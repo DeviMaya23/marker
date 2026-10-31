@@ -1,0 +1,822 @@
+openapi: 3.1.0
+info:
+  title: Bookmark Manager API
+  version: 1.0.0
+  description: |
+    Source of truth for the HTTP contract. Backend, frontend (mock server) and verifier all work against this file.
+    `api.md` is the human-readable companion; if the two disagree, this file wins.
+    FR and NFR numbers in descriptions refer to `requirements.md` (v12).
+
+    **Conventions**
+    - IDs are UUIDs (v7). Timestamps are ISO 8601 in UTC.
+    - HTTPS only (NFR-6).
+    - Every `/api/v1` endpoint requires a valid session cookie, otherwise `401 unauthenticated`.
+    - A resource that does not exist, or belongs to another user, returns `404 not_found`, never 403 (NFR-7).
+    - Every `POST`, `PATCH` and `DELETE` must carry an `X-CSRF-Token` header equal to the `csrf_token` cookie, and an `Origin` header matching the app's origin (NFR-13). Failure returns `403 csrf_failed`.
+    - PATCH bodies: an omitted field is unchanged; `null` clears `note` or means root for `folder_id` / `parent_id`. Unknown fields are rejected with `422 validation_error`.
+    - Errors use RFC 9457 problem details (`application/problem+json`) with a stable `code`. Clients branch on `code`, never on message text.
+    - Every endpoint can also return `429 rate_limited` (NFR-16) and, for bodies, `413 payload_too_large` (64 KB, NFR-14). `GET /sync/version` is exempt from rate limiting.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: Bookmarks
+  - name: Trash
+  - name: Folders
+  - name: Sync
+  - name: Favicons
+  - name: Account
+  - name: Auth
+paths:
+  /bookmarks:
+    post:
+      tags: [Bookmarks]
+      operationId: createBookmark
+      summary: Save a URL as a bookmark
+      description: |
+        Covers FR-3, FR-3a, FR-3d, FR-4, FR-5, FR-22 to FR-24, NFR-5, NFR-17.
+
+        Validates the scheme (`http` or `https` only), normalizes the URL, rejects duplicates, enforces the 1,000 bookmark cap, inserts the row with `fetch_status: pending` and queues the background fetch.
+        It never fetches the page during the request. Duplicates are checked before the cap.
+        A duplicate includes a bookmark that is in the trash (`in_trash: true`).
+        New bookmarks go to `folder_id` or root.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookmarkRequest'
+      responses:
+        '201':
+          description: Bookmark created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkSummary'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: |
+            `duplicate_bookmark` (normalized URL already saved, live or trashed) or `bookmark_limit_reached` (user already holds 1,000 bookmarks, trashed ones included).
+          content:
+            application/problem+json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/DuplicateBookmarkProblem'
+                  - $ref: '#/components/schemas/Problem'
+              examples:
+                duplicate:
+                  value:
+                    type: /errors/duplicate-bookmark
+                    title: Bookmark already exists
+                    status: 409
+                    detail: This URL is already in your trash.
+                    code: duplicate_bookmark
+                    existing_bookmark_id: 0191a2b4-7c3e-7d10-9a55-3f2b8c1d4e60
+                    in_trash: true
+                limit:
+                  value:
+                    type: /errors/bookmark-limit-reached
+                    title: Bookmark limit reached
+                    status: 409
+                    detail: You can hold at most 1,000 bookmarks, including trashed ones.
+                    code: bookmark_limit_reached
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: '`invalid_url` (malformed, or scheme is not http or https) or `validation_error` (any other bad input, including `too_long`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [Bookmarks, Trash]
+      operationId: listBookmarks
+      summary: List or search bookmarks, or list the trash
+      description: |
+        Covers FR-7, FR-9, FR-10, FR-11, FR-18, FR-21.
+
+        Without `q`, order is newest first by `created_at`. With `q`, results are ranked by relevance.
+        With `trashed=true`, the trash is listed instead, most recently trashed first.
+        Trashed bookmarks never appear when `trashed` is false. `trashed=true` cannot be combined with `q` or `folder_id`.
+        Page content is never included in the list; use `GET /bookmarks/{id}`.
+      parameters:
+        - name: q
+          in: query
+          description: Search term over title, URL and page content, ranked by relevance.
+          schema: { type: string }
+        - name: include_notes
+          in: query
+          description: Also match against notes. Only meaningful with `q`.
+          schema: { type: boolean, default: false }
+        - name: folder_id
+          in: query
+          description: Limit to this folder and all its subfolders. Absent means all bookmarks.
+          schema: { type: string, format: uuid }
+        - name: trashed
+          in: query
+          description: '`true` lists the trash. Cannot be combined with `q` or `folder_id` (422 `validation_error`).'
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: One page of bookmark summaries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkPage'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422':
+          description: Invalid combination or value (for example `trashed=true` with `q`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /bookmarks/{id}:
+    parameters:
+      - $ref: '#/components/parameters/BookmarkId'
+    get:
+      tags: [Bookmarks]
+      operationId: getBookmark
+      summary: Get one bookmark with its page content
+      description: |
+        Works for trashed bookmarks too (FR-21a); `deleted_at` tells the client. `content` is null while `fetch_status` is `pending` or when it is `failed`.
+      responses:
+        '200':
+          description: Bookmark detail.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkDetail'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    patch:
+      tags: [Bookmarks]
+      operationId: updateBookmark
+      summary: Edit user-defined fields of a bookmark
+      description: |
+        Covers FR-8, FR-14, FR-15. Edits only `title`, `note` and `folder_id`.
+        `url`, `content`, favicon, `fetch_status` and trash state cannot be changed here.
+        A trashed bookmark cannot be edited (`409 bookmark_in_trash`, FR-21a).
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBookmarkRequest'
+      responses:
+        '200':
+          description: Updated bookmark.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkSummary'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/BookmarkInTrash' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: Unknown or read-only field, or a value over its limit (`too_long`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Bookmarks, Trash]
+      operationId: deleteBookmark
+      summary: Move a bookmark to the trash
+      description: |
+        Soft delete (FR-17). There is no per-item permanent delete; permanent deletion happens only through `DELETE /trash` or `DELETE /account`.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Moved to the trash.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/BookmarkInTrash' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /bookmarks/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/BookmarkId'
+    post:
+      tags: [Trash]
+      operationId: restoreBookmark
+      summary: Restore a trashed bookmark to root
+      description: 'FR-19. Clears `deleted_at` and sets `folder_id` to null. Does not change the bookmark count (NFR-17).'
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Restored bookmark.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookmarkSummary'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: '`bookmark_not_in_trash`: the bookmark is not trashed.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: /errors/bookmark-not-in-trash
+                title: Bookmark is not in the trash
+                status: 409
+                detail: Only trashed bookmarks can be restored.
+                code: bookmark_not_in_trash
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /trash:
+    delete:
+      tags: [Trash]
+      operationId: emptyTrash
+      summary: Permanently delete every trashed bookmark
+      description: 'FR-20. Deletes trashed bookmarks and their content. Nothing is purged automatically.'
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Trash emptied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted:
+                    type: integer
+                    minimum: 0
+                    description: Number of bookmarks permanently deleted.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /folders:
+    get:
+      tags: [Folders]
+      operationId: listFolders
+      summary: List every folder as a flat list
+      description: |
+        FR-12. No pagination, filters or search at the scale in NFR-4. The client builds the tree from `parent_id`
+        and sums `bookmark_count` over a subtree for the FR-16 delete confirmation.
+      responses:
+        '200':
+          description: All of the user's folders.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Folder'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Folders]
+      operationId: createFolder
+      summary: Create a folder
+      description: 'FR-12, FR-13, FR-26. Rejects exceeding depth 3 and a case-insensitive sibling name collision.'
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFolderRequest'
+      responses:
+        '201':
+          description: Folder created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/FolderNameConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: '`folder_depth_exceeded` or `validation_error`.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /folders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/FolderId'
+    patch:
+      tags: [Folders]
+      operationId: updateFolder
+      summary: Rename or move a folder with its contents
+      description: |
+        FR-12, FR-13, FR-15, FR-26. Rejects moving a folder into itself or any descendant (`folder_cycle`),
+        a move where the new parent's depth plus the moved subtree's height exceeds 3 (`folder_depth_exceeded`),
+        and a rename or move that collides with a sibling name in the resulting location (`folder_name_conflict`).
+        Descendant depths are updated in the same transaction.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFolderRequest'
+      responses:
+        '200':
+          description: Updated folder.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Folder'
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/FolderNameConflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422':
+          description: '`folder_cycle`, `folder_depth_exceeded` or `validation_error`.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ValidationProblem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Folders]
+      operationId: deleteFolder
+      summary: Permanently delete a folder and its subtree
+      description: |
+        FR-16. Deletes the folder and every subfolder permanently, in one transaction.
+        All live bookmarks anywhere in the subtree move to the trash. Folders are never trashed and cannot be restored.
+        The UI shows the affected counts beforehand from `GET /folders`, not from this response.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Folder subtree deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted_folders, trashed_bookmarks]
+                properties:
+                  deleted_folders:
+                    type: integer
+                    minimum: 1
+                  trashed_bookmarks:
+                    type: integer
+                    minimum: 0
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /sync/version:
+    get:
+      tags: [Sync]
+      operationId: getSyncVersion
+      summary: Get the user's change counter
+      description: |
+        NFR-2. Every write transaction increments the counter, including completion of a background fetch.
+        Clients poll every 2 to 3 seconds; when the number changes they refetch the folder list and the list they are showing.
+        Exempt from rate limiting.
+      responses:
+        '200':
+          description: Current version.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: integer
+                    minimum: 0
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /favicons/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Favicons]
+      operationId: getFavicon
+      summary: Get stored favicon bytes
+      description: 'Authenticated and per-user. The content behind an id never changes.'
+      responses:
+        '200':
+          description: Image bytes.
+          headers:
+            Cache-Control:
+              description: '`private` with a long max-age.'
+              schema: { type: string }
+            ETag:
+              schema: { type: string }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/gif:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/x-icon:
+              schema: { type: string, format: binary }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /account:
+    delete:
+      tags: [Account]
+      operationId: deleteAccount
+      summary: Permanently erase all of the user's app data
+      description: 'FR-25, NFR-3. Erases bookmarks, notes, folders, favicons, content, the trash and sessions, then ends the session. The IdP account is untouched.'
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204':
+          description: Account data erased.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/login:
+    servers:
+      - url: /
+    get:
+      tags: [Auth]
+      operationId: authLogin
+      summary: Start the IdP login
+      description: 'FR-1, FR-3c. Browser navigation, not a JSON call. Rate limited per IP (NFR-16).'
+      security: []
+      parameters:
+        - name: return_to
+          in: query
+          description: Same-origin relative path to return to after login. Anything else is ignored (prevents open redirects). Defaults to `/`.
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to the identity provider.
+          headers:
+            Location:
+              schema: { type: string }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/callback:
+    servers:
+      - url: /
+    get:
+      tags: [Auth]
+      operationId: authCallback
+      summary: IdP redirect target
+      description: |
+        Completes the OIDC code flow, creates the session, sets the `session` cookie (`HttpOnly; Secure; SameSite=Lax`)
+        and the `csrf_token` cookie (readable by the frontend), then redirects to `return_to`. Rate limited per IP (NFR-16).
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Logged in; redirect to `return_to` (default `/`).
+          headers:
+            Location:
+              schema: { type: string }
+            Set-Cookie:
+              description: Sets the `session` and `csrf_token` cookies.
+              schema: { type: string }
+        '400':
+          description: Invalid or expired login attempt (bad `state` or `code`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/logout:
+    servers:
+      - url: /
+    post:
+      tags: [Auth]
+      operationId: authLogout
+      summary: End the session
+      description: |
+        FR-2. CSRF-protected. Deletes the app session server-side, then returns the identity provider's logout URL
+        (with a redirect back to the app). The frontend must navigate the browser to `logout_url` so the Kinde session
+        ends too; otherwise the next login would sign the user straight back in.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: App session ended.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [logout_url]
+                properties:
+                  logout_url:
+                    type: string
+                    format: uri
+                    description: Identity provider logout URL to navigate to.
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Server-issued session cookie (`HttpOnly; Secure; SameSite=Lax`), sliding 30 days with a 90 day absolute maximum (NFR-15).
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Must equal the value of the `csrf_token` cookie (NFR-13).
+      schema: { type: string }
+    BookmarkId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FolderId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's `next_cursor`.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+  responses:
+    Unauthenticated:
+      description: No valid session (`unauthenticated`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/unauthenticated
+            title: Not logged in
+            status: 401
+            detail: Log in to continue.
+            code: unauthenticated
+    CsrfFailed:
+      description: Missing or wrong CSRF token or origin (`csrf_failed`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/csrf-failed
+            title: Request rejected
+            status: 403
+            detail: The CSRF token or origin check failed.
+            code: csrf_failed
+    NotFound:
+      description: Unknown id, another user's id, or an unknown folder id in a body or filter (`not_found`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/not-found
+            title: Not found
+            status: 404
+            detail: No such resource.
+            code: not_found
+    BookmarkInTrash:
+      description: '`bookmark_in_trash`: the bookmark is in the trash and cannot be edited or deleted. Restore it or empty the trash.'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/bookmark-in-trash
+            title: Bookmark is in the trash
+            status: 409
+            detail: Restore this bookmark before changing it.
+            code: bookmark_in_trash
+    FolderNameConflict:
+      description: '`folder_name_conflict`: a sibling folder already has this name (case-insensitive).'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/folder-name-conflict
+            title: Folder name already used
+            status: 409
+            detail: A folder with this name already exists here.
+            code: folder_name_conflict
+    PayloadTooLarge:
+      description: Request body over 64 KB (`payload_too_large`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RateLimited:
+      description: Over a rate limit (`rate_limited`).
+      headers:
+        Retry-After:
+          description: Seconds until the client may retry.
+          schema: { type: integer, minimum: 0 }
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    ErrorCode:
+      type: string
+      enum:
+        - unauthenticated
+        - csrf_failed
+        - not_found
+        - invalid_url
+        - duplicate_bookmark
+        - bookmark_limit_reached
+        - folder_depth_exceeded
+        - folder_cycle
+        - folder_name_conflict
+        - bookmark_in_trash
+        - bookmark_not_in_trash
+        - validation_error
+        - payload_too_large
+        - rate_limited
+    Problem:
+      type: object
+      description: RFC 9457 problem details with a stable `code`.
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { $ref: '#/components/schemas/ErrorCode' }
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field: { type: string }
+                  code:
+                    type: string
+                    description: Per-field code, for example `too_long`.
+    DuplicateBookmarkProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [existing_bookmark_id, in_trash]
+          properties:
+            existing_bookmark_id: { type: string, format: uuid }
+            in_trash: { type: boolean }
+    FetchStatus:
+      type: string
+      enum: [pending, ok, failed]
+    BookmarkSummary:
+      type: object
+      required: [id, url, title, note, folder_id, favicon_url, fetch_status, created_at, deleted_at]
+      properties:
+        id: { type: string, format: uuid }
+        url:
+          type: string
+          description: As submitted, not normalized.
+        title:
+          type: string
+          description: May be empty until the fetch fills it (FR-5b).
+        note:
+          type: [string, 'null']
+        folder_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null means root. Not meaningful for trashed bookmarks.
+        favicon_url:
+          type: [string, 'null']
+          description: '`/api/v1/favicons/{id}`. Never inline bytes.'
+        fetch_status: { $ref: '#/components/schemas/FetchStatus' }
+        created_at: { type: string, format: date-time }
+        deleted_at:
+          type: [string, 'null']
+          format: date-time
+          description: Set when the bookmark is in the trash.
+    BookmarkDetail:
+      allOf:
+        - $ref: '#/components/schemas/BookmarkSummary'
+        - type: object
+          required: [content, updated_at]
+          properties:
+            content:
+              type: [string, 'null']
+              description: Extracted page text, never HTML. Null while pending or when the fetch failed.
+            updated_at: { type: string, format: date-time }
+    BookmarkPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookmarkSummary'
+        next_cursor:
+          type: [string, 'null']
+          description: Null on the last page.
+    CreateBookmarkRequest:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, minLength: 1, maxLength: 2048 }
+        title:
+          type: string
+          maxLength: 300
+          description: Client-supplied title (FR-3d). Used if the server fetch fails or finds no title.
+        folder_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null or omitted means root.
+    UpdateBookmarkRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        title: { type: string, maxLength: 300 }
+        note:
+          type: [string, 'null']
+          maxLength: 500
+          description: Null clears the note.
+        folder_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null moves the bookmark to root.
+    Folder:
+      type: object
+      required: [id, name, parent_id, depth, bookmark_count, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        parent_id: { type: [string, 'null'], format: uuid }
+        depth:
+          type: integer
+          minimum: 1
+          maximum: 3
+          description: A root-level folder has depth 1.
+        bookmark_count:
+          type: integer
+          minimum: 0
+          description: Live bookmarks directly in this folder. Trashed bookmarks are excluded.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateFolderRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parent_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null or omitted means root.
+    UpdateFolderRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        parent_id:
+          type: [string, 'null']
+          format: uuid
+          description: Null moves the folder to root.

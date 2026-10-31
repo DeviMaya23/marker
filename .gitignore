@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Go
+backend/bin/
+*.test
+*.out
+coverage.txt
+__debug*
+
+# Node
+node_modules/
+frontend/dist/
+*.log
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
