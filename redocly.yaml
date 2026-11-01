@@ -1,0 +1,9 @@
+# Config for `make openapi-lint` (Redocly CLI picks this up from the repo root).
+extends:
+  - recommended
+
+rules:
+  # Private practice project: there is no license to declare.
+  info-license: off
+  # /auth/login and /auth/callback are redirect-only (302) by design.
+  operation-2xx-response: off

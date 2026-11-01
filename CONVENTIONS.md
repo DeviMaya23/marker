@@ -10,7 +10,7 @@
 These come straight from the requirements. Do not work around them.
 
 1. **Outbound requests to user-supplied URLs go through `pkg/safehttp` only** (NFR-8, NFR-9). Never use `http.Get`, `http.DefaultClient` or another client for a URL a user gave.
-2. **Every query for user data filters by `user_id`.** Another user's record is "not found" (404), never "forbidden" (NFR-7).
+2. **Every query for user data filters by `user_id`.** Another user's record is "not found" (404), never "forbidden" (NFR-7). The one system-level exception is the fetch sweep, which lists pending bookmarks across all users and returns only IDs.
 3. **Page content is plain text end to end.** The frontend never renders it as HTML (no `dangerouslySetInnerHTML`).
 4. **Every write transaction increments `users.version`** (NFR-2), including the write that completes a background fetch.
 5. **API errors are `application/problem+json` with a `code` from `openapi.yaml`.** Clients branch on `code`, never on message text. Never expose internal error text.

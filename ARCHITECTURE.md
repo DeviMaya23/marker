@@ -73,6 +73,7 @@ Do not pre-promote speculatively.
 backend/
   cmd/
     server/          ← entry point: configuration and wiring only
+    migrate/         ← applies migrations (`make migrate`)
   internal/
     domain/          ← entities and value objects; no dependencies on other layers
     usecase/         ← business logic; defines interfaces for everything it depends on
@@ -86,6 +87,8 @@ backend/
                        page fetcher); satisfy interfaces defined by their consumer
     platform/        ← cross-cutting infrastructure; startup concerns only
       config/        ← environment/config parsing
+      database/      ← opens the GORM connection
+      migrate/       ← runs golang-migrate, then River's migrator
     testutil/        ← integration test helpers
   pkg/               ← generic utilities with no app-specific knowledge
     safehttp/        ← SSRF-safe HTTP client
@@ -123,6 +126,11 @@ Workers are a delivery layer, like handlers. A worker parses its job arguments,
 calls a usecase, and maps the outcome to the queue (complete, retry, discard).
 Business rules, such as which fields a finished fetch may update, live in the
 usecase, not the worker.
+
+The queue lives in `internal/worker`: `Queue` (client setup and
+`EnqueueFetch`), `FetchWorker` and `SweepWorker`. Workers depend on small
+interfaces they define (`BookmarkFetcher`, `PendingLister`), satisfied by the
+usecase and repository layers.
 
 A job is enqueued after the database transaction that created its row has
 committed, never inside a GORM transaction. A bookmark whose job was never
@@ -169,3 +177,8 @@ Migrations live in `backend/migration/` as numbered SQL pairs, applied with
   drops a column must update the corresponding domain struct in the same
   change — and a new or changed domain field needs a migration. Column names
   in the migration must match the struct's `column:` tag exactly.
+  Exception: `bookmarks.search_vector` is not mapped on the struct; it is
+  written with raw SQL in the repository.
+- **River has its own migrations**, applied by its migrator after yours (see
+  `internal/platform/migrate`). Never write SQL for River's tables.
+- **Apply locally with `make migrate`** (needs a running PostgreSQL and `DATABASE_URL`).

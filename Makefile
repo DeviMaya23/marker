@@ -1,5 +1,9 @@
 .DEFAULT_GOAL := help
 
+# Load .env (if present) and pass its values to every command below.
+-include .env
+export
+
 # Pinned by major version. Confirm the version when first run, then pin it exactly.
 REDOCLY := npx --yes @redocly/cli@2
 
@@ -7,11 +11,20 @@ REDOCLY := npx --yes @redocly/cli@2
 # project is pinned to 6.0. Running it through npx keeps it out of the dependency tree.
 OPENAPI_TS := npx --yes openapi-typescript@7.13.0
 
-.PHONY: help generate generate-check lint lint-backend lint-frontend test test-backend \
+.PHONY: help db-up db-down migrate generate generate-check lint lint-backend lint-frontend test test-backend \
 	test-frontend test-integration build build-backend build-frontend openapi-lint check
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
+
+db-up: ## Start local PostgreSQL (Docker)
+	docker compose up -d postgres
+
+db-down: ## Stop local PostgreSQL (data is kept)
+	docker compose down
+
+migrate: ## Apply app and River migrations to DATABASE_URL
+	cd backend && go run ./cmd/migrate
 
 generate: ## Regenerate Go and TypeScript code from openapi.yaml
 	cd backend && go generate ./internal/api
@@ -25,7 +38,7 @@ lint: lint-backend lint-frontend ## Lint backend and frontend
 
 lint-backend: ## gofmt check and go vet
 	@test -z "$$(gofmt -l backend)" || (echo "gofmt needed on:"; gofmt -l backend; exit 1)
-	cd backend && go vet ./...
+	cd backend && go vet ./... && go vet -tags integration ./...
 
 lint-frontend: ## ESLint
 	cd frontend && npm run lint

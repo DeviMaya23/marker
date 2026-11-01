@@ -8,7 +8,7 @@
 |---|---|
 | Language | Go. The `go` directive is `1.26` (see `CONVENTIONS.md`). |
 | HTTP | Echo v4 |
-| Database | PostgreSQL, accessed with GORM; raw SQL where Postgres features are needed (ranked full-text search, recursive folder subtrees, expression indexes) |
+| Database | PostgreSQL 17 (matches the developer's local install), accessed with GORM on the pgx v5 driver; raw SQL where Postgres features are needed (ranked full-text search, recursive folder subtrees, expression indexes) |
 | Migrations | `golang-migrate` |
 | Job queue | River: the page fetch, with a concurrency cap (NFR-11, NFR-12). River's own tables are created by its migrator (`rivermigrate`), run after the app's `golang-migrate` migrations; the two are independent |
 | API layer | `oapi-codegen` generates Go types and a strict server interface from `openapi.yaml`, so a handler that drifts from the contract fails to compile |
@@ -21,7 +21,9 @@ Suggested, not yet adopted: `go-oidc` and `x/oauth2` for login, `go-readability`
 
 ### Fetch queue
 
-A save commits the bookmark through GORM first, then enqueues its River job. If the process dies between the two, the bookmark stays `pending` with no job; a periodic sweep enqueues jobs for old `pending` bookmarks. River's uniqueness option keyed on the bookmark id stops the sweep from creating duplicates, and River's rescuer re-runs jobs interrupted mid-fetch (NFR-11). GORM and River do not share a transaction here, so there is no atomic enqueue.
+A save commits the bookmark through GORM first, then enqueues its River job (`worker.Queue.EnqueueFetch`). If the process dies between the two, the bookmark stays `pending` with no job. A periodic sweep, run every minute, enqueues jobs for bookmarks still `pending` after 2 minutes. River's unique-jobs option keyed on the bookmark id keeps one job per bookmark, so the sweep and the normal enqueue cannot duplicate each other.
+
+Fetch jobs run on their own queue with a concurrency cap (`FETCH_CONCURRENCY`, default 4; NFR-12), a 15 second timeout (NFR-11) and a single attempt: the fetch usecase records a failure itself, since retrying failed fetches is out of scope. A job interrupted by a crash is discarded by River's rescuer (after 1 minute) and re-created by the sweep (NFR-11). GORM and River do not share a transaction here, so there is no atomic enqueue.
 
 ### Rate limiting
 
@@ -61,7 +63,8 @@ A login path that skips Kinde exists only when `APP_ENV` is `development` or in 
 - Go server on `:8085` (`HTTP_ADDR`); Vite dev server on `:5175`.
 - Vite proxies `/api`, `/auth` and `/healthz` to the Go server, so the browser sees one origin (`http://localhost:5175`).
 - Kinde dev application callback: `http://localhost:5175/auth/callback`. The CSRF origin check must allow `http://localhost:5175` in development.
-- PostgreSQL runs in Docker Compose (not yet added).
+- Any PostgreSQL 17 works; set `DATABASE_URL` in `.env` (`make` loads it). A local install is the default. `docker-compose.yml` is an optional alternative (`make db-up`, host port 5435) for machines without one, and `.env.example` matches it.
+- `make migrate` applies the app's migrations and then River's.
 
 ## Open items
 

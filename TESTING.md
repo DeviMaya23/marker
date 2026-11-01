@@ -27,7 +27,7 @@ Repository integration tests need Docker, so they carry the build tag and are ex
 //go:build integration
 ```
 
-Run them with `make test-integration`. Agents write these tests but usually cannot run them: in a report, say "integration tests written, not run" rather than claiming they pass.
+Run them with `make test-integration`. `make lint` still compiles them (`go vet -tags integration`), so a broken integration test is caught without Docker. The shared helper is `testutil.NewDB(t)`: one container per test process, so tests create their own users and never assume empty tables. `repository/schema_integration_test.go` is the pattern to copy. Agents write these tests but usually cannot run them: in a report, say "integration tests written, not run" rather than claiming they pass.
 
 ### What to test in usecases
 

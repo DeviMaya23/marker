@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS bookmark_content;
+DROP TABLE IF EXISTS bookmarks;
+DROP TABLE IF EXISTS favicons;
+DROP TABLE IF EXISTS folders;
+DROP TABLE IF EXISTS users;

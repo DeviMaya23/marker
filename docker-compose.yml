@@ -1,0 +1,21 @@
+# Local development services. Credentials here are for development only.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: marker
+      POSTGRES_PASSWORD: marker
+      POSTGRES_DB: marker
+    ports:
+      # 5435 on the host, so it does not clash with a local PostgreSQL on 5432.
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marker -d marker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
