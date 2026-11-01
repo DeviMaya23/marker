@@ -19,6 +19,16 @@ Test usecase behaviour, not structure. A test that only verifies a method was ca
 | `repository/` | Integration tests only — no unit tests |
 | `pkg/safehttp` | Unit tests (security-critical, see below) |
 
+### Running integration tests
+
+Repository integration tests need Docker, so they carry the build tag and are excluded from `go test ./...`:
+
+```go
+//go:build integration
+```
+
+Run them with `make test-integration`. Agents write these tests but usually cannot run them: in a report, say "integration tests written, not run" rather than claiming they pass.
+
 ### What to test in usecases
 
 **Happy path** — only if the usecase adds assembly or transformation. If the function delegates to a repo and returns the result unchanged, the happy path is covered by integration tests.

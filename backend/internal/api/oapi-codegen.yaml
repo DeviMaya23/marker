@@ -1,0 +1,9 @@
+# Config for oapi-codegen. Run `make generate` from the repo root.
+package: api
+output: api.gen.go
+generate:
+  models: true
+  echo-server: true
+  strict-server: true
+  # Embeds the spec so tests can validate responses against it.
+  embedded-spec: true

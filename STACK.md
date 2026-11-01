@@ -10,7 +10,8 @@
 | HTTP | Echo v4 |
 | Database | PostgreSQL, accessed with GORM; raw SQL where Postgres features are needed (ranked full-text search, recursive folder subtrees, expression indexes) |
 | Migrations | `golang-migrate` |
-| Job queue | River: the page fetch, with a concurrency cap (NFR-11, NFR-12) |
+| Job queue | River: the page fetch, with a concurrency cap (NFR-11, NFR-12). River's own tables are created by its migrator (`rivermigrate`), run after the app's `golang-migrate` migrations; the two are independent |
+| API layer | `oapi-codegen` generates Go types and a strict server interface from `openapi.yaml`, so a handler that drifts from the contract fails to compile |
 | Auth | Kinde through the standard OIDC authorization code flow, the Go backend as a confidential client. The app then issues its own session cookie. `users.idp_id` is the OIDC `sub` claim |
 | Sessions | A server-side `sessions` table in PostgreSQL: sliding 30 days, 90 day absolute maximum (NFR-15) |
 | Outbound fetching | `pkg/safehttp`, an SSRF-safe client (NFR-8, NFR-9) |
@@ -33,14 +34,27 @@ Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes
 | UI | React 19, TypeScript, Vite |
 | TypeScript | Pinned to the 6.0 line (`~6.0`): `typescript-eslint` 8.x accepts only TypeScript below 6.1. Revisit when it supports TypeScript 7 |
 | Lint | ESLint with `typescript-eslint` |
-| Tests | Vitest with Testing Library (proposed; not installed yet) |
-| Data fetching | TanStack Query suggested, for the sync poll, refetching and infinite scroll |
+| Tests | Vitest with Testing Library (jsdom) |
+| Data fetching | TanStack Query, for the sync poll, refetching and infinite scroll |
 | Styling and components | Undecided, pending the UI design |
-| API types | Generated from `openapi.yaml`; generator chosen at foundation |
+| API types | Generated from `openapi.yaml` with `openapi-typescript` (types only, no generated client) into `src/lib/api/schema.d.ts` |
 
 ## Contract
 
 `openapi.yaml` (OpenAPI 3.1) is the source of truth. `docs/api.md` is the readable companion.
+
+Generated code is committed so agents never need the generators to build: Go in `backend/internal/api`, TypeScript in `frontend/src/lib/api/schema.d.ts`. `make generate` regenerates both; `make generate-check` (for CI) fails if they are stale. `openapi-typescript` runs through `npx`, pinned in the `Makefile`, and is not a dependency in `package.json`: its 7.x peer range stops at TypeScript 5, and the project is on 6.0. `oapi-codegen` is pinned as a Go tool in `backend/go.mod` (`go tool oapi-codegen`), so there is no global install. Its OpenAPI 3.1 support is recent; if it chokes on the spec, tell the user rather than downgrading the spec.
+
+## Tooling
+
+A root `Makefile` is the task runner. Run `make help` for the targets. `make check` (lint, test, build, openapi-lint) is what an agent runs before pushing.
+
+- Backend lint is `gofmt` and `go vet`; OpenAPI lint is Redocly CLI through `npx`.
+- Integration tests carry the build tag `integration` and need Docker. `make test` skips them; `make test-integration` runs them. Only the user runs these, so agents write them and report "written, not run".
+
+## Dev and test auth bypass
+
+A login path that skips Kinde exists only when `APP_ENV` is `development` or in test builds, so agents and tests can reach authenticated routes without Kinde secrets. It must be impossible to enable in production: the route is not registered otherwise, and startup fails if the bypass is set with any other environment.
 
 ## Local development
 
@@ -51,7 +65,6 @@ Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes
 
 ## Open items
 
-- How River's own schema is applied next to `golang-migrate` migrations. Check River's documentation.
 - Kinde: the logout redirect parameter, which URLs must be registered, and confirming `sub` is stable.
 - The tool that mocks the API from `openapi.yaml` for the frontend.
-- The generator for frontend API types.
+- Pin Redocly CLI to an exact version once confirmed.

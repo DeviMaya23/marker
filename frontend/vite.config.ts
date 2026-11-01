@@ -1,5 +1,5 @@
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 
 // Where the Go server listens in development (HTTP_ADDR in .env.example).
 const backend = 'http://localhost:8085'
@@ -17,5 +17,9 @@ export default defineConfig({
       '/auth': { target: backend },
       '/healthz': { target: backend },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
   },
 })
