@@ -16,6 +16,10 @@ func TestNormalizeURL_SameKey(t *testing.T) {
 		{"repeated values sorted", "https://e.com/a?a=2&a=1", "https://e.com/a?a=1&a=2"},
 		{"fragment ignored", "https://e.com/a#top", "https://e.com/a"},
 		{"tracking mixed with real param", "https://e.com/a?utm_x=1&id=7", "https://e.com/a?id=7"},
+		{"default https port", "https://e.com:443/a", "https://e.com/a"},
+		{"default http port", "http://e.com:80/a", "https://e.com/a"},
+		{"default port across schemes", "http://e.com:80/a", "https://e.com:443/a"},
+		{"equivalent query escapes", "https://e.com/a?q=a%20b", "https://e.com/a?q=a+b"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -35,6 +39,13 @@ func TestNormalizeURL_DifferentKey(t *testing.T) {
 		{"different param name", "https://e.com/a?id=1", "https://e.com/a?pid=1"},
 		{"param present vs absent", "https://e.com/a?id=1", "https://e.com/a"},
 		{"different host", "https://e.com/a", "https://www.e.com/a"},
+		{"non-default port", "https://e.com:8443/a", "https://e.com/a"},
+		{"http on 443 is not default", "http://e.com:443/a", "https://e.com/a"},
+		{"semicolon in a value", "https://e.com/a?a=1;b=2", "https://e.com/a?a=3;b=4"},
+		{"semicolon query vs none", "https://e.com/a?a=1;b=2", "https://e.com/a"},
+		{"bad escape vs none", "https://e.com/a?q=%zz", "https://e.com/a"},
+		{"different bad escapes", "https://e.com/a?q=%zz", "https://e.com/a?q=%yy"},
+		{"encoded trailing slash", "https://e.com/a%2F", "https://e.com/a"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
