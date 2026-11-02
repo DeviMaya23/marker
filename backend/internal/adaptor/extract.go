@@ -73,6 +73,9 @@ type metadata struct {
 func (m *metadata) collect(n *html.Node, pageURL *url.URL) {
 	if n.Type == html.ElementNode {
 		switch n.Data {
+		case "svg":
+			// An <svg><title> names the graphic, not the page.
+			return
 		case "title":
 			if !m.haveTitle {
 				m.title, m.haveTitle = nodeText(n), true
@@ -92,17 +95,32 @@ func (m *metadata) collect(n *html.Node, pageURL *url.URL) {
 	}
 }
 
-// visibleText appends the text of every node outside the skipped elements, each text
-// node followed by a space so that words in adjacent elements do not run together.
+// blockElements break the text flow: a space goes around them so that "<p>a</p><p>b</p>"
+// reads "a b". Any other element is inline and adds no space, so "<b>Hel</b>lo" stays one
+// word.
+var blockElements = map[string]bool{
+	"address": true, "article": true, "blockquote": true, "br": true, "caption": true,
+	"dd": true, "details": true, "dialog": true, "div": true, "dl": true, "dt": true,
+	"fieldset": true, "figcaption": true, "figure": true, "form": true, "h1": true,
+	"h2": true, "h3": true, "h4": true, "h5": true, "h6": true, "hr": true, "li": true,
+	"main": true, "ol": true, "option": true, "p": true, "pre": true, "section": true,
+	"summary": true, "table": true, "tbody": true, "td": true, "tfoot": true, "th": true,
+	"thead": true, "tr": true, "ul": true,
+}
+
+// visibleText appends the text of every node outside the skipped elements.
 func visibleText(n *html.Node, b *strings.Builder) {
 	switch n.Type {
 	case html.TextNode:
 		b.WriteString(n.Data)
-		b.WriteByte(' ')
 		return
 	case html.ElementNode:
 		if skippedElements[n.Data] {
 			return
+		}
+		if blockElements[n.Data] {
+			b.WriteByte(' ')
+			defer b.WriteByte(' ')
 		}
 	}
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
