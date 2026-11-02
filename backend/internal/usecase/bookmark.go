@@ -87,7 +87,10 @@ func (s *BookmarkService) Create(ctx context.Context, userID uuid.UUID, in Creat
 		return domain.Bookmark{}, domain.ErrBookmarkLimitReached
 	}
 
-	// 5. Insert. The unique constraint decides a race between two saves.
+	// 5. Insert. The store re-checks the URL and the cap under a lock on the user, and
+	// the unique constraint backs that up. A duplicate it reports names the winner,
+	// found by a lookup. If the winner is already gone (emptied from the trash in
+	// between), the URL is free again, so try once more.
 	now := s.now().UTC()
 	b := domain.Bookmark{
 		ID:            domain.NewID(),
@@ -100,11 +103,20 @@ func (s *BookmarkService) Create(ctx context.Context, userID uuid.UUID, in Creat
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
-	if err := s.bookmarks.Create(ctx, b); err != nil {
-		if errors.Is(err, domain.ErrDuplicateBookmark) {
-			return domain.Bookmark{}, s.duplicateError(ctx, userID, normalized)
+	for attempt := 1; ; attempt++ {
+		err := s.bookmarks.Create(ctx, b)
+		if err == nil {
+			break
 		}
-		return domain.Bookmark{}, err
+		if !errors.Is(err, domain.ErrDuplicateBookmark) {
+			return domain.Bookmark{}, err
+		}
+		if dup := s.checkDuplicate(ctx, userID, normalized); dup != nil {
+			return domain.Bookmark{}, dup
+		}
+		if attempt == 2 {
+			return domain.Bookmark{}, domain.ErrDuplicateBookmark
+		}
 	}
 
 	// 6. Enqueue after the commit. A failure is not the caller's problem: the sweep
@@ -125,15 +137,6 @@ func (s *BookmarkService) checkDuplicate(ctx context.Context, userID uuid.UUID, 
 	default:
 		return err
 	}
-}
-
-// duplicateError builds the duplicate outcome after the unique constraint fired.
-func (s *BookmarkService) duplicateError(ctx context.Context, userID uuid.UUID, normalized string) error {
-	if err := s.checkDuplicate(ctx, userID, normalized); err != nil {
-		return err
-	}
-	// The winner vanished between the insert and the lookup (emptied from the trash).
-	return domain.ErrDuplicateBookmark
 }
 
 // Get returns the user's bookmark, trashed or not.

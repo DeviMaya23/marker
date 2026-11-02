@@ -103,11 +103,37 @@ func (r *BookmarkRepository) CountByUserID(ctx context.Context, userID uuid.UUID
 }
 
 // Create inserts a bookmark, sets its search vector from title and URL and increments
-// the user's version, in one transaction. The (user_id, normalized_url) unique
-// constraint decides a race between two saves of the same URL: the loser gets
-// domain.ErrDuplicateBookmark.
+// the user's version, in one transaction.
+//
+// The transaction first locks the user's row, so one user's saves run one at a time.
+// Under that lock it re-checks the URL and the cap, which makes "at most 1,000
+// bookmarks" (NFR-17) hold under concurrent saves: it returns
+// domain.ErrDuplicateBookmark for a URL already saved (checked before the cap) and
+// domain.ErrBookmarkLimitReached at the cap. The (user_id, normalized_url) unique
+// constraint stays as the backstop and maps to the same duplicate error.
 func (r *BookmarkRepository) Create(ctx context.Context, b domain.Bookmark) error {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var locked []uuid.UUID
+		if err := tx.Raw(`SELECT id FROM users WHERE id = ? FOR UPDATE`, b.UserID).Scan(&locked).Error; err != nil {
+			return err
+		}
+		if len(locked) == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		var counts struct{ Total, Same int64 }
+		if err := tx.Raw(`
+SELECT count(*) AS total, count(*) FILTER (WHERE normalized_url = ?) AS same
+FROM bookmarks WHERE user_id = ?`, b.NormalizedURL, b.UserID).Scan(&counts).Error; err != nil {
+			return err
+		}
+		if counts.Same > 0 {
+			return domain.ErrDuplicateBookmark
+		}
+		if counts.Total >= domain.MaxBookmarks {
+			return domain.ErrBookmarkLimitReached
+		}
+
 		if err := tx.Create(&b).Error; err != nil {
 			return err
 		}
