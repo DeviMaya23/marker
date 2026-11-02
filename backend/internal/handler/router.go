@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
 
 	"marker/internal/api"
 	"marker/internal/handler/middleware"
@@ -13,6 +14,10 @@ import (
 // apiPrefix is where the API is served. Per-path overrides in openapi.yaml
 // (the /auth routes live at the root) are handled in policyRouter.
 const apiPrefix = "/api/v1"
+
+// maxBodySize is the request body cap (NFR-14). A request that declares a larger
+// body is refused with 413 payload_too_large before it is read.
+const maxBodySize = "64K"
 
 // publicPaths are the operations that declare `security: []` in openapi.yaml: they
 // are reachable without a session.
@@ -37,6 +42,7 @@ func NewRouter(deps Deps) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HTTPErrorHandler = ErrorHandler
+	e.Use(echomw.BodyLimit(maxBodySize))
 
 	// Operational endpoint, deliberately outside /api/v1 and not part of openapi.yaml.
 	e.GET("/healthz", Health)

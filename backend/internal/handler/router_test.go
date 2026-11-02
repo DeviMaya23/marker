@@ -150,3 +150,27 @@ func TestRouter_ErrorsAreProblemJSON(t *testing.T) {
 		requireProblem(t, rec, http.StatusBadRequest, api.ErrorCodeValidationError)
 	})
 }
+
+func TestRouter_RequestBodyIsCappedAt64KB(t *testing.T) {
+	e := newTestRouter()
+
+	post := func(size int) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/bookmarks", strings.NewReader(strings.Repeat("a", size)))
+		req.Header.Set("Content-Type", "application/json")
+		withSession(goodSession)(req)
+		withCSRF()(req)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("over the cap", func(t *testing.T) {
+		requireProblem(t, post(64*1024+1), http.StatusRequestEntityTooLarge, api.ErrorCodePayloadTooLarge)
+	})
+
+	t.Run("at the cap is not refused for size", func(t *testing.T) {
+		// The body is not valid JSON, so the stub or the decoder answers; the point
+		// is only that the size limit does not fire.
+		require.NotEqual(t, http.StatusRequestEntityTooLarge, post(64*1024).Code)
+	})
+}
