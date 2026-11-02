@@ -58,7 +58,7 @@ func TestBookmarkService_Create_NoTitleIsEmpty(t *testing.T) {
 }
 
 func TestBookmarkService_Create_InvalidURL(t *testing.T) {
-	for _, raw := range []string{"ftp://x", "javascript:x", "not a url"} {
+	for _, raw := range []string{"ftp://x", "javascript:x", "not a url", ""} {
 		t.Run(raw, func(t *testing.T) {
 			f := newCreateFixture()
 			_, err := f.svc.Create(context.Background(), f.user, CreateBookmarkInput{URL: raw})

@@ -39,7 +39,7 @@ func newSpy() *spyStarter {
 
 func newDevRouter(spy *spyStarter, secure bool) *echo.Echo {
 	return NewRouter(Deps{
-		Server:    NewServer(),
+		Server:    NewServer(nil),
 		Auth:      stubAuth{},
 		AppOrigin: testOrigin,
 		DevLogin:  NewDevLogin(spy, secure).Handle,

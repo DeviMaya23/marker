@@ -11,10 +11,12 @@ import "marker/internal/api"
 // of the same name, so server.go and stubs.go need no edit beyond a new dependency field.
 type Server struct {
 	unimplemented
+
+	bookmarks BookmarkService
 }
 
-func NewServer() *Server {
-	return &Server{}
+func NewServer(bookmarks BookmarkService) *Server {
+	return &Server{bookmarks: bookmarks}
 }
 
 // The compiler checks that Server covers every operation in the contract.
