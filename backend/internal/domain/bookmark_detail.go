@@ -30,3 +30,11 @@ type FaviconData struct {
 	ContentType string
 	Data        []byte
 }
+
+// FetchResult is a finished fetch, already truncated to the storage limits and ready
+// to store. Title is only applied when the bookmark's own title is empty (FR-5b).
+type FetchResult struct {
+	Title   string
+	Text    string
+	Favicon *FaviconData
+}

@@ -154,3 +154,65 @@ func (f *fakeEnqueuer) EnqueueFetch(_ context.Context, id uuid.UUID) error {
 	f.ids = append(f.ids, id)
 	return f.err
 }
+
+// fakeFetchStore is an in-memory FetchStore that honours the contract's rules: a
+// success fills only an empty title, sets content, favicon and status, and bumps the
+// user's version; a deleted bookmark is gorm.ErrRecordNotFound.
+type fakeFetchStore struct {
+	bookmarks map[uuid.UUID]domain.Bookmark
+	contents  map[uuid.UUID]string
+	favicons  map[uuid.UUID]domain.FaviconData
+	versions  map[uuid.UUID]int64
+}
+
+func newFakeFetchStore(bs ...domain.Bookmark) *fakeFetchStore {
+	f := &fakeFetchStore{
+		bookmarks: map[uuid.UUID]domain.Bookmark{},
+		contents:  map[uuid.UUID]string{},
+		favicons:  map[uuid.UUID]domain.FaviconData{},
+		versions:  map[uuid.UUID]int64{},
+	}
+	for _, b := range bs {
+		f.bookmarks[b.ID] = b
+	}
+	return f
+}
+
+func (f *fakeFetchStore) FindForFetch(_ context.Context, id uuid.UUID) (domain.Bookmark, error) {
+	b, ok := f.bookmarks[id]
+	if !ok {
+		return domain.Bookmark{}, gorm.ErrRecordNotFound
+	}
+	return b, nil
+}
+
+func (f *fakeFetchStore) RecordFetchSuccess(_ context.Context, b domain.Bookmark, r domain.FetchResult) error {
+	cur, ok := f.bookmarks[b.ID]
+	if !ok {
+		return gorm.ErrRecordNotFound
+	}
+	if cur.Title == "" {
+		cur.Title = r.Title
+	}
+	if r.Favicon != nil {
+		fid := domain.NewID()
+		f.favicons[fid] = *r.Favicon
+		cur.FaviconID = &fid
+	}
+	cur.FetchStatus = domain.FetchOK
+	f.bookmarks[b.ID] = cur
+	f.contents[b.ID] = r.Text
+	f.versions[b.UserID]++
+	return nil
+}
+
+func (f *fakeFetchStore) RecordFetchFailure(_ context.Context, b domain.Bookmark) error {
+	cur, ok := f.bookmarks[b.ID]
+	if !ok {
+		return gorm.ErrRecordNotFound
+	}
+	cur.FetchStatus = domain.FetchFailed
+	f.bookmarks[b.ID] = cur
+	f.versions[b.UserID]++
+	return nil
+}
