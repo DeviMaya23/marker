@@ -74,3 +74,83 @@ func (f *fakeUserStore) FindOrCreateUserByIdpID(_ context.Context, idpID string)
 	f.users[idpID] = u
 	return u, nil
 }
+
+// fakeBookmarkStore is an in-memory BookmarkStore. Create events go to the shared log
+// so tests can assert the order against the queue.
+type fakeBookmarkStore struct {
+	bookmarks []domain.Bookmark
+	contents  map[uuid.UUID]string
+	log       *[]string
+	// createErr, if set, is returned by Create (after nothing is stored).
+	createErr error
+}
+
+func newFakeBookmarkStore(log *[]string) *fakeBookmarkStore {
+	return &fakeBookmarkStore{contents: map[uuid.UUID]string{}, log: log}
+}
+
+func (f *fakeBookmarkStore) FindByNormalizedURL(_ context.Context, userID uuid.UUID, n string) (domain.Bookmark, error) {
+	for _, b := range f.bookmarks {
+		if b.UserID == userID && b.NormalizedURL == n {
+			return b, nil
+		}
+	}
+	return domain.Bookmark{}, gorm.ErrRecordNotFound
+}
+
+func (f *fakeBookmarkStore) CountByUserID(_ context.Context, userID uuid.UUID) (int64, error) {
+	var n int64
+	for _, b := range f.bookmarks {
+		if b.UserID == userID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (f *fakeBookmarkStore) Create(_ context.Context, b domain.Bookmark) error {
+	if f.createErr != nil {
+		return f.createErr
+	}
+	f.bookmarks = append(f.bookmarks, b)
+	if f.log != nil {
+		*f.log = append(*f.log, "commit")
+	}
+	return nil
+}
+
+func (f *fakeBookmarkStore) GetDetail(_ context.Context, userID, id uuid.UUID) (domain.BookmarkDetail, error) {
+	for _, b := range f.bookmarks {
+		if b.ID == id && b.UserID == userID {
+			d := domain.BookmarkDetail{Bookmark: b}
+			if text, ok := f.contents[id]; ok {
+				d.Content = &text
+			}
+			return d, nil
+		}
+	}
+	return domain.BookmarkDetail{}, gorm.ErrRecordNotFound
+}
+
+// fakeFolders knows which folders exist per user.
+type fakeFolders struct{ owned map[uuid.UUID]uuid.UUID } // folder ID -> owner
+
+func (f fakeFolders) GetFolder(_ context.Context, userID, id uuid.UUID) (domain.Folder, error) {
+	if f.owned[id] == userID {
+		return domain.Folder{ID: id, UserID: userID}, nil
+	}
+	return domain.Folder{}, gorm.ErrRecordNotFound
+}
+
+// fakeEnqueuer records enqueues in the shared log.
+type fakeEnqueuer struct {
+	log *[]string
+	ids []uuid.UUID
+	err error
+}
+
+func (f *fakeEnqueuer) EnqueueFetch(_ context.Context, id uuid.UUID) error {
+	*f.log = append(*f.log, "enqueue")
+	f.ids = append(f.ids, id)
+	return f.err
+}
