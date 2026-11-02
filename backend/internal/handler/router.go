@@ -15,9 +15,10 @@ import (
 // (the /auth routes live at the root) are handled in policyRouter.
 const apiPrefix = "/api/v1"
 
-// maxBodySize is the request body cap (NFR-14). A request that declares a larger
+// maxBodySize is the request body cap (NFR-14): 64 KiB, as an exact byte count.
+// Do not write it as "64K": Echo reads that as 64,000 bytes. A request that declares a larger
 // body is refused with 413 payload_too_large before it is read.
-const maxBodySize = "64K"
+const maxBodySize = "65536B"
 
 // publicPaths are the operations that declare `security: []` in openapi.yaml: they
 // are reachable without a session.
