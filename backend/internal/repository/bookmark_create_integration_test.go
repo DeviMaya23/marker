@@ -69,9 +69,9 @@ func TestCreateBookmark_PersistsRowSearchVectorAndVersion(t *testing.T) {
 	).Scan(&hits).Error)
 	require.EqualValues(t, 1, hits, "title is searchable")
 	require.NoError(t, db.Raw(
-		`SELECT count(*) FROM bookmarks WHERE id = ? AND search_vector @@ plainto_tsquery('english', 'zebras')`, b.ID,
+		`SELECT count(*) FROM bookmarks WHERE id = ? AND search_vector @@ plainto_tsquery('english', 'example.com')`, b.ID,
 	).Scan(&hits).Error)
-	require.EqualValues(t, 1, hits, "url is searchable")
+	require.EqualValues(t, 1, hits, "the url is searchable by its host (the parser keeps a URL as host and path tokens, not words)")
 
 	require.Equal(t, before+1, userVersion(t, db, user.ID), "a save increments users.version once")
 }
