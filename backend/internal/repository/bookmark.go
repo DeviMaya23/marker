@@ -162,10 +162,11 @@ func (r *BookmarkRepository) RecordFetchSuccess(ctx context.Context, b domain.Bo
 		var faviconID any // nil leaves favicon_id unchanged
 		if f := result.Favicon; f != nil {
 			var id uuid.UUID
+			// Row().Scan, not Raw().Scan: GORM would read a uuid.UUID as a byte array.
 			err := tx.Raw(`
 INSERT INTO favicons (id, user_id, host, content_type, data) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (user_id, host) DO UPDATE SET content_type = EXCLUDED.content_type, data = EXCLUDED.data
-RETURNING id`, domain.NewID(), b.UserID, f.Host, f.ContentType, f.Data).Scan(&id).Error
+RETURNING id`, domain.NewID(), b.UserID, f.Host, f.ContentType, f.Data).Row().Scan(&id)
 			if err != nil {
 				return err
 			}
