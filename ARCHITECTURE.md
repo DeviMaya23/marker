@@ -120,6 +120,22 @@ importing from `usecase/`.
 - Handlers map between `api` types and domain types. Do not pass an `api` type into a usecase.
 - A handler that does not match the contract fails to compile, because it must satisfy the generated strict server interface.
 
+### Handlers and cross-cutting HTTP rules
+
+`handler.Server` implements the generated strict server interface. Operations that
+are not implemented yet fall through to the embedded `unimplemented` stubs in
+`stubs.go` and answer 501. To implement one, define its method on `*Server` in a
+file named after its feature (`bookmarks.go`, `folders.go`, ...); it shadows the
+stub. Put a new dependency on `Server` as its own field line.
+
+Authentication, CSRF and the route prefix are applied once, in `policyRouter`
+(`router.go`), from the rules in `openapi.yaml`. Handlers never check them. The caller's
+identity is `middleware.AuthFrom(ctx)`.
+
+Errors: a handler returns a domain error and `ErrorHandler` (`problem.go`) turns it into
+`application/problem+json`. When a usecase gains a sentinel error, add a row to
+`domainProblems`; the `code` must exist in `openapi.yaml`.
+
 ### Workers
 
 Workers are a delivery layer, like handlers. A worker parses its job arguments,

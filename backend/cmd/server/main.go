@@ -15,11 +15,15 @@ import (
 	"marker/internal/platform/config"
 	"marker/internal/platform/database"
 	"marker/internal/repository"
+	"marker/internal/usecase"
 	"marker/internal/worker"
 )
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("config: %v", err)
+	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is not set (copy .env.example to .env and run through make)")
 	}
@@ -52,7 +56,19 @@ func main() {
 		log.Fatalf("queue start: %v", err)
 	}
 
-	e := handler.NewRouter()
+	authService := usecase.NewAuthService(repository.NewUserRepository(db), repository.NewSessionRepository(db))
+	deps := handler.Deps{
+		Server:    handler.NewServer(),
+		Auth:      authService,
+		AppOrigin: cfg.AppBaseURL,
+	}
+	if cfg.AuthDevLogin {
+		// Config.Validate already refused this outside APP_ENV=development.
+		deps.DevLogin = handler.NewDevLogin(authService, cfg.CookieSecure()).Handle
+		log.Print("WARNING: dev login is enabled at /auth/dev-login (development only)")
+	}
+
+	e := handler.NewRouter(deps)
 	go func() {
 		if err := e.Start(cfg.Addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server: %v", err)

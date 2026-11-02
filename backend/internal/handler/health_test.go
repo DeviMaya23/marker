@@ -9,7 +9,7 @@ import (
 )
 
 func TestHealth(t *testing.T) {
-	e := NewRouter()
+	e := NewRouter(Deps{})
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	rec := httptest.NewRecorder()
 

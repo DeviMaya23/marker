@@ -18,6 +18,10 @@ How the work divides between agent roles. Every agent also follows `CLAUDE.md`, 
 
 Each agent runs in its own isolated checkout on its own branch, and stays inside the directories it owns. Directory ownership keeps branches from touching the same files, so merges stay clean.
 
+## Implementing an operation
+
+Backend agents implement operations by defining methods on `*handler.Server` in a feature file, replacing the 501 stub (see `ARCHITECTURE.md`). Local development signs in with `GET /auth/dev-login?name=alice` (`AUTH_DEV_LOGIN=true`); tests build sessions directly and never use that route.
+
 ## Schema changes
 
 Migrations are shared state. Only one agent at a time may add migrations, and a backend agent that needs a schema change stops and asks instead of adding one. This avoids two agents claiming the same migration number.

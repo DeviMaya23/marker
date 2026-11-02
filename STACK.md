@@ -56,7 +56,7 @@ A root `Makefile` is the task runner. Run `make help` for the targets. `make che
 
 ## Dev and test auth bypass
 
-A login path that skips Kinde exists only when `APP_ENV` is `development` or in test builds, so agents and tests can reach authenticated routes without Kinde secrets. It must be impossible to enable in production: the route is not registered otherwise, and startup fails if the bypass is set with any other environment.
+`GET /auth/dev-login?name=alice` signs in as the user `dev|alice` without Kinde, so local development and tests of authenticated routes need no Kinde secrets. It exists only when `AUTH_DEV_LOGIN=true`, and the server refuses to start with that set unless `APP_ENV=development` (`Config.Validate`). Tests do not use the route: they create a user and session directly. The route is not in `openapi.yaml`.
 
 ## Local development
 
