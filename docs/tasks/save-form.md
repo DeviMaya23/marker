@@ -33,7 +33,7 @@ How to use it:
 
 Role: Frontend (see `AGENTS.md`).
 
-You may change `frontend/**`. You may not change `backend/**`, `openapi.yaml`, `docs/**`, the Makefile, or `frontend/src/lib/api/schema.d.ts` (generated). Dev server: `http://localhost:5175` (see `vite.config.ts`); the Go server must be running for the app to work, and tests never need it.
+You may change `frontend/**`. You may not change `backend/**`, `openapi.yaml`, `docs/**` (except your own plan file, `docs/tasks/save-form.plan.md`, see `AGENTS.md`), the Makefile, or `frontend/src/lib/api/schema.d.ts` (generated). Dev server: `http://localhost:5175` (see `vite.config.ts`); the Go server must be running for the app to work, and tests never need it.
 
 ## Operations used
 

@@ -12,7 +12,7 @@ Requirements covered: FR-3 (URL entry), FR-4, FR-5, FR-5a, FR-5b, FR-5c, FR-22, 
 
 Role: Backend (see `AGENTS.md`).
 
-You may change `backend/**` except `backend/migration/`. You may not change `openapi.yaml`, `docs/**`, the frontend, existing migrations or the Makefile. You need no migration: the tables exist. If you think you need one, stop and ask.
+You may change `backend/**` except `backend/migration/`. You may not change `openapi.yaml`, `docs/**` (except your own plan file, `docs/tasks/save-a-url.plan.md`, see `AGENTS.md`), the frontend, existing migrations or the Makefile. You need no migration: the tables exist. If you think you need one, stop and ask.
 
 ## Operations
 

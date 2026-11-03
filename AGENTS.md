@@ -16,6 +16,8 @@ How the work divides between agent roles. Every agent also follows `CLAUDE.md`, 
 | Integrator | Any file, to merge work and fix the seams between pieces | Add features, or change requirements |
 | Verifier | Tests and a verification report | Source code |
 
+**Task records.** Each task keeps its records under `docs/tasks/`: the builder's plan (`<task>.plan.md`), the verifier's report (`<task>.report.md`) and the shared `backlog.md`. The agent a prompt names writes that record, and these are the only files under `docs/` an agent may change. No agent edits the task file itself, `requirements.md` or any other doc.
+
 Each agent runs in its own isolated checkout on its own branch, and stays inside the directories it owns. Directory ownership keeps branches from touching the same files, so merges stay clean.
 
 ## Implementing an operation

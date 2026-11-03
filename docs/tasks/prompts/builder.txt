@@ -4,4 +4,4 @@ Work on the branch this session gives you. Don't create or switch to another bra
 
 Nobody is available to answer questions while you work. If a "Stop and ask" condition in the task file applies, stop, don't improvise, and say what blocked you. Otherwise settle small gaps with the most reasonable reading.
 
-At the end, add a "Judgment calls" section to the plan file for anything the task file didn't settle. Finish with the report format in AGENTS.md ("Handing back"), plus the judgment calls. State your branch name at the top of the report.
+At the end, add a "Judgment calls" section to the plan file for anything the task file didn't settle. Finish with the report format in AGENTS.md ("Handing back"), plus the judgment calls. Your plan file is the only file under `docs/` you may change. State your branch name at the top of the report.
