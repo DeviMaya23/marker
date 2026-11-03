@@ -26,6 +26,10 @@ Backend agents implement operations by defining methods on `*handler.Server` in 
 
 Migrations are shared state. Only one agent at a time may add migrations, and a backend agent that needs a schema change stops and asks instead of adding one. This avoids two agents claiming the same migration number.
 
+## Dependencies
+
+A dependency not listed in `STACK.md` needs the user's approval first (`CLAUDE.md`), and the user records it in `STACK.md` before the task that needs it starts. A task file's "Dependencies" section only repeats what `STACK.md` already allows. Only one agent at a time may change `package.json`, `package-lock.json`, `go.mod` or `go.sum`; an agent that needs a new package stops and asks. This keeps two branches from conflicting on the same lockfile.
+
 ## Verifier
 
 Checks the finished work against the requirements, runs the tests and linters, and reports per requirement ID (FR-n, NFR-n) with evidence. It does not fix source; findings go back to the user.

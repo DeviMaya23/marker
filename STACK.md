@@ -38,7 +38,9 @@ Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes
 | Lint | ESLint with `typescript-eslint` |
 | Tests | Vitest with Testing Library (jsdom) |
 | Data fetching | TanStack Query, for the sync poll, refetching and infinite scroll |
-| Styling and components | Undecided, pending the UI design |
+| Routing | `react-router` with browser history (`/save`, `/bookmarks/:id`), not hash routes: the backend's `return_to` after login is a plain path |
+| Icons | `lucide-react`, the only icon library |
+| Styling and components | Plain CSS with the design tokens from `docs/design/ui-reference/src/styles/`; no UI library yet. Choose one when a slice first needs dialogs or menus, and record it here before that slice |
 | API types | Generated from `openapi.yaml` with `openapi-typescript` (types only, no generated client) into `src/lib/api/schema.d.ts` |
 
 ## Contract

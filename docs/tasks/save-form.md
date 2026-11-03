@@ -26,7 +26,7 @@ How to use it:
 
 - **Reproduce the look and behavior** with your own code, in this repo's stack and conventions. The reference is a prototype with a mock API; its code does not meet `CONVENTIONS.md` (hand-rolled hooks and router, `eslint-disable`, no tests).
 - **Do copy the CSS you need.** Carry `tokens.css` and `base.css` across, and from `components.css` and `layout.css` only the rules these screens use (buttons, inputs, banners, status chips, favicon, popup, detail page). Put them under `frontend/src/styles/` and import them from `main.tsx`. Keep the class names so the reference stays comparable.
-- **Do not copy** any `.tsx` or `.ts` file, and do not use its mock API, its hooks, its router, its toast or its icon library.
+- **Do not copy** any `.tsx` or `.ts` file, and do not use its mock API, its hooks, its router or its toast. Icons come from `lucide-react`, not from the reference's `react-icons`.
 - Where this file and the reference disagree, this file wins. Say so in your report.
 
 ## Role and ownership
@@ -116,12 +116,12 @@ Follow the hook rule in `CONVENTIONS.md`: one hook per concern with a colocated 
 - `src/lib/api/`: the helper, `ApiError`, the two wrappers.
 - A hook for the save (phases, the call, the mapped result), used by both save screens; `useBookmark(id)` for reading with the polling rule.
 - The pure failure-mapping function.
-- Components for the three pages and the shared pieces (`Favicon`, the status chip, banners, the signed-out message). Plain semantic markup, no UI library, no icon library: use text, or a few lines of inline SVG, where the reference has an icon.
+- Components for the three pages and the shared pieces (`Favicon`, the status chip, banners, the signed-out message). Plain semantic markup and no UI library. Where the reference has an icon, use the matching icon from `lucide-react` (bookmark, check, external link, clock, alert, arrow left). Icons are decorative: hide them from assistive technology (`aria-hidden`) and keep any button's accessible name as text or `aria-label`.
 - Wire the router and TanStack Query's provider in `main.tsx`. Remove the health page from `App.tsx`; leave the proxy in `vite.config.ts` as it is.
 
 ## Dependencies
 
-You may add `react-router` (one router; use its current stable release and state the version in your report). Nothing else. `package.json` and `package-lock.json` change only for that.
+You may add `react-router` (one router) and `lucide-react` (the only icon library; do not add `react-icons` or any other). Use the current stable release of each and state the versions in your report. Nothing else. `package.json` and `package-lock.json` change only for those two.
 
 ## Acceptance criteria
 
@@ -174,11 +174,11 @@ Checks specific to this task, on top of the repo-wide ones in the verifier promp
 ## Stop and ask when
 
 - The contract (`openapi.yaml`), a requirement, the design brief or this file conflict with each other.
-- You think you need a change to the backend or the contract, a dependency beyond the list above, or a UI or icon library.
+- You think you need a change to the backend or the contract, a dependency beyond the list above, or a UI library.
 - A convention in `CONVENTIONS.md` seems to prevent what this file asks for.
 
 Do not improvise around these. Report what blocked you and what you did not do.
 
 ## Handing back
 
-Follow `AGENTS.md`: run `make check`, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, requirement IDs covered (with the test that shows each), the `react-router` version, any place you departed from the reference design and why, the known gap, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle.
+Follow `AGENTS.md`: run `make check`, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, requirement IDs covered (with the test that shows each), the `react-router` and `lucide-react` versions, any place you departed from the reference design and why, the known gap, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle.
