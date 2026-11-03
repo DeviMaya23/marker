@@ -123,6 +123,33 @@ describe('SavePopup title', () => {
   })
 })
 
+describe('SavePopup limits and url shapes', () => {
+  it('sends a title of exactly 300 characters unchanged', async () => {
+    createBookmark.mockResolvedValue(created)
+    setup()
+    const title = 'a'.repeat(300)
+    await typeTitle(title)
+    await click('Save')
+    expect(createBookmark).toHaveBeenCalledWith({ url: 'https://example.com/page', title })
+  })
+
+  it.each([2048, 2049])('passes a url of %i characters to the server unchanged', async (length) => {
+    createBookmark.mockResolvedValue(created)
+    const url = `https://a.test/${'x'.repeat(length - 'https://a.test/'.length)}`
+    expect(url).toHaveLength(length)
+    setup(`?url=${encodeURIComponent(url)}`)
+    await click('Save')
+    expect(createBookmark).toHaveBeenCalledWith({ url })
+  })
+
+  it('keeps & and # inside the url parameter', async () => {
+    createBookmark.mockResolvedValue(created)
+    setup('?url=https%3A%2F%2Fa.test%2F%3Fx%3D1%26y%3D2%23frag&title=T')
+    await click('Save')
+    expect(createBookmark).toHaveBeenCalledWith({ url: 'https://a.test/?x=1&y=2#frag', title: 'T' })
+  })
+})
+
 describe('SavePopup closing', () => {
   it('shows Saved, closes after 1 second, then explains if the window stayed open', async () => {
     createBookmark.mockResolvedValue(created)
