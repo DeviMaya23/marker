@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 
 	"marker/internal/api"
 	"marker/internal/domain"
@@ -29,6 +30,9 @@ var domainProblems = []struct {
 }{
 	{domain.ErrUnauthenticated, http.StatusUnauthorized, api.ErrorCodeUnauthenticated, "Authentication required"},
 	{middleware.ErrCSRFFailed, http.StatusForbidden, api.ErrorCodeCsrfFailed, "CSRF check failed"},
+	{domain.ErrInvalidURL, http.StatusUnprocessableEntity, api.ErrorCodeInvalidUrl, "Invalid URL"},
+	{domain.ErrBookmarkLimitReached, http.StatusConflict, api.ErrorCodeBookmarkLimitReached, "Bookmark limit reached"},
+	{gorm.ErrRecordNotFound, http.StatusNotFound, api.ErrorCodeNotFound, "Not found"},
 }
 
 // ErrorHandler is Echo's error handler. Every error response is RFC 9457

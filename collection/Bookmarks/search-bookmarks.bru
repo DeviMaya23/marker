@@ -1,0 +1,20 @@
+meta {
+  name: Search Bookmarks
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/bookmarks?q=example&include_notes=true
+  body: none
+  auth: none
+}
+
+params:query {
+  q: example
+  include_notes: true
+}
+
+docs {
+  listBookmarks with a ranked search over title, URL, page content and (include_notes) notes.
+}

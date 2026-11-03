@@ -1,0 +1,27 @@
+meta {
+  name: Create Folder
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/folders
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "name": "Reading",
+    "parent_id": null
+  }
+}
+
+script:post-response {
+  if (res.status === 201) bru.setVar('folderId', res.body.id);
+}
+
+docs {
+  createFolder. 201 Folder; saves the id to `folderId`. Max depth 3.
+  409 folder_name_conflict (case-insensitive sibling), 422 folder_depth_exceeded / validation_error.
+}

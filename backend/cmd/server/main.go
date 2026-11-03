@@ -9,14 +9,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/uuid"
-
+	"marker/internal/adaptor"
 	"marker/internal/handler"
 	"marker/internal/platform/config"
 	"marker/internal/platform/database"
 	"marker/internal/repository"
 	"marker/internal/usecase"
 	"marker/internal/worker"
+	"marker/pkg/safehttp"
 )
 
 func main() {
@@ -45,9 +45,13 @@ func main() {
 		defer sqlDB.Close()
 	}
 
+	bookmarkRepo := repository.NewBookmarkRepository(db)
+	// One SSRF-safe client for every outbound fetch of a user-supplied URL.
+	pageFetcher := adaptor.NewPageFetcher(safehttp.New())
+
 	queue, err := worker.New(pool, worker.Deps{
-		Fetcher: placeholderFetcher{},
-		Pending: repository.NewBookmarkRepository(db),
+		Fetcher: usecase.NewFetchService(bookmarkRepo, pageFetcher),
+		Pending: bookmarkRepo,
 	}, worker.Options{FetchConcurrency: cfg.FetchConcurrency})
 	if err != nil {
 		log.Fatalf("queue: %v", err)
@@ -56,9 +60,10 @@ func main() {
 		log.Fatalf("queue start: %v", err)
 	}
 
+	bookmarkService := usecase.NewBookmarkService(bookmarkRepo, repository.NewFolderRepository(db), queue)
 	authService := usecase.NewAuthService(repository.NewUserRepository(db), repository.NewSessionRepository(db))
 	deps := handler.Deps{
-		Server:    handler.NewServer(),
+		Server:    handler.NewServer(bookmarkService),
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
 	}
@@ -86,13 +91,4 @@ func main() {
 	if err := queue.Stop(shutdownCtx); err != nil {
 		log.Printf("queue stop: %v", err)
 	}
-}
-
-// placeholderFetcher stands in until the save-a-URL slice adds the real fetch
-// usecase. It does nothing, so bookmarks stay pending; the slice replaces it.
-type placeholderFetcher struct{}
-
-func (placeholderFetcher) Fetch(_ context.Context, id uuid.UUID) error {
-	log.Printf("fetch for bookmark %s: not implemented yet", id)
-	return nil
 }

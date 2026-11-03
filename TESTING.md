@@ -17,7 +17,24 @@ Test usecase behaviour, not structure. A test that only verifies a method was ca
 | `usecase/` | Unit tests |
 | `handler/` | Unit tests |
 | `repository/` | Integration tests only — no unit tests |
+| `adaptor/` | Unit tests for logic the adaptor holds (see External services); no database |
 | `pkg/safehttp` | Unit tests (security-critical, see below) |
+
+### Test files
+
+One test file per source file: `fetch.go` is tested in `fetch_test.go`, and its integration tests, if it has any, in `fetch_integration_test.go`. Edge cases and regressions are rows in a table or subtests in that file, named for the behavior they pin. Never create a separate `_edge`, `_regress` or `_bugfix` file. A test written for a bug goes into the existing test file for the code that was fixed.
+
+When a source file grows too big to read, split the source file by concern and move its tests with it, keeping the names in step (`bookmark_search.go` with `bookmark_search_test.go`). Do not split only the tests.
+
+### Test imports
+
+Tests keep the same dependency direction as the code. A change in one layer must not break another layer's tests.
+
+- `repository/` integration tests import `domain`, `repository` and `testutil`. They never import `usecase` or `handler`, and never construct a service.
+- `usecase/` tests use the fakes in `fakes_test.go` for stores and queues. They never import `repository`.
+- `handler/` tests use per-handler usecase doubles. They never import `repository`.
+
+A behavior that spans layers is split at the seam. The persistence side is tested in `repository/` against the database (a concurrent save, the cap, what a lookup returns). The rule side is tested in the usecase with fakes (how a duplicate is reported, what happens when the queue fails). Do not write a test that wires real layers together to check both at once.
 
 ### Running integration tests
 
@@ -117,6 +134,8 @@ External services (the Kinde client, the page-fetch adaptor) are thin adapters o
 - No unit tests on the implementation — correctness depends on the external system, not on code in this repo
 - When used as a dependency in usecase tests, always use a value-return spy
 - Integration tests only if the adapter contains non-trivial logic worth verifying against the real system
+
+An adaptor that holds logic of its own, such as the page fetcher's text extraction and favicon discovery, is the exception to the first rule. Test the real adaptor against an `httptest` server, with `safehttp.NewForTesting`, and assert on what it returns. Do not involve a database: the next layer's side of the seam is tested there, with fakes in the usecase and the real schema in the repository.
 
 ### Security-critical logic: `pkg/safehttp`
 

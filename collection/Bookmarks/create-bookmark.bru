@@ -1,0 +1,29 @@
+meta {
+  name: Create Bookmark
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/bookmarks
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "url": "https://example.com/",
+    "title": "Example",
+    "folder_id": null
+  }
+}
+
+script:post-response {
+  if (res.status === 201) bru.setVar('bookmarkId', res.body.id);
+}
+
+docs {
+  createBookmark. 201 BookmarkSummary; saves the id to `bookmarkId`.
+  409 duplicate_bookmark / bookmark_limit_reached, 422 invalid_url / validation_error.
+  Set folder_id to {{folderId}} to file it in a folder.
+}

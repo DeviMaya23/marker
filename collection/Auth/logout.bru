@@ -1,0 +1,15 @@
+meta {
+  name: Logout
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: none
+  auth: none
+}
+
+docs {
+  authLogout. Returns 200 {"logout_url": "..."}. Ends the session; run Dev Login again afterwards.
+}

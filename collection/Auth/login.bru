@@ -1,0 +1,23 @@
+meta {
+  name: Login
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/auth/login?return_to=/
+  body: none
+  auth: none
+}
+
+params:query {
+  return_to: /
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+docs {
+  authLogin. Expect 302 to the identity provider. Rate limited per IP.
+}

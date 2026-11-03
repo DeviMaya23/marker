@@ -1,0 +1,24 @@
+meta {
+  name: Update Bookmark
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/bookmarks/{{bookmarkId}}
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "title": "Renamed",
+    "note": "A note",
+    "folder_id": null
+  }
+}
+
+docs {
+  updateBookmark. Only title, note and folder_id; omitted fields are unchanged, null clears note / moves to root.
+  409 bookmark_in_trash for trashed bookmarks, 422 on unknown fields.
+}

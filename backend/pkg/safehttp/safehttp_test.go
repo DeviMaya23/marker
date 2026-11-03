@@ -75,16 +75,33 @@ func TestGet_ProductionClientRefusesLoopback(t *testing.T) {
 	_, port, err := net.SplitHostPort(u.Host)
 	require.NoError(t, err)
 
-	for _, target := range []string{
-		"http://127.0.0.1:" + port + "/",
-		"http://localhost:" + port + "/",
-		"http://[::1]:" + port + "/",
-	} {
+	targets := []string{"http://127.0.0.1:" + port + "/"}
+	if hasIPv6Loopback() {
+		// Dialing an IPv6 address needs an IPv6 stack, which not every machine (or
+		// CI container) has, so these run only where it works. "localhost" may
+		// resolve to ::1 first, hence it is here too. The address rules for IPv6
+		// are also covered without sockets by the tables in addr_test.go.
+		targets = append(targets,
+			"http://[::1]:"+port+"/",
+			"http://localhost:"+port+"/",
+		)
+	}
+
+	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
 			_, err := New().Get(context.Background(), target, PageLimits)
 			assert.ErrorIs(t, err, ErrBlockedAddress)
 		})
 	}
+}
+
+func hasIPv6Loopback() bool {
+	l, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		return false
+	}
+	_ = l.Close()
+	return true
 }
 
 func TestGet_ProductionClientRefusesOtherPorts(t *testing.T) {
@@ -95,14 +112,19 @@ func TestGet_ProductionClientRefusesOtherPorts(t *testing.T) {
 }
 
 func TestGet_RefusesPrivateAndMetadataLiterals(t *testing.T) {
-	for _, target := range []string{
+	targets := []string{
 		"http://10.0.0.1/",
 		"http://192.168.0.1/",
 		"http://169.254.169.254/latest/meta-data/",
-		"http://[fd00:ec2::254]/",
-		"http://[::ffff:10.0.0.1]/",
 		"http://0.0.0.0/",
-	} {
+	}
+	if hasIPv6Loopback() { // IPv6 stack available, see TestGet_ProductionClientRefusesLoopback
+		targets = append(targets,
+			"http://[fd00:ec2::254]/",
+			"http://[::ffff:10.0.0.1]/",
+		)
+	}
+	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
 			_, err := NewForTesting(t).Get(context.Background(), target, PageLimits)
 			assert.ErrorIs(t, err, ErrBlockedAddress)

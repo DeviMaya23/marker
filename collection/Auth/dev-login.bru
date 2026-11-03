@@ -1,0 +1,33 @@
+meta {
+  name: Dev Login
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/auth/dev-login?name={{devUser}}
+  body: none
+  auth: none
+}
+
+params:query {
+  name: {{devUser}}
+}
+
+script:pre-request {
+  req.setMaxRedirects(0);
+}
+
+script:post-response {
+  const raw = res.getHeader('set-cookie') || [];
+  const cookies = Array.isArray(raw) ? raw : [raw];
+  for (const c of cookies) {
+    const m = /^csrf_token=([^;]+)/.exec(c);
+    if (m) bru.setVar('csrfToken', decodeURIComponent(m[1]));
+  }
+}
+
+docs {
+  Development only (not in openapi.yaml). Signs in as `dev|<name>`, sets the session and csrf_token cookies.
+  Expect 302. Run this before any other request.
+}

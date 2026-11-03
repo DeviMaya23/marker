@@ -36,7 +36,7 @@ func (stubAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func newTestRouter() *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(), Auth: stubAuth{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil), Auth: stubAuth{}, AppOrigin: testOrigin})
 }
 
 func withSession(token string) func(*http.Request) {
@@ -105,7 +105,7 @@ func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 	e := newTestRouter()
 
 	writes := []struct{ method, path string }{
-		{http.MethodPost, "/api/v1/bookmarks"},
+		{http.MethodPost, "/api/v1/folders"},
 		{http.MethodPatch, "/api/v1/folders/" + someFolderID},
 		{http.MethodDelete, "/api/v1/trash"},
 		{http.MethodPost, "/auth/logout"},
@@ -168,9 +168,9 @@ func TestRouter_RequestBodyIsCappedAt64KB(t *testing.T) {
 		requireProblem(t, post(64*1024+1), http.StatusRequestEntityTooLarge, api.ErrorCodePayloadTooLarge)
 	})
 
-	t.Run("at the cap is not refused for size", func(t *testing.T) {
+	t.Run("exactly at the cap is not refused for size", func(t *testing.T) {
 		// The body is not valid JSON, so the stub or the decoder answers; the point
-		// is only that the size limit does not fire.
+		// is only that the size limit does not fire. 64 KB means 65,536 bytes.
 		require.NotEqual(t, http.StatusRequestEntityTooLarge, post(64*1024).Code)
 	})
 }

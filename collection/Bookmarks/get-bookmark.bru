@@ -1,0 +1,15 @@
+meta {
+  name: Get Bookmark
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/bookmarks/{{bookmarkId}}
+  body: none
+  auth: none
+}
+
+docs {
+  getBookmark. Includes page `content` (null while pending or failed). Works for trashed bookmarks.
+}
