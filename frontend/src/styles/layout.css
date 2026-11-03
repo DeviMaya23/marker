@@ -208,3 +208,93 @@
   padding: var(--space-2);
   border-top: 1px solid var(--border);
 }
+
+/* Bookmark list: carried over from docs/design/ui-reference (list, rows, sentinel). */
+.bookmark-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.bookmark-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+.bookmark-row:last-child {
+  border-bottom: none;
+}
+.bookmark-row:hover {
+  background: var(--surface-sunken);
+}
+.bookmark-row__main {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+.bookmark-row__main:hover {
+  text-decoration: none;
+}
+.bookmark-row__title-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.bookmark-row__title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.bookmark-row__meta-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.bookmark-row__dot {
+  color: var(--text-faint);
+}
+.bookmark-row--skeleton {
+  align-items: center;
+}
+.list-sentinel {
+  height: 1px;
+}
+
+/* Written for this slice: the top navigation and the "couldn't load more" line. */
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.app-nav__name {
+  font-weight: 600;
+  margin-right: var(--space-2);
+}
+.app-nav__link {
+  color: var(--text-muted);
+}
+.app-nav__link[aria-current='page'] {
+  color: var(--text);
+  font-weight: 500;
+}
+.list-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+}
