@@ -36,13 +36,22 @@ components, hooks, and helpers for that feature live here, not in top-level
 **`app-shell/`** — only the shell layout and logic that genuinely coordinates
 across features (view routing, sync-driven refresh). Do not put feature work here.
 
-**`lib/`** — shared domain modules consumed by 4+ features. Keep these
-feature-agnostic; do not relocate a shared module into a single feature. A
-helper used by only one feature belongs in that feature's `lib/`, not here.
+**`lib/`** — shared domain modules used by more than one feature (the API
+helper and wrappers, URL helpers). Keep these feature-agnostic; do not relocate
+a shared module into a single feature. A helper used by only one feature belongs
+in that feature's `lib/`, not here.
 
 **`components/ui/`, `hooks/`, `pages/`** — stay top-level: design-system
 primitives, dependency-free generic hooks, and thin route entry points
 respectively.
+
+### Features do not import each other
+
+A file in one feature never imports a file from another feature. When two
+features need the same thing, promote it (see Promotion below): UI goes to
+`components/`, logic goes to `lib/`, and both features import it from there.
+Pages and `app-shell/` may import from any feature, since they are where
+features are assembled.
 
 ### API types
 
@@ -60,8 +69,8 @@ and the `lib/` domain module stay separately greppable.
 ### Promotion (YAGNI)
 
 A feature-local component/hook/helper is promoted to the shared layer
-(`components/`, `hooks/`, `lib/`) only once a second feature actually needs it.
-Do not pre-promote speculatively.
+(`components/`, `hooks/`, `lib/`) only once a second feature actually needs it,
+and it moves at that moment, not later. Do not pre-promote speculatively.
 
 ---
 

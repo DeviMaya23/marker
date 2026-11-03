@@ -137,6 +137,12 @@ External services (the Kinde client, the page-fetch adaptor) are thin adapters o
 
 An adaptor that holds logic of its own, such as the page fetcher's text extraction and favicon discovery, is the exception to the first rule. Test the real adaptor against an `httptest` server, with `safehttp.NewForTesting`, and assert on what it returns. Do not involve a database: the next layer's side of the seam is tested there, with fakes in the usecase and the real schema in the repository.
 
+### Queue and worker tests
+
+`worker/` integration tests run a real River queue against a real Postgres, because River keeps its jobs in the database. They cover River's behavior: a job runs once, enqueuing the same bookmark twice makes one job, and the sweep runs at start and enqueues what it finds.
+
+These tests do not import `repository`. The worker defines `PendingLister`, so the tests give it a fake lister that returns known IDs. Which bookmarks count as pending (status, age, trashed) is a SQL contract and is tested in `repository/`, in `ListPendingIDs`. Do not seed bookmark rows in a worker test.
+
 ### Security-critical logic: `pkg/safehttp`
 
 `pkg/safehttp` is not a thin adapter. It enforces NFR-8 and NFR-9 and is tested directly, because a hole in it is a server-side request forgery hole.
@@ -190,3 +196,4 @@ Same criterion as the backend: test logic that lives in your code. Do not test p
 - API calls are mocked at the API-wrapper boundary with value-return spies (`vi.fn().mockResolvedValue(...)`). Fakes are not used.
 - Use fake timers for time-driven behaviour: the 2 to 3 second sync poll and the save popup's auto-close.
 - A hook that attaches effects to a DOM ref is tested through a small harness component, not bare `renderHook` (see `CONVENTIONS.md`).
+- `user-event` hangs under Vitest's fake timers. In a test that uses fake timers, fire events with `fireEvent` from Testing Library; other tests use `user-event`.

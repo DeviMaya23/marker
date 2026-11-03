@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"marker/internal/domain"
-	"marker/internal/repository"
 	"marker/internal/testutil"
 	"marker/internal/worker"
 )
@@ -40,16 +39,24 @@ func (r *recordingFetcher) count(id uuid.UUID) int {
 	return r.calls[id]
 }
 
+// fakeLister stands in for the repository's pending-bookmark query. What that query
+// returns is tested in repository/; here it only decides which IDs the sweep sees.
+type fakeLister struct{ ids []uuid.UUID }
+
+func (f fakeLister) ListPendingIDs(context.Context, time.Time, int) ([]uuid.UUID, error) {
+	return f.ids, nil
+}
+
 // startQueue runs a real River queue against the shared test database and stops it
-// when the test ends. The sweep runs once at start.
-func startQueue(t *testing.T, fetcher worker.BookmarkFetcher) *worker.Queue {
+// when the test ends. The sweep runs once at start and enqueues whatever the lister
+// returns.
+func startQueue(t *testing.T, fetcher worker.BookmarkFetcher, pending worker.PendingLister) *worker.Queue {
 	t.Helper()
 	pool := testutil.NewPool(t)
-	db := testutil.NewDB(t)
 
 	q, err := worker.New(pool, worker.Deps{
 		Fetcher: fetcher,
-		Pending: repository.NewBookmarkRepository(db),
+		Pending: pending,
 	}, worker.Options{FetchConcurrency: 2})
 	require.NoError(t, err)
 	require.NoError(t, q.Start(context.Background()))
@@ -64,7 +71,7 @@ func startQueue(t *testing.T, fetcher worker.BookmarkFetcher) *worker.Queue {
 
 func TestQueue_EnqueuedFetchRunsOnce(t *testing.T) {
 	fetcher := newRecordingFetcher()
-	q := startQueue(t, fetcher)
+	q := startQueue(t, fetcher, fakeLister{})
 
 	id := domain.NewID()
 	require.NoError(t, q.EnqueueFetch(context.Background(), id))
@@ -75,27 +82,18 @@ func TestQueue_EnqueuedFetchRunsOnce(t *testing.T) {
 	require.Never(t, func() bool { return fetcher.count(id) > 1 }, 2*time.Second, 100*time.Millisecond)
 }
 
-func TestQueue_SweepEnqueuesOldPendingBookmarksOnly(t *testing.T) {
-	db := testutil.NewDB(t)
-	user := domain.User{ID: domain.NewID(), IdpID: "idp|" + domain.NewID().String()}
-	require.NoError(t, db.Create(&user).Error)
-
-	oldPending := domain.Bookmark{
-		ID: domain.NewID(), UserID: user.ID, URL: "https://example.com/sweep-old",
-		NormalizedURL: "https://example.com/sweep-old", FetchStatus: domain.FetchPending,
-	}
-	require.NoError(t, db.Create(&oldPending).Error)
-	require.NoError(t, db.Model(&oldPending).UpdateColumn("created_at", time.Now().Add(-10*time.Minute)).Error)
-
-	freshPending := domain.Bookmark{
-		ID: domain.NewID(), UserID: user.ID, URL: "https://example.com/sweep-fresh",
-		NormalizedURL: "https://example.com/sweep-fresh", FetchStatus: domain.FetchPending,
-	}
-	require.NoError(t, db.Create(&freshPending).Error)
-
+func TestQueue_SweepEnqueuesWhatTheListerReturns(t *testing.T) {
+	first, second := domain.NewID(), domain.NewID()
+	notListed := domain.NewID()
 	fetcher := newRecordingFetcher()
-	startQueue(t, fetcher) // the sweep runs once at start
 
-	require.Eventually(t, func() bool { return fetcher.count(oldPending.ID) == 1 }, 20*time.Second, 100*time.Millisecond)
-	require.Never(t, func() bool { return fetcher.count(freshPending.ID) > 0 }, 2*time.Second, 100*time.Millisecond)
+	// The first ID is returned twice: the sweep must still create one job for it.
+	startQueue(t, fetcher, fakeLister{ids: []uuid.UUID{first, second, first}})
+
+	require.Eventually(t, func() bool {
+		return fetcher.count(first) == 1 && fetcher.count(second) == 1
+	}, 20*time.Second, 100*time.Millisecond)
+	require.Never(t, func() bool {
+		return fetcher.count(first) > 1 || fetcher.count(second) > 1 || fetcher.count(notListed) > 0
+	}, 2*time.Second, 100*time.Millisecond)
 }
