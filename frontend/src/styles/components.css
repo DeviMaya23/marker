@@ -1,0 +1,162 @@
+/* Carried over from docs/design/ui-reference: only the rules these screens use. */
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-weight: 500;
+  font-size: 13.5px;
+  cursor: pointer;
+  background: var(--n-100);
+  color: var(--text);
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn--sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+.btn--block {
+  width: 100%;
+  justify-content: center;
+}
+.btn--primary {
+  background: var(--accent-500);
+  color: #fff;
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-600);
+}
+.btn--secondary {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+.btn--secondary:hover:not(:disabled) {
+  background: var(--n-100);
+}
+.btn--ghost {
+  background: transparent;
+}
+.btn--ghost:hover:not(:disabled) {
+  background: var(--n-100);
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--n-100);
+  color: var(--text);
+}
+.icon-btn--sm {
+  width: 26px;
+  height: 26px;
+}
+/* Inputs */
+.input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+.input:disabled {
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+}
+.textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.field {
+  margin-bottom: var(--space-3);
+}
+.field__label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.field__meta {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  margin-top: 4px;
+}
+.field__error {
+  color: var(--danger-500);
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: 13.5px;
+  margin-bottom: var(--space-3);
+}
+.banner--warning {
+  background: var(--pending-100);
+  color: var(--pending-500);
+}
+.banner--error {
+  background: var(--failed-100);
+  color: var(--failed-500);
+}
+.banner--info {
+  background: var(--accent-50);
+  color: var(--accent-700);
+}
+.banner--trashed {
+  background: var(--n-150);
+  color: var(--n-700);
+}
+
+/* Empty / error / loading state panels */
+.state-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-7) var(--space-4);
+  color: var(--text-muted);
+}
+.state-panel__icon {
+  color: var(--text-faint);
+  margin-bottom: var(--space-1);
+}
+.state-panel__title {
+  font-size: 15px;
+  color: var(--text);
+}
+.state-panel__desc {
+  max-width: 380px;
+  font-size: 13.5px;
+}
+.state-panel__action {
+  margin-top: var(--space-2);
+}
+
+/* Skeletons */
