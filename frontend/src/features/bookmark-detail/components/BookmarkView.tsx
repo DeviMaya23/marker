@@ -41,9 +41,11 @@ function Message({ title, description, children }: { title: string; description?
 export function BookmarkView({ id }: { id: string }) {
   const { bookmark, error, isLoading, retry } = useBookmark(id)
 
+  // A 401 on a later poll leaves the old data in place; the signed-out state still wins.
+  if (error instanceof ApiError && error.status === 401) return <SignedOut />
+
   if (!bookmark) {
     if (isLoading) return <p role="status">Loading…</p>
-    if (error instanceof ApiError && error.status === 401) return <SignedOut />
     if (error instanceof ApiError && error.status === 404) {
       return (
         <Message title="Bookmark not found">
