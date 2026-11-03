@@ -1,5 +1,5 @@
 import { CircleAlert, Clock } from 'lucide-react'
-import type { BookmarkDetail } from '../../../lib/api/bookmarks'
+import type { BookmarkDetail } from '../../lib/api/bookmarks'
 
 /** The fetch state as a chip: pending, complete or failed. */
 export function FetchStatusChip({ status }: { status: BookmarkDetail['fetch_status'] }) {

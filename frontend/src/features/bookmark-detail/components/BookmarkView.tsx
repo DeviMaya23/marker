@@ -6,9 +6,9 @@ import { StatePanel } from '../../../components/ui/StatePanel'
 import { ApiError } from '../../../lib/api/ApiError'
 import type { BookmarkDetail } from '../../../lib/api/bookmarks'
 import { useBookmark } from '../hooks/useBookmark'
-import { hostOf } from '../lib/hostOf'
-import { Favicon } from './Favicon'
-import { FetchStatusChip } from './FetchStatusChip'
+import { hostOf } from '../../../lib/hostOf'
+import { Favicon } from '../../../components/ui/Favicon'
+import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 
 /** The read-only bookmark page: fetch state, note and saved page text. */
 export function BookmarkView({ id }: { id: string }) {
