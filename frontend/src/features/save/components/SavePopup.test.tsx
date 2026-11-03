@@ -190,6 +190,16 @@ describe('SavePopup', () => {
       expect((titleInput() as HTMLInputElement).value).toHaveLength(300)
     })
 
+    it('sends a url of exactly 2,048 characters and a title of exactly 300 unchanged', async () => {
+      const url = `https://a.test/${'a'.repeat(2048 - 'https://a.test/'.length)}`
+      const title = 't'.repeat(300)
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup(`?url=${encodeURIComponent(url)}&title=${title}`)
+      expect(url).toHaveLength(2048)
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledWith({ url, title })
+    })
+
     it('lets the server judge a very long url, and shows its answer', async () => {
       const url = `https://a.test/${'a'.repeat(2049 - 'https://a.test/'.length)}`
       vi.mocked(createBookmark).mockRejectedValue(
