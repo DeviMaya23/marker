@@ -25,3 +25,8 @@
 .home__result .banner {
   margin-bottom: 0;
 }
+
+.detail-page__note-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
