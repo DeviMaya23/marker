@@ -119,6 +119,8 @@ describe('BookmarkView', () => {
       expect(screen.getByText('Pending')).toBeInTheDocument()
       await act(() => vi.advanceTimersByTimeAsync(1000))
       expect(getBookmark).toHaveBeenCalledTimes(2)
+      // Query notifies observers on a short timer, which fake timers hold back.
+      await act(() => vi.advanceTimersByTimeAsync(50))
       expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
       expect(screen.queryByText('Pending')).not.toBeInTheDocument()
     } finally {
