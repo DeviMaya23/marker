@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -184,6 +186,31 @@ func TestListBookmarks_InvalidCursor(t *testing.T) {
 			require.Zero(t, spy.listCalls)
 		})
 	}
+}
+
+func TestListBookmarks_CursorLengthBoundary(t *testing.T) {
+	base := `{"m":"live","t":"2026-01-01T00:00:00Z","id":"` + uuid.NewString() + `"}`
+	padTo := func(n int) string {
+		for i := 0; ; i++ {
+			s := base64.RawURLEncoding.EncodeToString([]byte(base + strings.Repeat(" ", i)))
+			if len(s) >= n {
+				return s
+			}
+		}
+	}
+	// No valid base64url string is 513 characters long, so the 513 case is one more character.
+	at512 := padTo(domain.MaxCursorLength)
+	at513 := at512 + "A"
+	require.Len(t, at512, 512)
+	require.Len(t, at513, 513)
+
+	spy := &bookmarkSpy{}
+	require.Equal(t, http.StatusOK, listBookmarks(spy, "?cursor="+at512).Code)
+	require.Equal(t, at512, spy.gotList.Cursor)
+
+	spy = &bookmarkSpy{}
+	requireListProblem(t, listBookmarks(spy, "?cursor="+at513), fieldErr{"cursor", "invalid"})
+	require.Zero(t, spy.listCalls)
 }
 
 func TestListBookmarks_SearchAndFolderAreNotImplemented(t *testing.T) {
