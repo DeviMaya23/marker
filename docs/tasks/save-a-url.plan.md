@@ -38,7 +38,7 @@ Branch: `claude/brave-bohr-ejckv2`. Paths are under `backend/internal/` unless n
 - [x] Blocked address → `failed`: `TestFetch_BlockedAddress`
 
 ## Repo-wide
-- [ ] `make check` passes — NOT fully green: lint, build, openapi-lint and frontend tests pass; 3 backend tests fail, none from this work (see Judgment calls)
+- [x] `make check` passes (it was red at first because of three tests that did not come from this work; they were fixed afterwards, see the verifier report F1 and F2)
 - [x] Content stored/returned as plain text only
 
 ## Judgment calls
@@ -55,3 +55,15 @@ Branch: `claude/brave-bohr-ejckv2`. Paths are under `backend/internal/` unless n
 - **FR-5b/5c in unit tests.** The "title only if empty" and "touch nothing else" rules live in the repository SQL, so the usecase unit tests use a fake that mirrors that contract. The real proof is `bookmark_fetch_integration_test.go` (written, not run).
 - **Dependencies.** `golang.org/x/net` and `golang.org/x/text` moved from indirect to direct in `go.mod` (versions unchanged; `go` directive untouched). `x/text` is used directly only by an extraction test (`charmap`, to build a Latin-1 page).
 - **Frontend deps** were installed with `npm ci` (git-ignored `node_modules`) so `make check` could run its lint step.
+
+
+## Verifier follow-up (`save-a-url.report.md`)
+Test names in the checklist above are the planned names; the real ones are in the verifier report. F1 and F2 were fixed by the user.
+- [x] **F3** `NormalizeURL` kept the pairs `url.Query()` dropped (`;`, bad escapes) and the encoded trailing `%2F`: `domain/url.go`, `TestNormalizeURL_DifferentKey`.
+- [x] **F4** `BookmarkRepository.Create` locks the user's row and re-checks duplicate (first) and cap before inserting: `repository/bookmark.go`; integration `TestCreateBookmark_ConcurrentSavesNeverExceedTheCap`, `..._DuplicateAtTheCapIsADuplicate` (written, not run).
+- [x] **F5** A duplicate whose winner has vanished is retried once instead of answering 500: `usecase/bookmark.go`, `TestBookmarkService_Create_DuplicateWhoseWinnerVanished`.
+- [x] **F6** Only block elements add a space, so `<b>Hel</b>lo` stays one word; an `<svg><title>` is not the page title: `adaptor/extract.go`, `TestExtractPage_InlineMarkupDoesNotSplitWords`, `TestExtractPage_SVGTitleIsNotThePageTitle`.
+- [x] **F7** Default ports (`:80` for http, `:443` for https) are dropped from the key: `TestNormalizeURL_SameKey`.
+- [x] **F8** If storing a fetch result fails with a real error, the bookmark is marked `failed` rather than left pending for the sweep to retry forever: `usecase/fetch.go`, `TestFetchService_StoreFailureIsRecordedAsFailed`. If that write also fails the error is returned.
+
+Judgment calls for the follow-up: the usecase keeps its early duplicate and cap checks, and the repository repeats them under the lock. A transient database error that happens when storing a result now marks the bookmark `failed` (no retry), which the task accepts for failures generally. The `tsvector` size limit in F8 is not tested.

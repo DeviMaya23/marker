@@ -199,16 +199,43 @@ func TestFetchService_Truncates(t *testing.T) {
 	})
 }
 
-func TestFetchService_StoreErrorIsReturned(t *testing.T) {
-	// A real database error is not "gone": return it so River records the job failure.
+func TestFetchService_StoreFailureIsRecordedAsFailed(t *testing.T) {
+	// A result the database refuses must not leave the bookmark pending: the sweep
+	// would queue the same failing job every minute.
 	b := pendingBookmark()
 	store := &erroringStore{fakeFetchStore: newFakeFetchStore(b)}
-	err := NewFetchService(store, &stubPageFetcher{page: domain.FetchedPage{}}).Fetch(context.Background(), b.ID)
-	require.ErrorContains(t, err, "db down")
+
+	err := NewFetchService(store, &stubPageFetcher{page: domain.FetchedPage{Text: "x"}}).Fetch(context.Background(), b.ID)
+
+	require.NoError(t, err)
+	require.Equal(t, domain.FetchFailed, store.bookmarks[b.ID].FetchStatus)
+	require.EqualValues(t, 1, store.versions[b.UserID])
 }
 
-type erroringStore struct{ *fakeFetchStore }
+func TestFetchService_StoreAndFailureWritesBothFailing(t *testing.T) {
+	// If even the failure cannot be recorded the database is probably down: return the
+	// error so the job fails, and leave the bookmark pending for the sweep.
+	b := pendingBookmark()
+	store := &erroringStore{fakeFetchStore: newFakeFetchStore(b), failureErr: errors.New("still down")}
+
+	err := NewFetchService(store, &stubPageFetcher{page: domain.FetchedPage{Text: "x"}}).Fetch(context.Background(), b.ID)
+
+	require.ErrorContains(t, err, "db down")
+	require.Equal(t, domain.FetchPending, store.bookmarks[b.ID].FetchStatus)
+}
+
+type erroringStore struct {
+	*fakeFetchStore
+	failureErr error
+}
 
 func (erroringStore) RecordFetchSuccess(context.Context, domain.Bookmark, domain.FetchResult) error {
 	return errors.New("db down")
+}
+
+func (s *erroringStore) RecordFetchFailure(ctx context.Context, b domain.Bookmark) error {
+	if s.failureErr != nil {
+		return s.failureErr
+	}
+	return s.fakeFetchStore.RecordFetchFailure(ctx, b)
 }

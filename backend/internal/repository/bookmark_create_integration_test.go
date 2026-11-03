@@ -210,3 +210,66 @@ func TestGetBookmark_OwnLiveAndTrashedButNeverAnotherUsers(t *testing.T) {
 	_, err = repo.GetDetail(context.Background(), alice.ID, uuid.New())
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 }
+
+func TestCreateBookmark_ConcurrentSavesNeverExceedTheCap(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := newUser(t, db)
+	svc := newBookmarkService(db, &stubQueue{})
+
+	rows := make([]domain.Bookmark, domain.MaxBookmarks-1)
+	for i := range rows {
+		rows[i] = newBookmark(user.ID, "https://cap.example.com/"+uuid.NewString())
+	}
+	require.NoError(t, db.CreateInBatches(rows, 200).Error)
+
+	const n = 6
+	errs := make([]error, n)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			_, errs[i] = svc.Create(context.Background(), user.ID, usecase.CreateBookmarkInput{URL: "https://cap.example.com/new-" + uuid.NewString()})
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	var created, atCap int
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			created++
+		case errors.Is(err, domain.ErrBookmarkLimitReached):
+			atCap++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	require.Equal(t, 1, created, "only one save fits under the cap")
+	require.Equal(t, n-1, atCap)
+
+	var total int64
+	require.NoError(t, db.Model(&domain.Bookmark{}).Where("user_id = ?", user.ID).Count(&total).Error)
+	require.EqualValues(t, domain.MaxBookmarks, total)
+}
+
+func TestCreateBookmark_DuplicateAtTheCapIsADuplicate(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := newUser(t, db)
+	repo := repository.NewBookmarkRepository(db)
+
+	rows := make([]domain.Bookmark, domain.MaxBookmarks)
+	for i := range rows {
+		rows[i] = newBookmark(user.ID, "https://capdup.example.com/"+uuid.NewString())
+	}
+	require.NoError(t, db.CreateInBatches(rows, 200).Error)
+
+	dup := newBookmark(user.ID, rows[0].NormalizedURL)
+	require.ErrorIs(t, repo.Create(context.Background(), dup), domain.ErrDuplicateBookmark)
+
+	fresh := newBookmark(user.ID, "https://capdup.example.com/fresh")
+	require.ErrorIs(t, repo.Create(context.Background(), fresh), domain.ErrBookmarkLimitReached)
+}

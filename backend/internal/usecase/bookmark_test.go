@@ -159,6 +159,54 @@ func (r *racingStore) FindByNormalizedURL(_ context.Context, _ uuid.UUID, _ stri
 	return r.winner, nil
 }
 
+// flakyDuplicateStore reports a duplicate on the first Create, but the winner is gone
+// when the usecase looks it up, like a trash emptied between the two.
+type flakyDuplicateStore struct {
+	*fakeBookmarkStore
+	creates    int
+	alwaysDupe bool
+}
+
+func (f *flakyDuplicateStore) Create(ctx context.Context, b domain.Bookmark) error {
+	f.creates++
+	if f.alwaysDupe || f.creates == 1 {
+		return domain.ErrDuplicateBookmark
+	}
+	return f.fakeBookmarkStore.Create(ctx, b)
+}
+
+func TestBookmarkService_Create_DuplicateWhoseWinnerVanished(t *testing.T) {
+	t.Run("the URL is free again, so the save is retried once", func(t *testing.T) {
+		f := newCreateFixture()
+		store := &flakyDuplicateStore{fakeBookmarkStore: f.store}
+		svc := NewBookmarkService(store, fakeFolders{}, f.queue)
+
+		b, err := svc.Create(context.Background(), f.user, CreateBookmarkInput{URL: "https://e.com/a"})
+		require.NoError(t, err)
+		require.Equal(t, 2, store.creates)
+		require.Equal(t, []uuid.UUID{b.ID}, f.queue.ids)
+	})
+	t.Run("a second duplicate with no winner gives up with the bare sentinel", func(t *testing.T) {
+		f := newCreateFixture()
+		store := &flakyDuplicateStore{fakeBookmarkStore: f.store, alwaysDupe: true}
+		svc := NewBookmarkService(store, fakeFolders{}, f.queue)
+
+		_, err := svc.Create(context.Background(), f.user, CreateBookmarkInput{URL: "https://e.com/a"})
+		require.ErrorIs(t, err, domain.ErrDuplicateBookmark)
+		require.Equal(t, 2, store.creates, "no endless retry")
+		require.Empty(t, f.queue.ids)
+	})
+}
+
+func TestBookmarkService_Create_CapReportedByTheStore(t *testing.T) {
+	// The store re-checks the cap under a lock; its answer reaches the caller as is.
+	f := newCreateFixture()
+	f.store.createErr = domain.ErrBookmarkLimitReached
+	_, err := f.svc.Create(context.Background(), f.user, CreateBookmarkInput{URL: "https://e.com/a"})
+	require.ErrorIs(t, err, domain.ErrBookmarkLimitReached)
+	require.Empty(t, f.queue.ids)
+}
+
 func TestBookmarkService_Create_Cap(t *testing.T) {
 	fill := func(f *createFixture, n int) {
 		for i := 0; i < n; i++ {

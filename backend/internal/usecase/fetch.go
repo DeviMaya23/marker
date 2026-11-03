@@ -62,7 +62,20 @@ func (s *FetchService) Fetch(ctx context.Context, bookmarkID uuid.UUID) error {
 		Text:    truncateBytes(page.Text, domain.MaxContentBytes),
 		Favicon: page.Favicon,
 	}
-	return discardIfGone(s.store.RecordFetchSuccess(ctx, b, result))
+	err = s.store.RecordFetchSuccess(ctx, b, result)
+	if err == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil
+	}
+
+	// The result could not be stored (for example, text the database refuses). Leaving
+	// the bookmark pending would make the sweep queue the same failing job every
+	// minute, so record the failure instead. If that write fails too, the database is
+	// likely down: return the error and leave the bookmark pending for the sweep.
+	slog.Error("storing fetch result failed; marking the bookmark failed", "bookmark_id", b.ID, "error", err)
+	if ferr := s.store.RecordFetchFailure(ctx, b); ferr != nil && !errors.Is(ferr, gorm.ErrRecordNotFound) {
+		return err
+	}
+	return nil
 }
 
 // discardIfGone turns "the bookmark or its user was deleted meanwhile" into a quiet

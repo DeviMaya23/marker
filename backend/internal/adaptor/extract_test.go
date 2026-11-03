@@ -40,7 +40,7 @@ func TestExtractPage_Text(t *testing.T) {
 }
 
 func TestExtractPage_TextIsPlain(t *testing.T) {
-	p := extract(t, `<body><p>a &lt;b&gt; &amp; c</p><b>bold</b><i>it</i></body>`)
+	p := extract(t, `<body><p>a &lt;b&gt; &amp; c</p><p><b>bold</b> it</p></body>`)
 	require.Equal(t, "a <b> & c bold it", p.Text)
 }
 
@@ -105,4 +105,33 @@ func TestExtractPage_StripsNULAndInvalidUTF8(t *testing.T) {
 	p := extract(t, "<body>a\x00b\xffc</body>")
 	require.NotContains(t, p.Text, "\x00")
 	require.True(t, strings.Contains(p.Text, "a") && strings.Contains(p.Text, "c"))
+}
+
+func TestExtractPage_InlineMarkupDoesNotSplitWords(t *testing.T) {
+	cases := []struct{ name, doc, want string }{
+		{"bold inside a word", `<body><b>Hel</b>lo</body>`, "Hello"},
+		{"punctuation in its own element", `<body>Hello<b>,</b> world</body>`, "Hello, world"},
+		{"link in a sentence", `<body><p>See <a href="/x">this page</a>.</p></body>`, "See this page."},
+		{"blocks are separated", `<body><div>one</div><div>two</div></body>`, "one two"},
+		{"list items are separated", `<body><ul><li>a</li><li>b</li></ul></body>`, "a b"},
+		{"table cells are separated", `<body><table><tr><td>a</td><td>b</td></tr></table></body>`, "a b"},
+		{"line break separates", `<body>one<br>two</body>`, "one two"},
+		{"headings and paragraphs", `<body><h1>Title</h1>text</body>`, "Title text"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, extract(t, c.doc).Text)
+		})
+	}
+}
+
+func TestExtractPage_SVGTitleIsNotThePageTitle(t *testing.T) {
+	p := extract(t, `<body><svg><title>Icon</title></svg>text</body>`)
+	require.Equal(t, "", p.Title)
+
+	p = extract(t, `<head><title>Real</title></head><body><svg><title>Icon</title></svg></body>`)
+	require.Equal(t, "Real", p.Title)
+
+	p = extract(t, `<body><svg><title>Icon</title></svg></body><head><meta property="og:title" content="OG"></head>`)
+	require.Equal(t, "OG", p.Title, "og:title is still the fallback")
 }
