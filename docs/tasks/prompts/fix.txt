@@ -1,4 +1,4 @@
-Read CLAUDE.md and docs/tasks/<TASK>.md. Check out <VERIFIER_BRANCH> and work on the branch this session gives you, which starts from it. Never push to main.
+Read CLAUDE.md and docs/tasks/<TASK>.md. This session starts on a fresh branch from main. Before anything else, move it onto <VERIFIER_BRANCH>: run `git fetch origin <VERIFIER_BRANCH>` and `git reset --hard FETCH_HEAD` (the session's branch has no commits of its own yet, so nothing is lost). Stay on the branch this session gives you; don't create or switch to another. Never push to main.
 
 Read the verifier's report in docs/tasks/<TASK>.report.md. Fix only the findings marked Blocking, highest severity first, except any I name here as already fixed: <ALREADY_FIXED>. Write a failing test for each bug before you fix it, in the existing test file for the code you are fixing, as a table row or subtest. Never create a new test file for it (see TESTING.md, "Test files"). Don't fix Non-blocking findings; append them to docs/tasks/backlog.md instead. Don't add scope, don't refactor unrelated code, and don't change the task file or the report. If you disagree with a finding, don't fix it; say why in your report.
 

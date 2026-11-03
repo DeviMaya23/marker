@@ -1,4 +1,4 @@
-You are re-verifying the <TASK> task. Read CLAUDE.md, AGENTS.md (Verifier role), docs/tasks/<TASK>.md and the previous report in docs/tasks/<TASK>.report.md. Check out <FIX_BRANCH> and work on the branch this session gives you, which starts from it. Never push to main.
+You are re-verifying the <TASK> task. Read CLAUDE.md, AGENTS.md (Verifier role), docs/tasks/<TASK>.md and the previous report in docs/tasks/<TASK>.report.md. This session starts on a fresh branch from main. Before anything else, move it onto <FIX_BRANCH>: run `git fetch origin <FIX_BRANCH>` and `git reset --hard FETCH_HEAD` (the session's branch has no commits of its own yet, so nothing is lost). Stay on the branch this session gives you; don't create or switch to another. Never push to main.
 
 You may add or fix tests and write a report. You may not change source code. Put any test you add in the existing test file for the code under test; never create `_edge` or `_regress` files.
 
