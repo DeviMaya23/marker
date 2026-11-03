@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { hostOf } from '../lib/hostOf'
+import { hostOf } from '../../lib/hostOf'
 
 type Props = { url: string; faviconUrl: string | null; size?: number }
 

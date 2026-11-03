@@ -1,16 +1,8 @@
-/* App-level layout for the temporary home page, the bookmark page and "Page not found". */
+/* App-level layout for the list and trash pages, the bookmark page and "Page not found". */
 .page {
   max-width: 720px;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
-}
-.home h1 {
-  font-size: 24px;
-  margin-bottom: var(--space-2);
-}
-.home__lead {
-  color: var(--text-muted);
-  margin-bottom: var(--space-4);
 }
 .home__row {
   display: flex;
@@ -29,4 +21,12 @@
 .detail-page__note-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.page__title {
+  font-size: 24px;
+  margin-bottom: var(--space-4);
+}
+.page form {
+  margin-bottom: var(--space-4);
 }

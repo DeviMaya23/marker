@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
+import { BOOKMARK_LIST_KEY } from '../lib/queryKeys'
 
-/** The paste-a-URL field. A stand-in for the add field in the top bar until the list screen exists. */
+/** The paste-a-URL field. A save clears it and refreshes the list; the page stays where it is. */
 export function AddUrlForm() {
-  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { phase, failure, save, dismiss } = useSaveBookmark()
   const [url, setUrl] = useState('')
 
@@ -17,7 +19,10 @@ export function AddUrlForm() {
     event.preventDefault()
     if (!trimmed || saving) return
     const bookmark = await save({ url: trimmed })
-    if (bookmark) void navigate(`/bookmarks/${bookmark.id}`)
+    if (bookmark) {
+      setUrl('')
+      void queryClient.invalidateQueries({ queryKey: BOOKMARK_LIST_KEY })
+    }
   }
 
   return (
