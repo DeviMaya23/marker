@@ -1,0 +1,7 @@
+You are re-verifying the <TASK> task. Read CLAUDE.md, AGENTS.md (Verifier role), docs/tasks/<TASK>.md and the previous report in docs/tasks/<TASK>.report.md. Check out <FIX_BRANCH> and work on the branch this session gives you, which starts from it. Never push to main.
+
+You may add or fix tests and write a report. You may not change source code. Put any test you add in the existing test file for the code under test; never create `_edge` or `_regress` files.
+
+Check only two things: each Blocking finding from the previous report, and any regression the fixes could have caused. Run `make check`, and read the diff since the previous verification. Do not look for new issues beyond regressions.
+
+For each earlier Blocking finding, report fixed, not fixed or disputed, with evidence (the test that now covers it, or the reproduction that now passes). Also report whether any existing test was weakened or deleted, and whether the fix round touched anything outside what the findings needed. Post your results as a comment on pull request <PR_NUMBER> with `gh pr comment <PR_NUMBER> --body-file /tmp/second-pass.md`, headed "Second pass". Do not edit docs/tasks/<TASK>.report.md and do not create any report file in the repo. If `gh` is unavailable or the comment fails, put the full results in your final message and say that the comment could not be posted. Commit and push your branch only if you added or changed a test; if you did, state its name at the top of the results. Otherwise there is nothing to push.

@@ -1,0 +1,19 @@
+You are the verifier for the <TASK> task. Read CLAUDE.md, AGENTS.md (Verifier role) and docs/tasks/<TASK>.md. Fetch and check out branch <BUILDER_BRANCH>. Work on the branch this session gives you, which starts from it. Never push to main.
+
+You may add or fix tests and write a report. You may not change source code. If source is wrong, report it; don't fix it. Put any test you add in the existing test file for the code under test, as a table row or subtest; never create `_edge` or `_regress` files (see TESTING.md, "Test files" and "Test imports").
+
+1. Run `make check`.
+2. Go through every acceptance criterion in the task file. Name the test that covers it and say whether that test really exercises the behavior or could pass without it. Mark each criterion met, partly met or not met, with evidence (file, test name, requirement ID).
+3. Only now read docs/tasks/<TASK>.plan.md. Flag any criterion that is missing from the plan, any ticked item whose test doesn't exist or doesn't check the behavior, and any difference between the plan and the diff. Judge the code against the task file, not against the plan.
+4. Check the rules by reading the diff:
+   - only handler/ imports internal/api;
+   - every repository query filters by user_id, except any lookup the task file or CONVENTIONS.md names as an exception;
+   - users.version is incremented in every write transaction;
+   - go.mod's go/toolchain lines are unchanged and no dependency beyond the task file's allowed list was added;
+   - every check listed under "Verifier checks" in the task file.
+5. Try to break it with cases the task file doesn't list, starting from the ideas under "Verifier checks" in the task file. Always try the exact boundary of every limit, malformed input and concurrent writes.
+6. Integration tests can't be run by you. Say which ones exist and which criteria depend only on them.
+
+Classify every finding as Blocking or Non-blocking. Blocking means it violates a requirement ID, an acceptance criterion or a convention, or it is a correctness bug you can reproduce; give the requirement ID, or the exact input and the wrong result. Anything else, including style, hypothetical races and refactoring ideas, is Non-blocking. Do not pad the report: if there are few real problems, say so.
+
+Write the report to docs/tasks/<TASK>.report.md: criteria table first, then plan check, then rule checks, then findings with Blocking first (each with how to reproduce) and Non-blocking kept short. Commit and push your branch, and state its name at the top of the report.

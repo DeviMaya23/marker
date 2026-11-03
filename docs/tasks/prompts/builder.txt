@@ -1,0 +1,7 @@
+Read CLAUDE.md, then complete the task in docs/tasks/<TASK>.md.
+
+Work on the branch this session gives you. Don't create or switch to another branch, and never push to main. Follow TESTING.md, including its rules on test files and test imports. Before writing code, write your plan to docs/tasks/<TASK>.plan.md as a checklist: one item per acceptance criterion in the task file, each naming the file and test you will use. Commit it as your first commit. As you finish items, tick them. Then implement, commit in small steps, run `make check`, and push your branch.
+
+Nobody is available to answer questions while you work. If a "Stop and ask" condition in the task file applies, stop, don't improvise, and say what blocked you. Otherwise settle small gaps with the most reasonable reading.
+
+At the end, add a "Judgment calls" section to the plan file for anything the task file didn't settle. Finish with the report format in AGENTS.md ("Handing back"), plus the judgment calls. State your branch name at the top of the report.

@@ -130,6 +130,16 @@ All of these must have a test. Unit tests need no database; integration tests ca
 - `make check` passes. `make test-integration` is for the user to run.
 - Page content is only ever stored and returned as plain text, never as HTML (convention 3).
 
+## Verifier checks
+
+Checks specific to this task, on top of the repo-wide ones in the verifier prompt:
+
+- The fetch job is enqueued only after the transaction commits, never inside it.
+- No outbound request bypasses `pkg/safehttp`: look for `http.Get`, `http.DefaultClient` and `http.Client`.
+- `users.version` is incremented in the fetch's write transactions too, including the failure path.
+- The only repository lookup without a `user_id` filter is the fetch's load by bookmark id.
+- Try to break it with: normalization edge cases (ports, uppercase scheme, empty query, repeated params, malformed queries), a title of exactly 300 characters, a URL of exactly 2,048, and concurrent saves.
+
 ## Stop and ask when
 
 - The contract (`openapi.yaml`) or a requirement conflicts with this file, or with itself.
