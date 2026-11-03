@@ -111,3 +111,47 @@ All pass in `make test-backend`, none changes source:
 - `backend/internal/adaptor/extract_edge_test.go`: NUL / invalid UTF-8 in `<title>` and `og:title` never reach the result; HTML-looking text stays text.
 
 I did **not** add failing tests for F1, F3 or F4, so `make check` stays green; each has a reproduction above.
+
+## Second pass
+
+**Verifier branch:** `claude/funny-ramanujan-hmwhst` (started from `claude/optimistic-johnson-n6562y` at `973aa61`; fix round is `ca84759..973aa61`).
+**Verdict:** every finding the previous report raised is fixed, I found no regression, and `make check` exits 0. Integration tests were written but not run (no Docker here; `go vet -tags integration ./...` is clean).
+
+**Scope note.** The first report did not label any finding "Blocking"; its verdict said none blocked the save path. I took the three medium findings (F1–F3) as the blocking ones and checked F4–F8 as well, because the fix round touched them too.
+
+### Checks run
+- `make check`: exit 0 (after `npm ci`, as in the first pass; the same 7 openapi tag-description warnings, in a file this branch does not touch).
+- `go test ./...` in `backend/`: all packages pass. `go vet -tags integration ./...`: clean.
+- Read `git diff ca84759..HEAD -- backend docs/tasks/save-a-url.plan.md` in full.
+
+### Earlier findings
+
+| Finding | Result | Evidence |
+|---|---|---|
+| **F1** body cap was 64,000 bytes, test weakened | **Fixed** | `router.go` now has `maxBodySize = "65536B"`. `TestRouter_RequestBodyIsCappedAt64KB` is restored to assert that a body of exactly `64*1024` bytes is not refused and that `64*1024+1` gets 413 `payload_too_large`. Both subtests pass. |
+| **F2** IPv6 cases deleted from `safehttp` tests | **Fixed** | `[::1]`, `[fd00:ec2::254]` and `[::ffff:10.0.0.1]` are back in `TestGet_ProductionClientRefusesLoopback` and `TestGet_RefusesPrivateAndMetadataLiterals`, behind `hasIPv6Loopback()`. They are **skipped in this container (no IPv6)**, so I could not confirm them passing here; `addr_test.go` still covers the address rules. This is the same limitation as before, now written into the tests as a machine condition instead of a deletion. |
+| **F3** different URLs shared a key (`;`, bad escapes, `%2F`) | **Fixed** | `NormalizeURL` splits `RawQuery` itself and keeps unparseable pairs verbatim; `EscapedPath` keeps `%2F`. `TestNormalizeURL_DifferentKey` has the exact cases from my reproduction (`a=1;b=2` vs `a=3;b=4` vs none, `%zz` vs none, `%zz` vs `%yy`, `/a%2F` vs `/a`), and they pass. |
+| F4 cap not atomic | Fixed | `BookmarkRepository.Create` locks the `users` row, then re-checks duplicate (first) and cap. Integration `TestCreateBookmark_ConcurrentSavesNeverExceedTheCap`, `…DuplicateAtTheCapIsADuplicate` (compile and vet only; **not run**). Unit: `Create_CapReportedByTheStore`. |
+| F5 vanished winner gave 500 | Fixed | The usecase retries the insert once; a second duplicate with no winner still returns the bare sentinel (so a 500 is still possible, but only in that double race). `Create_DuplicateWhoseWinnerVanished` covers both. |
+| F6 extraction quality | Fixed (two of four items) | `<b>Hel</b>lo` stays one word; `<svg><title>` is ignored. `hidden`/`textarea` text and the empty-200 `EOF` case were not changed (they were low and not requested). |
+| F7 default ports | Fixed | `:80`/`:443` dropped; `http://e.com:80` equals `https://e.com`. |
+| F8 `tsvector`/store failure loops | Partly | A real store error now records `failed` instead of staying pending forever. The 1 MB `tsvector` limit itself is still untested, as the builder says. |
+
+### Regression probes I added (tests only)
+- `backend/internal/domain/url_regress_test.go`: IPv6 literals with default and custom ports, userinfo, a key without a value, empty pairs, tracking next to a bad escape, case-insensitive and percent-encoded tracking keys, root path. All pass. (My first draft assumed tracking names were case-sensitive; `isTrackingParam` lowercases and was not changed in this round, so I corrected the probe.)
+- `backend/internal/adaptor/extract_regress_test.go`: newline between inline links, text around `<script>`, `<nav>` between blocks, `dl`, headings, nested inline words, empty body. All pass.
+
+No regression found in: normalization of ordinary URLs, the duplicate-before-cap order, the enqueue-after-commit order, or word spacing in extracted text.
+
+### Tests weakened or deleted?
+- **None weakened.** The F1 and F2 tests are restored, not loosened further.
+- **Changed because behaviour changed:** `TestExtractPage_TextIsPlain` input went from `<b>bold</b><i>it</i>` to `<p><b>bold</b> it</p>` with the same expected string; the old input would now correctly give `boldit`. Reasonable, but it is an edit to an existing test.
+- **Replaced:** `TestFetchService_StoreErrorIsReturned` was replaced by `StoreFailureIsRecordedAsFailed` and `StoreAndFailureWritesBothFailing`. The "error is returned" behaviour survives only when the failure write also fails. This follows from the F8 fix.
+
+### Did the fix round go beyond what the findings needed?
+- **Within scope, but beyond the literal ask:** F7 was marked info ("mention as a decision"), yet default-port dropping was implemented without asking. F8's fix changes retry semantics: a transient database error while storing a result now permanently marks the bookmark `failed` (the builder records this as a judgment call). `Create` now returns `gorm.ErrRecordNotFound` if the user row is missing. Worth your decision on F7 and F8.
+- **Outside the findings entirely:** `collection/**` (a Bruno API collection, 24 files) and `docs/tasks/prompts.md`. Neither touches source, but neither was a finding.
+- `docs/tasks/save-a-url.plan.md` was updated (a ticked item and a follow-up section). Source edits stayed in `backend/**`; `openapi.yaml`, `docs/requirements.md`, migrations, the Makefile and the frontend are untouched; no dependency or `go.mod` change in the fix round.
+
+### Still not verified
+Every integration test, including the new cap-concurrency test, and the IPv6 `Get` path on a host without IPv6. Please run `make test-integration` before merging.
