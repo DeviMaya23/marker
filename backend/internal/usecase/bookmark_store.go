@@ -21,4 +21,7 @@ type BookmarkStore interface {
 	Create(ctx context.Context, b domain.Bookmark) error
 	// GetDetail returns the user's bookmark, live or trashed, with its stored text.
 	GetDetail(ctx context.Context, userID, id uuid.UUID) (domain.BookmarkDetail, error)
+	// List returns up to q.Limit of the user's bookmarks as summaries (no page content),
+	// starting strictly after q.After, in the order of q.Mode.
+	List(ctx context.Context, q domain.BookmarkListQuery) ([]domain.Bookmark, error)
 }
