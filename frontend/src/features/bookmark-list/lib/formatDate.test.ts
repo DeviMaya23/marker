@@ -27,6 +27,16 @@ describe('formatDate', () => {
     expect(formatDate(ago(47 * HOUR), now)).toBe('1d ago')
   })
 
+  it('still says 6d one millisecond before 7 days, and 59m one millisecond before an hour', () => {
+    expect(formatDate(ago(7 * DAY - 1), now)).toBe('6d ago')
+    expect(formatDate(ago(HOUR - 1), now)).toBe('59m ago')
+  })
+
+  it('treats a time slightly in the future as just now, and a bad date as empty', () => {
+    expect(formatDate(ago(-5 * SEC), now)).toBe('just now')
+    expect(formatDate('not a date', now)).toBe('')
+  })
+
   it('switches to a date at 7 days, without the year in the same year', () => {
     const iso = ago(7 * DAY)
     const expected = new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })

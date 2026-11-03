@@ -151,6 +151,23 @@ describe('useBookmarkList', () => {
     await waitFor(() => expect(result.current.phase).toBe('signed-out'))
   })
 
+  it('survives a refresh (as after a save) while the next page is in flight', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
+    const { result } = setup(false, client)
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+
+    list.mockReturnValueOnce(new Promise(() => {}))
+    act(() => result.current.fetchNext())
+    await waitFor(() => expect(result.current.isLoadingMore).toBe(true))
+    list.mockResolvedValue(page([bookmark({ id: 'n' }), bookmark({ id: 'a' })], 'c1'))
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['bookmark-list'] })
+    })
+    await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['n', 'a']))
+    expect(result.current.phase).toBe('ready')
+  })
+
   it('keeps the live list and the trash in separate caches', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     list.mockResolvedValueOnce(page([bookmark({ id: 'live' })]))

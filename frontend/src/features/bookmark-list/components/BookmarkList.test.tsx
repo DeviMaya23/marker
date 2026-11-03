@@ -239,6 +239,31 @@ describe('BookmarkList (live list)', () => {
     expect(await screen.findByText('Fine')).toBeInTheDocument()
   })
 
+  it('keeps the rows and drops the sentinel when a last page is empty', async () => {
+    list
+      .mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
+      .mockResolvedValueOnce(page([], null))
+    renderList()
+    await screen.findByText('Title a')
+    scrollToEnd()
+    await waitFor(() => expect(screen.queryByTestId('list-sentinel')).not.toBeInTheDocument())
+    expect(screen.getByText('Title a')).toBeInTheDocument()
+    expect(screen.queryByText('No bookmarks yet')).not.toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not throw when unmounted while a page request is in flight', async () => {
+    let resolve: (p: ReturnType<typeof page>) => void = () => {}
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
+    list.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    const { unmount } = renderList()
+    await screen.findByText('Title a')
+    scrollToEnd()
+    unmount()
+    await act(async () => resolve(page([bookmark({ id: 'b' })])))
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
   it('shows a long title and an unbroken title as plain text', async () => {
     const long = 'x'.repeat(300)
     list.mockResolvedValue(page([bookmark({ title: long })]))
