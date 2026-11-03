@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
@@ -106,6 +106,24 @@ describe('BookmarkView', () => {
     getBookmark.mockRejectedValue(new ApiError(401, null, null))
     show()
     expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+  })
+
+  it('shows the signed-out message when a poll after the first load gets a 401', async () => {
+    vi.useFakeTimers()
+    try {
+      getBookmark
+        .mockResolvedValueOnce(detail({ fetch_status: 'pending', content: null }))
+        .mockRejectedValue(new ApiError(401, null, null))
+      show()
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(screen.getByText('Pending')).toBeInTheDocument()
+      await act(() => vi.advanceTimersByTimeAsync(1000))
+      expect(getBookmark).toHaveBeenCalledTimes(2)
+      expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+      expect(screen.queryByText('Pending')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows an error state with a retry for any other failure', async () => {
