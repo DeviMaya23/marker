@@ -1,0 +1,15 @@
+meta {
+  name: Empty Trash
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/trash
+  body: none
+  auth: none
+}
+
+docs {
+  emptyTrash. Permanently deletes every trashed bookmark. 200 {"deleted": n}.
+}

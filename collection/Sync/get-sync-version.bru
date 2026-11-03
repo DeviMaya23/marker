@@ -1,0 +1,15 @@
+meta {
+  name: Get Sync Version
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/sync/version
+  body: none
+  auth: none
+}
+
+docs {
+  getSyncVersion. 200 {"version": n}. Exempt from rate limiting.
+}

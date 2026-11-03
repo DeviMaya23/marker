@@ -1,0 +1,11 @@
+headers {
+  Origin: {{origin}}
+  X-CSRF-Token: {{csrfToken}}
+}
+
+docs {
+  Run "Auth / Dev Login" first. It stores the session cookie in Bruno's cookie jar and saves
+  the csrf_token cookie to the `csrfToken` variable, which every request sends as X-CSRF-Token.
+  The Origin header comes from the `origin` environment variable (must match APP_BASE_URL).
+  Requires the server to run with APP_ENV=development and AUTH_DEV_LOGIN=true.
+}

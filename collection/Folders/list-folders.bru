@@ -1,0 +1,15 @@
+meta {
+  name: List Folders
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/folders
+  body: none
+  auth: none
+}
+
+docs {
+  listFolders. Flat list, no pagination.
+}

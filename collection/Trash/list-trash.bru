@@ -1,0 +1,19 @@
+meta {
+  name: List Trash
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/bookmarks?trashed=true
+  body: none
+  auth: none
+}
+
+params:query {
+  trashed: true
+}
+
+docs {
+  listBookmarks with trashed=true. Most recently trashed first.
+}

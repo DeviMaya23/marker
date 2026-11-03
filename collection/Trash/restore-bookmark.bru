@@ -1,0 +1,15 @@
+meta {
+  name: Restore Bookmark
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/v1/bookmarks/{{bookmarkId}}/restore
+  body: none
+  auth: none
+}
+
+docs {
+  restoreBookmark. 200 BookmarkSummary, moved to root. 409 bookmark_not_in_trash if it is live.
+}

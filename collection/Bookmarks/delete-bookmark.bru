@@ -1,0 +1,15 @@
+meta {
+  name: Delete Bookmark (to Trash)
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/bookmarks/{{bookmarkId}}
+  body: none
+  auth: none
+}
+
+docs {
+  deleteBookmark. Soft delete, 204. 409 bookmark_in_trash if already trashed.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: List Bookmarks
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/bookmarks?limit=50
+  body: none
+  auth: none
+}
+
+params:query {
+  limit: 50
+  ~q: example
+  ~include_notes: true
+  ~folder_id: {{folderId}}
+  ~trashed: false
+  ~cursor: 
+}
+
+docs {
+  listBookmarks. Newest first; with q, ranked by relevance. Enable the disabled params as needed.
+  trashed=true lists the trash and cannot be combined with q or folder_id (422).
+}

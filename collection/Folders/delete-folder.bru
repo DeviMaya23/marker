@@ -1,0 +1,16 @@
+meta {
+  name: Delete Folder
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/folders/{{folderId}}
+  body: none
+  auth: none
+}
+
+docs {
+  deleteFolder. Permanently deletes the subtree; live bookmarks in it move to the trash.
+  200 {"deleted_folders": n, "trashed_bookmarks": n}.
+}

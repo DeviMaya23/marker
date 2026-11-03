@@ -1,0 +1,16 @@
+meta {
+  name: Get Favicon
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/favicons/{{faviconId}}
+  body: none
+  auth: none
+}
+
+docs {
+  getFavicon. Set the `faviconId` variable to the id at the end of a bookmark's favicon_url
+  (/api/v1/favicons/{id}). Returns image bytes.
+}
