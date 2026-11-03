@@ -18,7 +18,7 @@ Stop rules: two verification rounds at most. Only Blocking findings are fixed in
 ```
 Read CLAUDE.md, then complete the task in docs/tasks/save-a-url.md.
 
-Work on the branch this session gives you. Don't create or switch to another branch, and never push to main. Before writing code, write your plan to docs/tasks/save-a-url.plan.md as a checklist: one item per acceptance criterion in the task file, each naming the file and test you will use. Commit it as your first commit. As you finish items, tick them. Then implement, commit in small steps, run `make check`, and push your branch.
+Work on the branch this session gives you. Don't create or switch to another branch, and never push to main. Follow TESTING.md, including its rules on test files and test imports. Before writing code, write your plan to docs/tasks/save-a-url.plan.md as a checklist: one item per acceptance criterion in the task file, each naming the file and test you will use. Commit it as your first commit. As you finish items, tick them. Then implement, commit in small steps, run `make check`, and push your branch.
 
 Nobody is available to answer questions while you work. If a "Stop and ask" condition in the task file applies, stop, don't improvise, and say what blocked you. Otherwise settle small gaps with the most reasonable reading.
 
@@ -32,7 +32,7 @@ At the end, add a "Judgment calls" section to the plan file for anything the tas
 ```
 You are the verifier for the save-a-URL task. Read CLAUDE.md, AGENTS.md (Verifier role) and docs/tasks/save-a-url.md. Fetch and check out branch <BUILDER_BRANCH>. Work on the branch this session gives you, which starts from it. Never push to main.
 
-You may add or fix tests and write a report. You may not change source code. If source is wrong, report it; don't fix it.
+You may add or fix tests and write a report. You may not change source code. If source is wrong, report it; don't fix it. Put any test you add in the existing test file for the code under test, as a table row or subtest; never create `_edge` or `_regress` files (see TESTING.md, "Test files" and "Test imports").
 
 1. Run `make check`.
 2. Go through every acceptance criterion in the task file. Name the test that covers it and say whether that test really exercises the behavior or could pass without it. Mark each criterion met, partly met or not met, with evidence (file, test name, requirement ID).
@@ -59,7 +59,7 @@ Write the report to docs/tasks/save-a-url.report.md: criteria table first, then 
 ```
 Read CLAUDE.md and docs/tasks/save-a-url.md. Check out <VERIFIER_BRANCH> and work on the branch this session gives you, which starts from it. Never push to main.
 
-Read the verifier's report in docs/tasks/save-a-url.report.md. Fix only the findings marked Blocking, highest severity first, except any I name here as already fixed: <ALREADY_FIXED>. Write a failing test for each bug before you fix it. Don't fix Non-blocking findings; append them to docs/tasks/backlog.md instead. Don't add scope, don't refactor unrelated code, and don't change the task file or the report. If you disagree with a finding, don't fix it; say why in your report.
+Read the verifier's report in docs/tasks/save-a-url.report.md. Fix only the findings marked Blocking, highest severity first, except any I name here as already fixed: <ALREADY_FIXED>. Write a failing test for each bug before you fix it, in the existing test file for the code you are fixing, as a table row or subtest. Never create a new test file for it (see TESTING.md, "Test files"). Don't fix Non-blocking findings; append them to docs/tasks/backlog.md instead. Don't add scope, don't refactor unrelated code, and don't change the task file or the report. If you disagree with a finding, don't fix it; say why in your report.
 
 Run `make check`, commit in small steps, push your branch, and state its name at the top of your report. For each Blocking finding, say whether it is fixed (with the commit), disputed (with the reason) or not attempted (with the reason). Do not weaken or delete an existing test to make it pass; if a test seems wrong, say so instead.
 ```
@@ -71,7 +71,7 @@ Run `make check`, commit in small steps, push your branch, and state its name at
 ```
 You are re-verifying the save-a-URL task. Read CLAUDE.md, AGENTS.md (Verifier role), docs/tasks/save-a-url.md and the previous report in docs/tasks/save-a-url.report.md. Check out <FIX_BRANCH> and work on the branch this session gives you, which starts from it. Never push to main.
 
-You may add or fix tests and write a report. You may not change source code.
+You may add or fix tests and write a report. You may not change source code. Put any test you add in the existing test file for the code under test; never create `_edge` or `_regress` files.
 
 Check only two things: each Blocking finding from the previous report, and any regression the fixes could have caused. Run `make check`, and read the diff since the previous verification. Do not look for new issues beyond regressions.
 

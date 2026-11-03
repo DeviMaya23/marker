@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/charmap"
@@ -40,8 +41,16 @@ func TestExtractPage_Text(t *testing.T) {
 }
 
 func TestExtractPage_TextIsPlain(t *testing.T) {
-	p := extract(t, `<body><p>a &lt;b&gt; &amp; c</p><p><b>bold</b> it</p></body>`)
-	require.Equal(t, "a <b> & c bold it", p.Text)
+	cases := []struct{ name, doc, want string }{
+		{"entities decode and markup is dropped", `<body><p>a &lt;b&gt; &amp; c</p><p><b>bold</b> it</p></body>`, "a <b> & c bold it"},
+		// Entities decode to text; the frontend must render it as text (convention 3).
+		{"escaped script tag stays text", `<body><p>&lt;script&gt;alert(1)&lt;/script&gt;</p></body>`, "<script>alert(1)</script>"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			require.Equal(t, c.want, extract(t, c.doc).Text)
+		})
+	}
 }
 
 func TestExtractPage_Title(t *testing.T) {
@@ -101,10 +110,24 @@ func TestExtractPage_NonUTF8(t *testing.T) {
 	require.Equal(t, "Crème brûlée", p.Text)
 }
 
+// PostgreSQL text rejects NUL bytes and invalid UTF-8, so neither may reach the text
+// or the title.
 func TestExtractPage_StripsNULAndInvalidUTF8(t *testing.T) {
-	p := extract(t, "<body>a\x00b\xffc</body>")
-	require.NotContains(t, p.Text, "\x00")
-	require.True(t, strings.Contains(p.Text, "a") && strings.Contains(p.Text, "c"))
+	t.Run("text", func(t *testing.T) {
+		p := extract(t, "<body>a\x00b\xffc</body>")
+		require.NotContains(t, p.Text, "\x00")
+		require.True(t, strings.Contains(p.Text, "a") && strings.Contains(p.Text, "c"))
+	})
+	t.Run("title", func(t *testing.T) {
+		p := extract(t, "<head><title>a\x00b</title></head>")
+		require.NotContains(t, p.Title, "\x00")
+		require.True(t, utf8.ValidString(p.Title))
+	})
+	t.Run("og:title", func(t *testing.T) {
+		p := extract(t, "<head><meta property=\"og:title\" content=\"x\x00y\xff\"></head>")
+		require.NotContains(t, p.Title, "\x00")
+		require.True(t, utf8.ValidString(p.Title))
+	})
 }
 
 func TestExtractPage_InlineMarkupDoesNotSplitWords(t *testing.T) {
@@ -117,6 +140,13 @@ func TestExtractPage_InlineMarkupDoesNotSplitWords(t *testing.T) {
 		{"table cells are separated", `<body><table><tr><td>a</td><td>b</td></tr></table></body>`, "a b"},
 		{"line break separates", `<body>one<br>two</body>`, "one two"},
 		{"headings and paragraphs", `<body><h1>Title</h1>text</body>`, "Title text"},
+		{"newline between inline links", "<body><a>One</a>\n<a>Two</a></body>", "One Two"},
+		{"text on both sides of a script", "<body>a<script>x()</script>b</body>", "ab"},
+		{"nav between blocks", "<body><p>a</p><nav>menu</nav><p>b</p></body>", "a b"},
+		{"definition list", "<body><dl><dt>k</dt><dd>v</dd></dl></body>", "k v"},
+		{"consecutive headings", "<body><h1>A</h1><h2>B</h2></body>", "A B"},
+		{"nested inline keeps the word whole", "<body><p>un<em>be<strong>liev</strong></em>able</p></body>", "unbelievable"},
+		{"empty body", "<body></body>", ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
