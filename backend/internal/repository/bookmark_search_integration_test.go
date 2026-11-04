@@ -126,6 +126,17 @@ func TestBookmarkRepository_Search_Ranking(t *testing.T) {
 		require.Equal(t, want, searchIDs(t, repo, user.ID, "pangolin", false))
 		require.Equal(t, want, searchIDs(t, repo, user.ID, "pangolin", true), "the same with notes")
 	})
+
+	t.Run("created_at decides before id when the newer row was inserted first", func(t *testing.T) {
+		// IDs are time-ordered, so rows seeded oldest first would pass on id alone.
+		// Seeding the newest row first makes its id the lowest: only created_at puts it first.
+		newest := seedDoc(t, db, repo, user.ID, doc{Title: "Quokka", At: listTestBase.Add(2 * time.Hour)})
+		mid := seedDoc(t, db, repo, user.ID, doc{Title: "Quokka", At: listTestBase.Add(time.Hour)})
+		old := seedDoc(t, db, repo, user.ID, doc{Title: "Quokka", At: listTestBase})
+		want := []uuid.UUID{newest.ID, mid.ID, old.ID}
+		require.Equal(t, want, searchIDs(t, repo, user.ID, "quokka", false))
+		require.Equal(t, want, searchIDs(t, repo, user.ID, "quokka", true), "the same with notes")
+	})
 }
 
 func TestBookmarkRepository_Search_QuerySyntax(t *testing.T) {
