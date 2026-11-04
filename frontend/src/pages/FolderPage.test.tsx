@@ -165,6 +165,21 @@ describe('FolderPage moving between folders', () => {
     expect(vi.mocked(createBookmark).mock.calls.some(([r]) => r.folder_id === 'f-1')).toBe(false)
   })
 
+  it('starts empty on every move, including back to a folder already visited', async () => {
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://one.test')
+    await goToTravel(user)
+    expect(addField()).toHaveValue('')
+    await user.type(addField(), 'https://two.test')
+    await user.click(await screen.findByRole('link', { name: /Recipes/ }))
+    await waitFor(() => expect(heading()).toHaveTextContent('Recipes'))
+    expect(addField()).toHaveValue('')
+    await user.type(addField(), 'https://three.test')
+    await goToTravel(user)
+    expect(addField()).toHaveValue('')
+  })
+
   it('keeps the typed text when only the search changes', async () => {
     const user = userEvent.setup()
     openWithSidebar()
