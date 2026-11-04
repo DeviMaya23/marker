@@ -8,3 +8,8 @@ export function loginHref(pathname: string, search: string): string {
     ? `/auth/dev-login?name=alice&return_to=${returnTo}`
     : `/auth/login?return_to=${returnTo}`
 }
+
+/** The login screen's address, which returns to `pathname + search` after login. */
+export function loginPageHref(pathname: string, search: string): string {
+  return `/login?return_to=${encodeURIComponent(pathname + search)}`
+}
