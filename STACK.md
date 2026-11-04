@@ -36,7 +36,7 @@ Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes
 | UI | React 19, TypeScript, Vite |
 | TypeScript | Pinned to the 6.0 line (`~6.0`): `typescript-eslint` 8.x accepts only TypeScript below 6.1. Revisit when it supports TypeScript 7 |
 | Lint | ESLint with `typescript-eslint` |
-| CSS lint | `stylelint` with `stylelint-config-recommended` and no other preset or plugin: it catches syntax errors and clear mistakes, not style. Run with `make lint-css` (part of `make check` once `css-lint-cleanup` is done) |
+| CSS lint | `stylelint` with `stylelint-config-recommended` and no other preset or plugin: it catches syntax errors and clear mistakes, not style. Run with `make lint-css`; it is part of `make check` |
 | Tests | Vitest with Testing Library (jsdom) |
 | Data fetching | TanStack Query, for the sync poll, refetching and infinite scroll |
 | Routing | `react-router` with browser history (`/save`, `/bookmarks/:id`), not hash routes: the backend's `return_to` after login is a plain path |

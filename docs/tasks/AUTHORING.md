@@ -29,16 +29,24 @@ These come from how the user works. They apply to every drafting session.
 
 ## Phase 0: choosing what to draft
 
-A session starts here, not with a named backlog item (unless the user names one, in which case confirm it still fits the plan below and go to step 1). Nothing is edited in this phase.
+A session starts here, not with a named backlog item (unless the user names one, in which case confirm it still fits the plan below and go to step 1). Nothing is edited in this phase, including the backlog.
 
 1. **Read the whole backlog**, then `scripts/status.sh` (what is drafted, ready, built, verified, merged), the open task files, and `STACK.md`. Read all of it, every time; the order depends on all of it, and it changes whenever something merges.
-2. **Work out the order with parallel work in mind.** The user runs a backend task and a frontend task at the same time whenever the files allow it, so the plan is a set of lanes, not a single list. For every candidate, find:
+2. **Reconcile the backlog with the facts before you trust it.** The backlog is a to-do list, not evidence of what exists. When sources disagree, believe them in this order: the code on `main`, then `openapi.yaml`, then the task reports and `scripts/status.sh`, then the backlog. Check at least:
+   - the operations still unbuilt against `backend/internal/handler/stubs.go` and `openapi.yaml`, and the count in the backlog's state line;
+   - every merged task's report: each Non-blocking finding is in the backlog (as a loose end, or as a fix-round line) or was fixed;
+   - items whose task has since merged or been drafted, and any line in `STACK.md`, `docs/api.md` or the backlog that describes work as pending when it is done;
+   - the dependencies between items: a front-end item that needs a back-end operation names it, and a back-end item that a front-end item waits on says so;
+   - decisions the user made in conversation that are written nowhere (for example "after the app is finished", an ordering rule, something deliberately left out).
+
+   Report every disagreement to the user in the plan (step 4), with what the source says and what the backlog says, and propose the fix. Do not change the backlog or any other doc yet: edits wait for the user's go-ahead (the rules above). Mechanical corrections the user approves are made in the same commit as the task they belong to, or in a commit of their own if no task is drafted.
+3. **Work out the order with parallel work in mind.** The user runs a backend task and a frontend task at the same time whenever the files allow it, so the plan is a set of lanes, not a single list. For every candidate, find:
    - **Prerequisites:** what must be merged first (a backend slice before its frontend slice; the search API before the search UI; a contract or `STACK.md` change the user must make).
    - **Conflicts:** what it shares with tasks that are running or that you plan alongside it. Backend tasks that change the same `handler/` files or `handler/problem.go`, any two tasks that change `package.json`, `go.mod`, a lockfile, the `Makefile` or migrations, and two frontend tasks that change the same shared files (`app-shell/`, `src/styles/`, `src/test/setup.ts`, `components/ui/`) do not run together. Different directories (`backend/**` against `frontend/**`) usually do.
    - **Blockers for the user:** anything that needs their decision or edit first (the contract, requirements, `STACK.md`, a migration, secrets, deployment details).
    - **Size and risk:** whether it should be split (a task a builder cannot finish in one session, or that mixes a back end and a front end) or merged with a neighbour.
-3. **Propose the plan in chat**: the next few tasks to draft, in order, which lane each belongs to (backend, frontend, tooling), which can run at the same time, what each waits for, and what is blocked on the user. Say which items you would leave alone for now and why. Keep it short; the user approves, reorders or overrules it.
-4. **Draft in the approved order.** A session may draft several tasks, one at a time: complete steps 1 to 6 for the first before starting the second, and give each its own fresh checker, started right after its file is written (step 5). A task drafted later in the session reads `main` as it is, plus the drafts already written in this session (they are not merged yet; treat them as running tasks when working out conflicts, and name them in "Shared files" and prerequisites). If an earlier answer changes the plan, say so and re-propose it.
+4. **Propose the plan in chat**, and list the backlog disagreements from step 2 with it: the next few tasks to draft, in order, which lane each belongs to (backend, frontend, tooling), which can run at the same time, what each waits for, and what is blocked on the user. Say which items you would leave alone for now and why. Keep it short; the user approves, reorders or overrules it.
+5. **Draft in the approved order.** A session may draft several tasks, one at a time: complete steps 1 to 6 for the first before starting the second, and give each its own fresh checker, started right after its file is written (step 5). A task drafted later in the session reads `main` as it is, plus the drafts already written in this session (they are not merged yet; treat them as running tasks when working out conflicts, and name them in "Shared files" and prerequisites). If an earlier answer changes the plan, say so and re-propose it.
 
 The plan is not stored in a file. It would become a second home for backlog items; the next session works it out again from the backlog and `status.sh`.
 
@@ -109,6 +117,8 @@ The backlog's rule: one home per item. In the same commit that adds the task fil
 
 **Run the checker immediately.** As soon as a task file is written, in the same turn, spawn the checker for that file. Do not wait to finish the backlog change, to draft the next task, or to report to the user. In a session with several tasks, each task's checker starts the moment its own file is written, not after all the files exist. A checker runs in the background, so you may keep working on the backlog line for that task while it runs, but you do not start the next task's file until its findings are handled (steps 5 and 6 are finished for one task before the next one starts).
 
+**Not ready until checked.** Do not push the branch, and do not tell the user a task is ready, until that task's checker has finished and its findings are handled. If the user asks while a checker is still running, say so. A task file that exists on the branch without a finished check is a draft in progress, not something to build from.
+
 Spawn a **fresh subagent** to check it (the Agent tool). It gets no summary of your conversation, only the path of the draft and read access to the repository; that independence is the point. Give it the brief below, unchanged except for the file name.
 
 > You are reviewing a task file that a builder agent will implement without access to the person who wrote it. Read `CLAUDE.md`, `AGENTS.md`, then the task file `docs/tasks/<slug>.md`. Do not edit any file. Check it against the repository as it is now (`openapi.yaml`, `docs/requirements.md`, the code, the tests, `STACK.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `TESTING.md`) and report:
@@ -148,9 +158,9 @@ Keep these in mind; each cost a round.
 
 For each task, and once for the session:
 
-- [ ] The task files, and the backlog changes, are the only files changed.
+- [ ] The task files, and the backlog changes, are the only files changed (plus any backlog or doc correction the user approved after the reconcile step).
 - [ ] Each drafted item is gone from the backlog; any left-out part is named there with its source task.
 - [ ] The closing summary lists the tasks in run order, which lanes they are in, which can run together, what each waits for (merges, contract or `STACK.md` edits, `make generate`), and what the user must do first.
-- [ ] The checker was started right after each file was written, not after the whole session's drafts, and ran on the final text; mechanical fixes are applied and listed; its design questions are answered or shown to the user.
+- [ ] Nothing was pushed or announced as ready before its checker finished. The checker was started right after each file was written, not after the whole session's drafts, and ran on the final text; mechanical fixes are applied and listed; its design questions are answered or shown to the user.
 - [ ] Every defaults-you-chose item is in your final message.
 - [ ] The final message says what the user must do before the task can run.

@@ -10,9 +10,9 @@ State as of `main` at `5ff12eb`: 11 of the 17 operations are real (bookmarks: cr
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Favicons | `getFavicon` (icons are fetched and stored but never served) | FR-5 |
-| Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works) | FR-1, 2 |
-| Account | `deleteAccount` | FR-25, NFR-3 |
+| Favicons | `getFavicon` (icons are fetched and stored but never served; showing them in the UI waits for this) | FR-5 |
+| Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works; the login screen and the account area's log out wait for these) | FR-1, 2 |
+| Account | `deleteAccount` (the account area's delete button waits for this) | FR-25, NFR-3 |
 
 ## Backend: cross-cutting
 
@@ -49,7 +49,15 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `mobile-drawer`: `border-bottom: none` in the 768px block of `.app-shell__sidebar` is a dead rule; the `matchMedia` test stand-in supports only the three queries in use.
 - `search-api`: a next-page cursor can pass the 100,000 offset cap and answer `422 cursor invalid` on the following request. Unreachable at the scale of NFR-4.
 - `search-api`: `ListBookmarksInput.IsSearch` trims `Query` again after the handler has. Harmless.
+- `backend-hardening`: an unauthenticated request with a body over 64 KiB answers `413`, not `401`, because Echo's global body limit runs before the session check; the task file's order text says 401, 403, 413. Decide: move the limit behind authentication, or change the wording.
+- `backend-hardening`: the unknown-user answer (not found at the lock) is not tested for the six locked methods. `requireJSON` rewrites the request's `Content-Type` to lower case so Echo accepts `Application/JSON`; it works and is tested, but it mutates the request.
+- `folder-moves`: a bookmark move that answers `422` refreshes the list, though the task says a `422` does not. The server has no `422` for a bookmark move, so it cannot happen today.
+- `css-lint-cleanup`: `.folder-error` is defined twice in `layout.css` (once in the `.folder-empty, .folder-error` list, once alone). The properties do not overlap, so nothing changes in the cascade; stylelint does not flag it.
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
+
+## Later, after the app is finished
+
+- Deployment and real use of the app. Nothing is planned or scoped yet; do not draft a task for it until the features above are done.
 
 ## Process and tooling
 
