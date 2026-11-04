@@ -49,12 +49,12 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `folder-sidebar`: on the folder page the add field is the same instance when you go from one folder to another, so a half-typed URL (and a shown failure) carries over and would be saved into the new folder. A `key` on the form fixes it. Read from code, not run.
 - `folder-sidebar`: the name counter and the 100 limit use the trimmed name, which is what is sent. If the server counts the raw name, a 100-character name with trailing spaces could pass here and fail there. Check when the two halves meet.
 - `folder-sidebar`: "Too many requests. Try again in about 0 seconds." for `Retry-After: 0`, which is what the task's wording gives.
+- `folder-sidebar`: `FolderSection.test.tsx` (the "deleting the current folder" navigation test, line 204) failed once in a full `make check` on the `css-lint` verifier's branch, after the folder-sidebar verifier had already fixed one flake in the same test (`css-lint` report, N1). Passes on rerun. Fix the wait properly (a task of its own or a small fix round).
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
 
 ## Process and tooling
 
 - Verifiers open the PR when they find nothing Blocking (`docs/tasks/prompts.md`). Check that this works from a cloud session; if not, the agent gives the title and body in its final message.
-- `css-lint-cleanup`: fix what the first run of `css-lint` reports, then put `lint-css` into `make check`. Draft it after `css-lint` is merged and its report lists the findings.
 - Try chaining builder to first verifier, with the builder stopping and asking when blocked (a `Status: done|blocked` line in the plan file).
 - Mock-versus-contract check: a front-end test that validates the mocked responses against `openapi.yaml`, so drift shows up before the two halves meet.
 - Fill in the timing table in `docs/retro/trial-1.md` and add a section for the parallel trial.
