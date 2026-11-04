@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useLocation } from 'react-router'
 import { logout as requestLogout } from '../../../lib/api/auth'
+import { suppressLoginRedirect } from '../../../lib/api/loginRedirect'
 import { LOGGED_OUT_TOAST } from '../../../lib/bookmarks/describeFailure'
 import { goTo } from '../../../lib/goTo'
 import { loginHref } from '../../../lib/loginHref'
@@ -39,6 +40,7 @@ export function useLogout() {
       }
       return
     }
+    suppressLoginRedirect()
     goTo(logoutTarget(url))
   }, [toast, pathname, search])
 
