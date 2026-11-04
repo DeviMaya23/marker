@@ -44,6 +44,21 @@ const (
 	pgForeignKeyViolation = "23503"
 )
 
+// lockUser takes the user's lock: a row lock on the users row, held to the end of the
+// transaction. Every write transaction calls it first, before it touches any other row,
+// so all of one user's writes take their locks in the same order and cannot deadlock.
+// It returns gorm.ErrRecordNotFound if the user does not exist.
+func lockUser(tx *gorm.DB, userID uuid.UUID) error {
+	var ids []uuid.UUID
+	if err := tx.Raw(`SELECT id FROM users WHERE id = ? FOR UPDATE`, userID).Scan(&ids).Error; err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 // bumpUserVersion increments users.version, which every write transaction does
 // (NFR-2). It returns gorm.ErrRecordNotFound if the user no longer exists.
 func bumpUserVersion(tx *gorm.DB, userID uuid.UUID) error {
@@ -113,12 +128,8 @@ func (r *BookmarkRepository) CountByUserID(ctx context.Context, userID uuid.UUID
 // constraint stays as the backstop and maps to the same duplicate error.
 func (r *BookmarkRepository) Create(ctx context.Context, b domain.Bookmark) error {
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var locked []uuid.UUID
-		if err := tx.Raw(`SELECT id FROM users WHERE id = ? FOR UPDATE`, b.UserID).Scan(&locked).Error; err != nil {
+		if err := lockUser(tx, b.UserID); err != nil {
 			return err
-		}
-		if len(locked) == 0 {
-			return gorm.ErrRecordNotFound
 		}
 
 		var counts struct{ Total, Same int64 }
@@ -185,6 +196,9 @@ func (r *BookmarkRepository) FindForFetch(ctx context.Context, id uuid.UUID) (do
 // gorm.ErrRecordNotFound.
 func (r *BookmarkRepository) RecordFetchSuccess(ctx context.Context, b domain.Bookmark, result domain.FetchResult) error {
 	return r.fetchTx(ctx, func(tx *gorm.DB) error {
+		if err := lockUser(tx, b.UserID); err != nil {
+			return err
+		}
 		var faviconID any // nil leaves favicon_id unchanged
 		if f := result.Favicon; f != nil {
 			var id uuid.UUID
@@ -231,6 +245,9 @@ ON CONFLICT (bookmark_id) DO UPDATE SET text = EXCLUDED.text`, b.ID, result.Text
 // bookmark is no longer pending, it returns gorm.ErrRecordNotFound.
 func (r *BookmarkRepository) RecordFetchFailure(ctx context.Context, b domain.Bookmark) error {
 	return r.fetchTx(ctx, func(tx *gorm.DB) error {
+		if err := lockUser(tx, b.UserID); err != nil {
+			return err
+		}
 		res := tx.Exec(`
 UPDATE bookmarks SET fetch_status = 'failed', updated_at = now()
 WHERE id = ? AND user_id = ? AND fetch_status = 'pending'`, b.ID, b.UserID)

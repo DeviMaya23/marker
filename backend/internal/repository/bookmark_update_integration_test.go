@@ -227,3 +227,102 @@ func TestBookmarkRepository_Update_RacesWithDelete(t *testing.T) {
 		}
 	}
 }
+
+// holdRow locks one bookmark row in a transaction of its own, and returns the function
+// that releases it.
+func holdRow(t *testing.T, db *gorm.DB, id uuid.UUID) (release func()) {
+	t.Helper()
+	tx := db.Begin()
+	require.NoError(t, tx.Error)
+	require.NoError(t, tx.Exec(`SELECT id FROM bookmarks WHERE id = ? FOR UPDATE`, id).Error)
+	released := false
+	release = func() {
+		if !released {
+			released = true
+			require.NoError(t, tx.Rollback().Error)
+		}
+	}
+	t.Cleanup(release)
+	return release
+}
+
+// TestWritesTakeTheUserLockFirst: with a bookmark row held by someone else, each write
+// has already locked the user's row while it waits for the bookmark. That is the lock
+// order that keeps a bookmark write and a folder delete from deadlocking.
+func TestWritesTakeTheUserLockFirst(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		// seed makes the bookmark the operation targets and returns the operation.
+		seed func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, user domain.User) (domain.Bookmark, func() error)
+	}{
+		{"Update", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b, _ := seedEditable(t, db, repo, u.ID, "quokka")
+			return b, func() error {
+				_, err := repo.Update(ctx, u.ID, b.ID, domain.BookmarkUpdate{Note: domain.Value("n")})
+				return err
+			}
+		}},
+		{"Trash", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b, _ := seedEditable(t, db, repo, u.ID, "quokka")
+			return b, func() error { return repo.Trash(ctx, u.ID, b.ID) }
+		}},
+		{"Restore", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b, _ := seedEditable(t, db, repo, u.ID, "quokka")
+			require.NoError(t, repo.Trash(ctx, u.ID, b.ID))
+			return b, func() error { _, err := repo.Restore(ctx, u.ID, b.ID); return err }
+		}},
+		{"EmptyTrash", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b, _ := seedEditable(t, db, repo, u.ID, "quokka")
+			require.NoError(t, repo.Trash(ctx, u.ID, b.ID))
+			return b, func() error { _, err := repo.EmptyTrash(ctx, u.ID); return err }
+		}},
+		{"RecordFetchSuccess", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b := newBookmark(u.ID, "https://lock.example.com/"+domain.NewID().String())
+			require.NoError(t, db.Create(&b).Error)
+			return b, func() error {
+				return repo.RecordFetchSuccess(ctx, b, domain.FetchResult{Title: "T", Text: "x"})
+			}
+		}},
+		{"RecordFetchFailure", func(t *testing.T, db *gorm.DB, repo *repository.BookmarkRepository, u domain.User) (domain.Bookmark, func() error) {
+			b := newBookmark(u.ID, "https://lock.example.com/"+domain.NewID().String())
+			require.NoError(t, db.Create(&b).Error)
+			return b, func() error { return repo.RecordFetchFailure(ctx, b) }
+		}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			repo := repository.NewBookmarkRepository(db)
+			user := newUser(t, db)
+			b, op := tc.seed(t, db, repo, user)
+			before := userVersion(t, db, user.ID)
+
+			release := holdRow(t, db, b.ID)
+			done := make(chan error, 1)
+			go func() { done <- op() }()
+
+			select {
+			case err := <-done:
+				t.Fatalf("the operation finished while its bookmark row was held: %v", err)
+			case <-time.After(300 * time.Millisecond):
+			}
+
+			// A third connection: the user's row must already be locked by the operation.
+			err := db.Transaction(func(tx *gorm.DB) error {
+				return tx.Exec(`SELECT id FROM users WHERE id = ? FOR UPDATE NOWAIT`, user.ID).Error
+			})
+			requirePgCode(t, err, "55P03") // lock_not_available
+
+			release()
+			select {
+			case err := <-done:
+				require.NoError(t, err)
+			case <-time.After(10 * time.Second):
+				t.Fatal("the operation did not finish after the row was released")
+			}
+			require.Equal(t, before+1, userVersion(t, db, user.ID), "one real write, one version increment")
+		})
+	}
+}

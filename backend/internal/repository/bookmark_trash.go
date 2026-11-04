@@ -15,6 +15,9 @@ import (
 // else about the bookmark changes.
 func (r *BookmarkRepository) Trash(ctx context.Context, userID, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
 		res := tx.Exec(`UPDATE bookmarks SET deleted_at = now() WHERE id = ? AND user_id = ? AND deleted_at IS NULL`, id, userID)
 		if res.Error != nil {
 			return res.Error
@@ -40,6 +43,9 @@ func (r *BookmarkRepository) Trash(ctx context.Context, userID, id uuid.UUID) er
 func (r *BookmarkRepository) Restore(ctx context.Context, userID, id uuid.UUID) (domain.Bookmark, error) {
 	var out domain.Bookmark
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
 		res := tx.Exec(`UPDATE bookmarks SET deleted_at = NULL, folder_id = NULL WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`, id, userID)
 		if res.Error != nil {
 			return res.Error
@@ -74,6 +80,9 @@ func (r *BookmarkRepository) Restore(ctx context.Context, userID, id uuid.UUID) 
 func (r *BookmarkRepository) EmptyTrash(ctx context.Context, userID uuid.UUID) (int64, error) {
 	var n int64
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
 		res := tx.Exec(`DELETE FROM bookmarks WHERE user_id = ? AND deleted_at IS NOT NULL`, userID)
 		if res.Error != nil {
 			return res.Error
