@@ -98,7 +98,8 @@ backend/
       config/        ← environment/config parsing
       database/      ← opens the GORM connection
       migrate/       ← runs golang-migrate, then River's migrator
-    testutil/        ← integration test helpers
+    testutil/        ← shared test helpers: the integration test database and the
+                       fake identity provider
   pkg/               ← generic utilities with no app-specific knowledge
     safehttp/        ← SSRF-safe HTTP client
   migration/         ← numbered SQL migration pairs (golang-migrate)
