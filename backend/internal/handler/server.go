@@ -14,10 +14,11 @@ type Server struct {
 
 	bookmarks BookmarkService
 	folders   FolderService
+	sync      SyncService
 }
 
-func NewServer(bookmarks BookmarkService, folders FolderService) *Server {
-	return &Server{bookmarks: bookmarks, folders: folders}
+func NewServer(bookmarks BookmarkService, folders FolderService, sync SyncService) *Server {
+	return &Server{bookmarks: bookmarks, folders: folders, sync: sync}
 }
 
 // The compiler checks that Server covers every operation in the contract.
