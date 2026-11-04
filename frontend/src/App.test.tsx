@@ -13,6 +13,10 @@ vi.mock('./lib/api/bookmarks', () => ({
   listBookmarks: vi.fn(),
 }))
 
+vi.mock('./lib/api/sync', () => ({
+  getSyncVersion: vi.fn(() => Promise.resolve({ version: 0 })),
+}))
+
 vi.mock('./lib/api/folders', () => ({
   listFolders: vi.fn(() => Promise.resolve({ items: [] })),
 }))
