@@ -19,10 +19,8 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
 - Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c). Needs `auth-backend` merged, and a who-am-I endpoint (does not exist; a contract change to decide).
-- Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
 - Log out and the sidebar's account menu (screen 6). Split from `account-area`: it needs `auth-backend` (`authLogout`) merged; the sidebar's plain "Account & help" link becomes the menu.
-- The "1,000 bookmark limit reached" message on the list.
 
 ## Loose ends from verifier reports
 
