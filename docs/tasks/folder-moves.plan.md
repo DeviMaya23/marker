@@ -8,8 +8,8 @@ Branch: `claude/folder-moves-task-kyi515`. All paths under `frontend/src/`. One 
 - The depth rule matches `docs/tasks/folders-api.md` ("Depth"): the deepest descendant sits at `d + h - 1` with `d = row depth + 1`, so a row is disabled when `row depth + h > 3`.
 
 ## API wrappers
-- [ ] `updateBookmark` sends `folder_id` as a string, as an explicit `null`, and not at all; `title` and `note` unaffected — `lib/api/bookmarks.ts`, test `lib/api/bookmarks.test.ts`
-- [ ] `updateFolder` sends `parent_id` as a string, as an explicit `null`, and not at all; a rename sends only `name` — `lib/api/folders.ts`, test `lib/api/folders.test.ts`
+- [x] `updateBookmark` sends `folder_id` as a string, as an explicit `null`, and not at all; `title` and `note` unaffected — `lib/api/bookmarks.ts`, test `lib/api/bookmarks.test.ts`
+- [x] `updateFolder` sends `parent_id` as a string, as an explicit `null`, and not at all; a rename sends only `name` — `lib/api/folders.ts`, test `lib/api/folders.test.ts`
 
 ## Valid targets and messages (pure, table-driven)
 - [ ] Valid targets: bookmark with empty, flat and 3-level tree; folder with no children among depth 1, 2, 3; one-level subtree; two-level subtree; itself and grandchild disabled; orphan; server order kept — `lib/folders/moveTargets.ts`, test `lib/folders/moveTargets.test.ts`

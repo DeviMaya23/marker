@@ -34,13 +34,17 @@ export function listBookmarks({ trashed, cursor, folderId }: ListBookmarksParams
 
 export type UpdateBookmarkRequest = Schemas['UpdateBookmarkRequest']
 
-/** The fields the UI edits; an absent key is not sent, and `note: null` clears the note. */
-export type BookmarkChanges = Pick<UpdateBookmarkRequest, 'title' | 'note'>
+/**
+ * The fields the UI changes; an absent key is not sent. `note: null` clears the note and
+ * `folder_id: null` moves the bookmark to the top level.
+ */
+export type BookmarkChanges = Pick<UpdateBookmarkRequest, 'title' | 'note' | 'folder_id'>
 
 export function updateBookmark(id: string, changes: BookmarkChanges): Promise<BookmarkSummary> {
   const body: BookmarkChanges = {}
   if (changes.title !== undefined) body.title = changes.title
   if (changes.note !== undefined) body.note = changes.note
+  if (changes.folder_id !== undefined) body.folder_id = changes.folder_id
   return apiRequest<BookmarkSummary>('PATCH', `/bookmarks/${encodeURIComponent(id)}`, body)
 }
 

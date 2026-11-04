@@ -19,9 +19,14 @@ export function createFolder({ name, parentId }: { name: string; parentId?: stri
   return apiRequest<Folder>('POST', '/folders', body)
 }
 
-/** Renames a folder. Only `name` is ever sent: this slice never moves a folder. */
-export function updateFolder(id: string, { name }: { name: string }): Promise<Folder> {
-  const body: Schemas['UpdateFolderRequest'] = { name }
+/**
+ * Renames a folder, moves it, or both. An absent key is not sent: a rename sends only `name`,
+ * a move only `parent_id`. `parentId: null` moves the folder to the top level.
+ */
+export function updateFolder(id: string, changes: { name?: string; parentId?: string | null }): Promise<Folder> {
+  const body: Schemas['UpdateFolderRequest'] = {}
+  if (changes.name !== undefined) body.name = changes.name
+  if (changes.parentId !== undefined) body.parent_id = changes.parentId
   return apiRequest<Folder>('PATCH', `/folders/${encodeURIComponent(id)}`, body)
 }
 
