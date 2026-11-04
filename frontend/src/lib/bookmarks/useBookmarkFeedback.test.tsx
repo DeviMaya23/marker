@@ -1,5 +1,5 @@
 import { act, renderHook, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/ApiError'
 import { hookWrapper } from '../../test/hookWrapper'
 import { testClient } from '../../test/wrap'
