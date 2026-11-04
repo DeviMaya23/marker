@@ -11,11 +11,15 @@ vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn() }))
 
 const list = vi.mocked(listBookmarks)
 
-function setup(trashed = false, client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
+function setup(
+  trashed = false,
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  folderId?: string,
+) {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   )
-  return renderHook(() => useBookmarkList({ trashed }), { wrapper })
+  return renderHook(() => useBookmarkList({ trashed, folderId }), { wrapper })
 }
 
 const cursors = () => list.mock.calls.map(([args]) => args?.cursor)
@@ -179,5 +183,52 @@ describe('useBookmarkList', () => {
     expect(trash.result.current.phase).toBe('loading')
     expect(trash.result.current.rows).toEqual([])
     expect(list).toHaveBeenLastCalledWith({ trashed: true, cursor: undefined })
+  })
+
+  describe('with a folder id', () => {
+    it('requests that folder, and sends no folder id without one', async () => {
+      list.mockResolvedValue(page([bookmark({ id: 'a' })]))
+      const { result } = setup(false, undefined, 'f-1')
+      await waitFor(() => expect(result.current.phase).toBe('ready'))
+      expect(list).toHaveBeenCalledWith({ trashed: false, cursor: undefined, folderId: 'f-1' })
+
+      list.mockClear()
+      const plain = setup()
+      await waitFor(() => expect(plain.result.current.phase).toBe('ready'))
+      expect(list.mock.calls[0][0]).not.toHaveProperty('folderId')
+    })
+
+    it('keeps two folders in separate cache entries under the bookmark-list prefix', async () => {
+      list.mockImplementation(({ folderId } = {}) => Promise.resolve(page([bookmark({ id: `in-${folderId}` })])))
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const one = setup(false, client, 'f-1')
+      const two = setup(false, client, 'f-2')
+      await waitFor(() => expect(two.result.current.phase).toBe('ready'))
+      await waitFor(() => expect(one.result.current.phase).toBe('ready'))
+      expect(one.result.current.rows.map((r) => r.id)).toEqual(['in-f-1'])
+      expect(two.result.current.rows.map((r) => r.id)).toEqual(['in-f-2'])
+      expect(list).toHaveBeenCalledTimes(2)
+      const keys = client.getQueryCache().findAll({ queryKey: ['bookmark-list'] })
+      expect(keys).toHaveLength(2)
+    })
+
+    it('pages with the next cursor, keeping the folder', async () => {
+      list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1')).mockResolvedValueOnce(page([bookmark({ id: 'b' })]))
+      const { result } = setup(false, undefined, 'f-1')
+      await waitFor(() => expect(result.current.hasNextPage).toBe(true))
+      act(() => result.current.fetchNext())
+      await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['a', 'b']))
+      expect(list).toHaveBeenLastCalledWith({ trashed: false, cursor: 'c1', folderId: 'f-1' })
+    })
+
+    it('has the not-found phase on a 404 of the first page, and error on other failures', async () => {
+      list.mockRejectedValue(new ApiError(404, null, null))
+      const missing = setup(false, undefined, 'gone')
+      await waitFor(() => expect(missing.result.current.phase).toBe('not-found'))
+
+      list.mockRejectedValue(new ApiError(500, null, null))
+      const broken = setup(false, undefined, 'f-1')
+      await waitFor(() => expect(broken.result.current.phase).toBe('error'))
+    })
   })
 })

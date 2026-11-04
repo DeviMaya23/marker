@@ -13,6 +13,10 @@ vi.mock('./lib/api/bookmarks', () => ({
   listBookmarks: vi.fn(),
 }))
 
+vi.mock('./lib/api/folders', () => ({
+  listFolders: vi.fn(() => Promise.resolve({ items: [] })),
+}))
+
 function openAt(path: string) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>

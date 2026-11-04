@@ -6,6 +6,10 @@ export type MenuItemSpec = {
   label: string
   icon?: ReactNode
   danger?: boolean
+  /** A disabled item is shown but cannot be chosen. */
+  disabled?: boolean
+  /** A tooltip, for example to say why the item is disabled. */
+  title?: string
 } & (
   | { onSelect: () => void; href?: never }
   | { href: string; onSelect?: never }
@@ -53,7 +57,13 @@ export function Menu({ label, children, items, disabled = false, className = 'ic
                   {content}
                 </BaseMenu.LinkItem>
               ) : (
-                <BaseMenu.Item key={item.key} className={className} onClick={item.onSelect}>
+                <BaseMenu.Item
+                  key={item.key}
+                  className={className}
+                  onClick={item.onSelect}
+                  disabled={item.disabled}
+                  title={item.title}
+                >
                   {content}
                 </BaseMenu.Item>
               )

@@ -6,8 +6,11 @@ import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
 import { BOOKMARK_LIST_KEY } from '../../../lib/bookmarks/queryKeys'
 
-/** The paste-a-URL field. A save clears it and refreshes the list; the page stays where it is. */
-export function AddUrlForm() {
+/**
+ * The paste-a-URL field. A save clears it and refreshes the list; the page stays where it is.
+ * With a `folderId` the bookmark is saved into that folder, otherwise at the top level.
+ */
+export function AddUrlForm({ folderId }: { folderId?: string }) {
   const queryClient = useQueryClient()
   const { phase, failure, save, dismiss } = useSaveBookmark()
   const [url, setUrl] = useState('')
@@ -18,7 +21,7 @@ export function AddUrlForm() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault()
     if (!trimmed || saving) return
-    const bookmark = await save({ url: trimmed })
+    const bookmark = await save(folderId !== undefined ? { url: trimmed, folder_id: folderId } : { url: trimmed })
     if (bookmark) {
       setUrl('')
       void queryClient.invalidateQueries({ queryKey: BOOKMARK_LIST_KEY })

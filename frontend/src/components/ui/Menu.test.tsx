@@ -91,4 +91,23 @@ describe('Menu', () => {
     expect(onDelete).not.toHaveBeenCalled()
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
   })
+
+  it('shows a disabled item with its title and does not run it', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <Menu
+        label="Actions"
+        items={[{ key: 'sub', label: 'New subfolder', onSelect, disabled: true, title: 'Not here.' }]}
+      >
+        …
+      </Menu>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Actions' }))
+    const item = await screen.findByRole('menuitem', { name: 'New subfolder' })
+    expect(item).toHaveAttribute('aria-disabled', 'true')
+    expect(item).toHaveAttribute('title', 'Not here.')
+    await user.click(item)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
 })
