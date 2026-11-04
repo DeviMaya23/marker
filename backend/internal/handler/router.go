@@ -59,11 +59,14 @@ func NewRouter(deps Deps) *echo.Echo {
 	}
 	api.RegisterHandlersWithOptions(router, api.NewStrictHandler(deps.Server, nil), api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
+			// A body that is not JSON is a 415, checked before anything reads the body
+			// (see media_type.go).
+			"createBookmark": {requireJSON},
 			// updateBookmark must tell an absent key from a null one (see body_keys.go).
-			"updateBookmark": {recordBodyKeys},
+			"updateBookmark": {requireJSON, recordBodyKeys},
 			// So do the folder writes, to reject unknown keys and read parent_id.
-			"createFolder": {recordBodyKeys},
-			"updateFolder": {recordBodyKeys},
+			"createFolder": {requireJSON, recordBodyKeys},
+			"updateFolder": {requireJSON, recordBodyKeys},
 		},
 	})
 
