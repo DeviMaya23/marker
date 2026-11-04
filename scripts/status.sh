@@ -32,9 +32,13 @@ cd "$(git rev-parse --show-toplevel)"
 git fetch -q origin main '+refs/heads/claude/*:refs/remotes/origin/claude/*'
 
 # Names of the task files in a list of paths on stdin: docs/tasks/<slug>.md, minus the
-# plan and report records and the files that are not tasks.
+# plan and report records and the files that are not tasks. A task slug is lowercase
+# words joined by hyphens, so the uppercase guides (TEMPLATE.md, AUTHORING.md, any
+# future one) never count; backlog.md and prompts.md are lowercase and named here.
 slugs() {
-  sed -n 's#^docs/tasks/\([^/]*\)\.md$#\1#p' | grep -v -E '^(TEMPLATE|backlog|prompts)$|\.(plan|report)$' || true
+  sed -n 's#^docs/tasks/\([^/]*\)\.md$#\1#p' \
+    | grep -E '^[a-z0-9][a-z0-9-]*$' \
+    | grep -v -E '^(backlog|prompts)$' || true
 }
 
 on_main="$(git ls-tree --name-only origin/main docs/tasks/ | slugs)"
