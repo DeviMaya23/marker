@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"marker/internal/domain"
@@ -132,4 +133,24 @@ func TestAuthService_Authenticate_SlidingExpiry(t *testing.T) {
 		_, err = svc.Authenticate(ctx, grant.Token)
 		require.ErrorIs(t, err, domain.ErrUnauthenticated)
 	})
+}
+
+func TestAuthService_EndSession(t *testing.T) {
+	ctx := context.Background()
+	svc, sessions, _, _ := newTestAuth()
+	_, err := svc.StartSession(ctx, "idp|alice")
+	require.NoError(t, err)
+	_, err = svc.StartSession(ctx, "idp|alice")
+	require.NoError(t, err)
+	require.Len(t, sessions.sessions, 2)
+	var id uuid.UUID
+	for sid := range sessions.sessions {
+		id = sid
+	}
+
+	require.NoError(t, svc.EndSession(ctx, id))
+	require.Len(t, sessions.sessions, 1, "only that session is deleted")
+	require.NotContains(t, sessions.sessions, id)
+
+	require.NoError(t, svc.EndSession(ctx, id), "a session already gone is not an error")
 }
