@@ -141,6 +141,7 @@
   max-width: 640px;
   display: flex;
   flex-direction: column;
+}
 
 /* Save popup */
 .save-popup {
