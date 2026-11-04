@@ -4,6 +4,7 @@ package repository_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -185,4 +186,44 @@ func TestBookmarkRepository_Mutations_OtherUser(t *testing.T) {
 	// An unknown id answers the same way.
 	_, err = repo.Update(ctx, alice.ID, uuid.New(), domain.BookmarkUpdate{Title: domain.Value("x")})
 	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+}
+
+// An update racing with a delete: whichever order the database picks, a trashed row is
+// never written and users.version moves once per write that happened.
+func TestBookmarkRepository_Update_RacesWithDelete(t *testing.T) {
+	db := testutil.NewDB(t)
+	repo := repository.NewBookmarkRepository(db)
+	user := newUser(t, db)
+	ctx := context.Background()
+
+	for i := 0; i < 20; i++ {
+		b, _ := seedEditable(t, db, repo, user.ID, "quokka")
+		before := userVersion(t, db, user.ID)
+
+		var updErr, delErr error
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, updErr = repo.Update(ctx, user.ID, b.ID, domain.BookmarkUpdate{Title: domain.Value("pangolin")})
+		}()
+		go func() {
+			defer wg.Done()
+			delErr = repo.Trash(ctx, user.ID, b.ID)
+		}()
+		wg.Wait()
+
+		require.NoError(t, delErr, "the delete always succeeds: the update never trashes")
+		got, err := repo.Get(ctx, user.ID, b.ID)
+		require.NoError(t, err)
+		require.NotNil(t, got.DeletedAt)
+		if updErr == nil {
+			require.Equal(t, "pangolin", got.Title)
+			require.Equal(t, before+2, userVersion(t, db, user.ID))
+		} else {
+			require.ErrorIs(t, updErr, domain.ErrBookmarkInTrash)
+			require.Equal(t, "quokka", got.Title, "a trashed row is not written")
+			require.Equal(t, before+1, userVersion(t, db, user.ID))
+		}
+	}
 }
