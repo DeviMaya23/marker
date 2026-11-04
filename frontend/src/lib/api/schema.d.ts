@@ -242,6 +242,9 @@ export interface paths {
         /**
          * Start the IdP login
          * @description FR-1, FR-3c. Browser navigation, not a JSON call. Rate limited per IP (NFR-16).
+         *     Also sets the `login_binding` cookie, which ties this attempt to this browser:
+         *     `/auth/callback` accepts the attempt only if the browser sends the cookie back.
+         *     A second call replaces the cookie, so the later attempt wins.
          */
         get: operations["authLogin"];
         put?: never;
@@ -261,8 +264,17 @@ export interface paths {
         };
         /**
          * IdP redirect target
-         * @description Completes the OIDC code flow, creates the session, sets the `session` cookie (`HttpOnly; Secure; SameSite=Lax`)
-         *     and the `csrf_token` cookie (readable by the frontend), then redirects to `return_to`. Rate limited per IP (NFR-16).
+         * @description Completes the OIDC code flow, creates the session, sets the `session` and `csrf_token` cookies
+         *     (`HttpOnly; Secure; SameSite=Lax`; `csrf_token` readable by the frontend), then redirects to `return_to`.
+         *     The attempt must carry the `login_binding` cookie set by `/auth/login`, matching its `state`.
+         *     Every outcome clears that cookie. Rate limited per IP (NFR-16).
+         *
+         *     A browser navigation never gets JSON from this route. Any failure (bad, expired or reused `state`,
+         *     missing or wrong binding cookie, bad or missing `code`, the identity provider's rejection, a server
+         *     fault) redirects to `/login?error=<code>` and sets no session cookie. `<code>` is `access_denied` when
+         *     the user cancelled at the identity provider (`error=access_denied` on the request), otherwise
+         *     `login_failed`. When the `state` was valid, `&return_to=<path>` is added so a retry returns
+         *     to the same page.
          */
         get: operations["authCallback"];
         put?: never;
@@ -1064,6 +1076,8 @@ export interface operations {
             302: {
                 headers: {
                     Location?: string;
+                    /** @description Sets the `login_binding` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/auth/callback`, valid 10 minutes). */
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -1073,9 +1087,11 @@ export interface operations {
     };
     authCallback: {
         parameters: {
-            query: {
-                code: string;
-                state: string;
+            query?: {
+                code?: string;
+                state?: string;
+                /** @description Set by the identity provider when it rejects or the user cancels (for example `access_denied`). */
+                error?: string;
             };
             header?: never;
             path?: never;
@@ -1083,24 +1099,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Logged in; redirect to `return_to` (default `/`). */
+            /** @description Logged in, redirected to `return_to` (default `/`); or failed, redirected to `/login?error=<code>`. */
             302: {
                 headers: {
                     Location?: string;
-                    /** @description Sets the `session` and `csrf_token` cookies. */
+                    /** @description Sets the `session` and `csrf_token` cookies on success. Always clears the `login_binding` cookie. */
                     "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Invalid or expired login attempt (bad `state` or `code`). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
             };
             429: components["responses"]["RateLimited"];
         };
@@ -1120,6 +1127,8 @@ export interface operations {
             /** @description App session ended. */
             200: {
                 headers: {
+                    /** @description Clears the `session` and `csrf_token` cookies (`Max-Age=0`). */
+                    "Set-Cookie"?: string;
                     [name: string]: unknown;
                 };
                 content: {

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"sync"
@@ -161,7 +162,8 @@ func TestAuthFlow_LoginRoundTrip(t *testing.T) {
 	require.Equal(t, http.StatusFound, rec.Code)
 	require.Equal(t, returnTo, rec.Header().Get("Location"))
 	cookies := rec.Result().Cookies()
-	require.Len(t, cookies, 2)
+	require.Len(t, cookies, 3) // session, csrf_token, and the cleared login_binding
+	require.Equal(t, -1, cookieByName(t, cookies, "login_binding").MaxAge)
 	session := cookieByName(t, cookies, "session")
 	require.True(t, session.HttpOnly)
 	cookieByName(t, cookies, "csrf_token")
@@ -176,7 +178,7 @@ func TestAuthFlow_ReplayedCallbackIsRefused(t *testing.T) {
 	require.Equal(t, http.StatusFound, do(e.router, http.MethodGet, callback).Code)
 	rec := do(e.router, http.MethodGet, callback)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	requireLoginFailure(t, rec, "login_failed")
 	require.Equal(t, 1, e.sessions.count())
 }
 
@@ -188,7 +190,7 @@ func TestAuthFlow_DeniedLoginIsRefused(t *testing.T) {
 	require.NotContains(t, callback, "code=")
 	rec := do(e.router, http.MethodGet, callback)
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	requireLoginFailure(t, rec, "access_denied")
 	require.Zero(t, e.sessions.count())
 }
 
@@ -200,7 +202,7 @@ func TestAuthFlow_StateSignedWithAnotherSecretIsRefused(t *testing.T) {
 
 	rec := do(e.router, http.MethodGet, callbackPathFrom(t, noFollow(t, authorizeURL)))
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	requireLoginFailure(t, rec, "login_failed")
 	require.Zero(t, e.fake.Requests("token"), "the token endpoint is never called for a bad state")
 	require.Zero(t, e.sessions.count())
 }
@@ -250,28 +252,27 @@ func TestAuthFlow_ConcurrentCallbacksStartOneSession(t *testing.T) {
 	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
 
 	const n = 8
-	codes := make([]int, n)
+	recs := make([]*httptest.ResponseRecorder, n)
 	var wg sync.WaitGroup
 	for i := range n {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			codes[i] = do(e.router, http.MethodGet, callback).Code
+			recs[i] = do(e.router, http.MethodGet, callback)
 		}()
 	}
 	wg.Wait()
 
 	ok, bad := 0, 0
-	for _, c := range codes {
-		switch c {
-		case http.StatusFound:
-			ok++
-		case http.StatusBadRequest:
+	for _, r := range recs {
+		if strings.HasPrefix(r.Header().Get("Location"), "/login?error=") {
 			bad++
+		} else if r.Code == http.StatusFound {
+			ok++
 		}
 	}
-	require.Equal(t, 1, ok, "codes: %v", codes)
-	require.Equal(t, n-1, bad, "codes: %v", codes)
+	require.Equal(t, 1, ok, "%d succeeded, %d failed of %d", ok, bad, n)
+	require.Equal(t, n-1, bad, "%d succeeded, %d failed of %d", ok, bad, n)
 	require.Equal(t, 1, e.sessions.count())
 }
 
@@ -296,7 +297,7 @@ func TestAuthFlow_ReturnToThroughTheWholeRoundTrip(t *testing.T) {
 
 			require.Equal(t, http.StatusFound, rec.Code)
 			require.Equal(t, tt.want, rec.Header().Get("Location"))
-			require.Len(t, rec.Result().Cookies(), 2, "no header was injected")
+			require.Len(t, rec.Result().Cookies(), 3, "no header was injected")
 		})
 	}
 }
@@ -310,7 +311,7 @@ func TestAuthFlow_EmptyCodeIsRefusedWithoutCallingTheIdP(t *testing.T) {
 
 	rec := do(e.router, http.MethodGet, "/auth/callback?"+q.Encode())
 
-	require.Equal(t, http.StatusBadRequest, rec.Code)
+	requireLoginFailure(t, rec, "login_failed")
 	require.Zero(t, e.fake.Requests("token"))
 }
 
@@ -324,4 +325,16 @@ func TestAuthFlow_LogoutDoesNotDependOnTheIdPBeingUp(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Zero(t, e.sessions.count())
+}
+
+// requireLoginFailure asserts the callback's failure redirect: a 302 to /login?error=<code>
+// that sets no session cookie.
+func requireLoginFailure(t *testing.T, rec *httptest.ResponseRecorder, code string) {
+	t.Helper()
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.True(t, strings.HasPrefix(rec.Header().Get("Location"), "/login?error="+code), rec.Header().Get("Location"))
+	for _, c := range rec.Result().Cookies() {
+		require.Equal(t, "login_binding", c.Name, "only the binding cookie is touched")
+		require.Equal(t, -1, c.MaxAge)
+	}
 }

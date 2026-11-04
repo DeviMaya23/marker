@@ -2,7 +2,10 @@ package handler
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 
@@ -37,26 +40,55 @@ func (s *Server) AuthLogin(ctx context.Context, req api.AuthLoginRequestObject) 
 	return api.AuthLogin302Response{Headers: api.AuthLogin302ResponseHeaders{Location: &location}}, nil
 }
 
-// AuthCallback implements GET /auth/callback; it shadows the 501 stub. A missing code or
-// state never reaches here: the generated wrapper answers 400.
+// loginBindingCookie is the cookie /auth/login sets to tie an attempt to one browser.
+const loginBindingCookie = "login_binding"
+
+// AuthCallback implements GET /auth/callback; it shadows the 501 stub. A browser
+// navigation never gets JSON here: every failure redirects to /login?error=<code>.
 func (s *Server) AuthCallback(ctx context.Context, req api.AuthCallbackRequestObject) (api.AuthCallbackResponseObject, error) {
 	if s.login == nil {
 		return nil, ErrNotImplemented
 	}
-	grant, returnTo, err := s.login.Complete(ctx, req.Params.Code, req.Params.State)
+	clearBinding := &http.Cookie{
+		Name: loginBindingCookie, Path: "/auth/callback", MaxAge: -1,
+		HttpOnly: true, Secure: s.secureCookies, SameSite: http.SameSiteLaxMode,
+	}
+	deref := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+
+	// An empty code still gets the state verified, which yields the return_to for a retry.
+	grant, returnTo, err := s.login.Complete(ctx, deref(req.Params.Code), deref(req.Params.State))
 	if err != nil {
-		return nil, err
+		code := "login_failed"
+		if deref(req.Params.Error) == "access_denied" {
+			code = "access_denied"
+		}
+		if !errors.Is(err, domain.ErrInvalidLogin) {
+			slog.ErrorContext(ctx, "login callback failed", "error", err)
+		}
+		q := url.Values{"error": {code}}
+		if returnTo != "" {
+			q.Set("return_to", safeReturnTo(returnTo))
+		}
+		return authCallbackRedirect{
+			location: "/login?" + q.Encode(),
+			cookies:  []*http.Cookie{clearBinding},
+		}, nil
 	}
 	session, csrf := authCookies(grant, s.secureCookies)
 	return authCallbackRedirect{
 		// Validated again: the state is signed, but the open-redirect rule lives in one place.
 		location: safeReturnTo(returnTo),
-		cookies:  []*http.Cookie{session, csrf},
+		cookies:  []*http.Cookie{session, csrf, clearBinding},
 	}, nil
 }
 
 // authCallbackRedirect is the callback's 302. The generated response type carries one
-// Set-Cookie string and a header cannot hold two cookies, so this one writes both.
+// Set-Cookie string and a header cannot hold several cookies, so this one writes them all.
 type authCallbackRedirect struct {
 	location string
 	cookies  []*http.Cookie
@@ -85,5 +117,24 @@ func (s *Server) AuthLogout(ctx context.Context, _ api.AuthLogoutRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	return api.AuthLogout200JSONResponse{LogoutUrl: logoutURL}, nil
+	return authLogoutResponse{logoutURL: logoutURL, secure: s.secureCookies}, nil
+}
+
+// authLogoutResponse is the logout 200. It clears both login cookies, which the generated
+// response type cannot do: its Set-Cookie header holds one string.
+type authLogoutResponse struct {
+	logoutURL string
+	secure    bool
+}
+
+func (r authLogoutResponse) VisitAuthLogoutResponse(w http.ResponseWriter) error {
+	for _, name := range []string{middleware.SessionCookie, middleware.CSRFCookie} {
+		http.SetCookie(w, &http.Cookie{
+			Name: name, Path: "/", MaxAge: -1,
+			HttpOnly: name == middleware.SessionCookie, Secure: r.secure, SameSite: http.SameSiteLaxMode,
+		})
+	}
+	var resp api.AuthLogout200JSONResponse
+	resp.Body.LogoutUrl = r.logoutURL
+	return resp.VisitAuthLogoutResponse(w)
 }

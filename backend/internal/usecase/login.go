@@ -81,27 +81,28 @@ func (s *LoginService) Begin(ctx context.Context, returnTo string) (string, erro
 
 // Complete finishes a login attempt: it verifies the state, exchanges the code, and
 // starts a session for the subject. The state and the code are checked before the IdP is
-// called. Bad attempts are domain.ErrInvalidLogin; anything else is a fault.
+// called. Bad attempts are domain.ErrInvalidLogin; anything else is a fault. Once the state
+// verified, the returned return-to is set even on failure, so a retry can go back there.
 func (s *LoginService) Complete(ctx context.Context, code, state string) (Grant, string, error) {
 	st, err := verifyState(s.cfg.StateSecret, state, s.now())
 	if err != nil {
 		return Grant{}, "", err
 	}
 	if code == "" || len(code) > maxCodeLen {
-		return Grant{}, "", domain.ErrInvalidLogin
+		return Grant{}, st.ReturnTo, domain.ErrInvalidLogin
 	}
 
 	subject, err := s.idp.Exchange(ctx, code, pkceVerifier(s.cfg.StateSecret, st.Nonce), st.Nonce)
 	if err != nil {
-		return Grant{}, "", err
+		return Grant{}, st.ReturnTo, err
 	}
 	if subject == "" {
-		return Grant{}, "", domain.ErrInvalidLogin
+		return Grant{}, st.ReturnTo, domain.ErrInvalidLogin
 	}
 
 	grant, err := s.sessions.StartSession(ctx, subject)
 	if err != nil {
-		return Grant{}, "", err
+		return Grant{}, st.ReturnTo, err
 	}
 	return grant, st.ReturnTo, nil
 }

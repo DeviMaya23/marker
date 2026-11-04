@@ -168,9 +168,9 @@ Permanently erases all of the user's app data, including the trash (FR-25, NFR-3
 
 ## Auth (browser routes, under `/auth`)
 
-- `GET /auth/login?return_to=<path>`: starts the IdP login (FR-1, FR-3c). `return_to` must be a same-origin relative path; anything else is ignored, which prevents open redirects.
-- `GET /auth/callback`: the IdP redirects here. Creates the session, sets the `session` and `csrf_token` cookies, then redirects to `return_to` (default `/`).
-- `POST /auth/logout`: ends the app session (FR-2). CSRF-protected. Returns `200` with `{ "logout_url": "..." }`, the identity provider's logout URL (with a redirect back to the app). The frontend must navigate the browser to it so the Kinde session ends too; otherwise the next login would sign the user straight back in.
+- `GET /auth/login?return_to=<path>`: starts the IdP login (FR-1, FR-3c). `return_to` must be a same-origin relative path; anything else is ignored, which prevents open redirects. Also sets the `login_binding` cookie (`HttpOnly; Secure; SameSite=Lax; Path=/auth/callback`, 10 minutes), which ties the attempt to this browser. A second call replaces it, so the later attempt wins.
+- `GET /auth/callback?code=&state=&error=`: the IdP redirects here. `code`, `state` and `error` are all optional so a cancelled login (`?error=access_denied&state=...`, no `code`) still reaches the handler. Needs the `login_binding` cookie matching `state`. On success it creates the session, sets the `session` and `csrf_token` cookies, then redirects to `return_to` (default `/`). It never returns JSON: any failure (bad, expired or reused `state`, missing or wrong binding cookie, bad or missing `code`, IdP rejection, server fault) redirects to `/login?error=<code>` with no session cookie, where `<code>` is `access_denied` if the user cancelled at the IdP and `login_failed` otherwise. If the `state` was valid, `&return_to=<path>` is added so a retry returns to the same page. Every outcome clears `login_binding`.
+- `POST /auth/logout`: ends the app session (FR-2). CSRF-protected. Returns `200` with `{ "logout_url": "..." }`, the identity provider's logout URL (with a redirect back to the app). The response clears the `session` and `csrf_token` cookies (`Max-Age=0`). The frontend must navigate the browser to it so the Kinde session ends too; otherwise the next login would sign the user straight back in.
 
 ## Not an API endpoint
 

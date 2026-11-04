@@ -390,3 +390,17 @@ func orDefault(v, def string) string {
 	}
 	return v
 }
+
+func TestLoginService_CompleteKeepsReturnToOnceStateVerified(t *testing.T) {
+	svc, idp, _, _ := newTestLogin()
+	state := begin(t, svc, idp, "/save?x=1")
+
+	_, returnTo, err := svc.Complete(context.Background(), "", state)
+
+	require.ErrorIs(t, err, domain.ErrInvalidLogin)
+	require.Equal(t, "/save?x=1", returnTo)
+
+	_, returnTo, err = svc.Complete(context.Background(), "c", "garbage")
+	require.ErrorIs(t, err, domain.ErrInvalidLogin)
+	require.Empty(t, returnTo, "an unverified state yields no return_to")
+}

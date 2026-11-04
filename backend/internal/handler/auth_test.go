@@ -157,7 +157,7 @@ func TestAuthCallback_Redirects(t *testing.T) {
 	require.Equal(t, spy.returnTo, rec.Header().Get("Location"))
 	require.Equal(t, "the-code", spy.gotCode)
 	require.Equal(t, "the-state", spy.gotState)
-	require.Len(t, rec.Header().Values("Set-Cookie"), 2)
+	require.Len(t, rec.Header().Values("Set-Cookie"), 3) // session, csrf_token, cleared login_binding
 
 	cookies := rec.Result().Cookies()
 	session := cookieByName(t, cookies, middleware.SessionCookie)
@@ -200,41 +200,51 @@ func TestAuthCallback_ReturnPathIsValidatedAgain(t *testing.T) {
 }
 
 func TestAuthCallback_Errors(t *testing.T) {
-	t.Run("an invalid login is 400 validation_error", func(t *testing.T) {
+	t.Run("an invalid login redirects to login_failed", func(t *testing.T) {
 		spy := newLoginSpy()
 		spy.completeErr = domain.ErrInvalidLogin
 
 		rec := do(loginRouter(spy, false), http.MethodGet, callbackPath)
 
-		requireProblem(t, rec, http.StatusBadRequest, api.ErrorCodeValidationError)
-		require.Empty(t, rec.Header().Values("Set-Cookie"))
+		requireLoginFailure(t, rec, "login_failed")
 	})
 
-	t.Run("any other error is 500 internal_error and leaks nothing", func(t *testing.T) {
+	t.Run("any other error redirects the same way and leaks nothing", func(t *testing.T) {
 		spy := newLoginSpy()
 		spy.completeErr = errors.New("token endpoint exploded")
 
 		rec := do(loginRouter(spy, false), http.MethodGet, callbackPath)
 
-		requireProblem(t, rec, http.StatusInternalServerError, api.ErrorCodeInternalError)
-		require.NotContains(t, rec.Body.String(), "exploded")
-		require.Empty(t, rec.Header().Values("Set-Cookie"))
+		requireLoginFailure(t, rec, "login_failed")
+		require.NotContains(t, rec.Header().Get("Location"), "exploded")
+		require.Empty(t, rec.Body.String())
 	})
 
-	for name, path := range map[string]string{
-		"missing code":              "/auth/callback?state=s",
-		"missing state":             "/auth/callback?code=c",
-		"cancelled at the provider": "/auth/callback?error=access_denied&state=s",
+	for name, tt := range map[string]struct{ path, code string }{
+		"missing code":              {"/auth/callback?state=s", "login_failed"},
+		"missing state":             {"/auth/callback?code=c", "login_failed"},
+		"cancelled at the provider": {"/auth/callback?error=access_denied&state=s", "access_denied"},
 	} {
-		t.Run(name+" is 400 validation_error", func(t *testing.T) {
+		t.Run(name+" reaches the handler and redirects", func(t *testing.T) {
 			spy := newLoginSpy()
+			spy.completeErr = domain.ErrInvalidLogin
 
-			rec := do(loginRouter(spy, false), http.MethodGet, path)
+			rec := do(loginRouter(spy, false), http.MethodGet, tt.path)
 
-			requireProblem(t, rec, http.StatusBadRequest, api.ErrorCodeValidationError)
-			require.Zero(t, spy.completeCall)
+			requireLoginFailure(t, rec, tt.code)
+			require.Equal(t, 1, spy.completeCall)
 		})
 	}
+
+	t.Run("a valid state adds return_to to the failure redirect", func(t *testing.T) {
+		spy := newLoginSpy()
+		spy.completeErr = domain.ErrInvalidLogin
+		spy.returnTo = "/save?url=x"
+
+		rec := do(loginRouter(spy, false), http.MethodGet, callbackPath)
+
+		require.Equal(t, "/login?error=login_failed&return_to=%2Fsave%3Furl%3Dx", rec.Header().Get("Location"))
+	})
 
 	t.Run("works with no session cookie", func(t *testing.T) {
 		spy := newLoginSpy()
@@ -252,14 +262,18 @@ func TestAuthCallback_Errors(t *testing.T) {
 }
 
 func TestAuthLogout(t *testing.T) {
-	t.Run("answers 200 with the logout URL and nothing else", func(t *testing.T) {
+	t.Run("answers 200 with the logout URL and clears the cookies", func(t *testing.T) {
 		spy := newLoginSpy()
 
 		rec := do(loginRouter(spy, false), http.MethodPost, "/auth/logout", withSession(goodSession), withCSRF())
 
 		require.Equal(t, http.StatusOK, rec.Code)
 		require.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		require.Empty(t, rec.Header().Values("Set-Cookie"))
+		cookies := rec.Result().Cookies()
+		require.Len(t, cookies, 2)
+		for _, name := range []string{middleware.SessionCookie, middleware.CSRFCookie} {
+			require.Equal(t, -1, cookieByName(t, cookies, name).MaxAge, name)
+		}
 		want, err := json.Marshal(map[string]string{"logout_url": spy.logoutURL})
 		require.NoError(t, err)
 		require.JSONEq(t, string(want), rec.Body.String())
