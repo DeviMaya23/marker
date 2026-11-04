@@ -12,7 +12,7 @@ REDOCLY := npx --yes @redocly/cli@2
 OPENAPI_TS := npx --yes openapi-typescript@7.13.0
 
 .PHONY: help db-up db-down migrate generate generate-check lint lint-backend lint-frontend test test-backend \
-	test-frontend test-integration test-integration-local build build-backend build-frontend openapi-lint check
+	test-frontend test-integration test-integration-local build build-backend build-frontend openapi-lint check lint-css
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -42,6 +42,9 @@ lint-backend: ## gofmt check and go vet
 
 lint-frontend: ## ESLint
 	cd frontend && npm run lint
+
+lint-css: ## Stylelint over frontend/src/**/*.css (not part of check yet)
+	cd frontend && npm run lint:css
 
 test: test-backend test-frontend ## Unit tests (no Docker needed)
 
