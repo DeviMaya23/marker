@@ -33,7 +33,6 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `folders-api`: sibling names compare with `lower()` under the database's default collation; exact for ASCII, collation-dependent for other scripts.
 - `folders-api`: the router test no longer lists the folder write routes in its CSRF rows (CSRF is router-wide, and other rows still cover it).
 - `bookmark-edit-trash`: the branch where the folder is deleted between the `EXISTS` check and the update in `repository.Update` has no test of its own; nearly unreachable.
-- `folder-sidebar`: on the folder page the add field is the same instance when you go from one folder to another, so a half-typed URL (and a shown failure) carries over and would be saved into the new folder. A `key` on the form fixes it. Read from code, not run.
 - `folder-sidebar`: the name counter and the 100 limit use the trimmed name, which is what is sent. If the server counts the raw name, a 100-character name with trailing spaces could pass here and fail there. Check when the two halves meet.
 - `folder-sidebar`: "Too many requests. Try again in about 0 seconds." for `Retry-After: 0`, which is what the task's wording gives.
 - `mobile-drawer`: a dialog open inside the drawer (for example a half-filled "New folder") is dropped when the viewport crosses 768px, and its text is lost. Follows the task file; decide whether that is acceptable.
@@ -66,7 +65,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 ## Non-blocking findings from fix rounds
 
 <!-- Fix rounds append here: `- [<task slug>] finding` -->
-- [bookmark-actions] `EditBookmarkDialog` puts `.modal-footer` inside `.modal-body` (`max-height: 50vh; overflow-y: auto`), so on a short screen Save scrolls with the fields; `Dialog` has an unused `footer` prop for this. Same for the empty-trash dialog.
+- [bookmark-actions] `EditBookmarkDialog` puts `.modal-footer` inside `.modal-body` (`max-height: 50vh; overflow-y: auto`), so on a short screen Save scrolls with the fields; `Dialog` has an unused `footer` prop for this. Split from `add-form-key-and-trash-footer`, which fixed the empty-trash dialog and left this one because it changes `components/ui/` (and maybe `styles/`) while `login-screen` runs.
 - [bookmark-actions] A stored title with surrounding spaces enables Save on open, because the trimmed value differs from the stored one. Only matters if the server ever stores untrimmed titles.
 - [bookmark-actions] Base UI gives each toast `role="dialog"` inside the `role="status"` region (plan call 12); screen readers may announce toasts unevenly. Check in a real browser.
 - [bookmark-actions] Base UI pauses a toast's timer on hover and focus, so "disappears after 3.5 s" holds only while the pointer and focus are elsewhere.
