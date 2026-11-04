@@ -17,7 +17,9 @@
 | Outbound fetching | `pkg/safehttp`, an SSRF-safe client (NFR-8, NFR-9) |
 | Tests | testify, testcontainers for repository tests |
 
-Suggested, not yet adopted: `go-oidc` and `x/oauth2` for login, `go-readability` for text extraction, `x/time/rate` for in-process limiting.
+OIDC login libraries (adopted for the auth backend): `github.com/coreos/go-oidc/v3` at `v3.21.0` (provider discovery, ID token verification) and `golang.org/x/oauth2` at `v0.37.0` (authorization URL, PKCE, code exchange). Both are compatible with the `go 1.26.0` directive. Only `adaptor/oidc.go` imports them.
+
+Suggested, not yet adopted: `go-readability` for text extraction, `x/time/rate` for in-process limiting.
 
 ### Fetch queue
 
