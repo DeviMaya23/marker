@@ -35,7 +35,7 @@ func (stubAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func newTestRouter() *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil, nil, nil, false), Auth: stubAuth{}, AppOrigin: testOrigin})
 }
 
 func withSession(token string) func(*http.Request) {
@@ -94,7 +94,7 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 	})
 
 	t.Run("valid session reaches the handler", func(t *testing.T) {
-		// authLogout is a stub for now, so reaching the handler means a 501.
+		// newTestRouter has no login service, so authLogout answers 501: reaching the handler means a 501.
 		rec := do(e, http.MethodPost, "/auth/logout", withSession(goodSession), withCSRF())
 		requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
 	})
@@ -103,7 +103,7 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 	e := newTestRouter()
 
-	// reachesStub: with a token the request ends at a 501 stub. The account route is
+	// reachesStub: with a token the request ends at a 501 (no login service is configured for authLogout). The account route is
 	// implemented (see account_test.go) and newTestRouter has no service behind it, so
 	// only its 403 half is checked here.
 	writes := []struct {
@@ -132,7 +132,7 @@ func TestRouter_PublicAuthRoutesNeedNoSession(t *testing.T) {
 
 	for _, path := range []string{"/auth/login", "/auth/callback?code=abc&state=xyz"} {
 		t.Run(path, func(t *testing.T) {
-			// 501 (the stub), not 401: the session check is skipped for these routes.
+			// 501 (no login service is configured here), not 401: the session check is skipped for these routes.
 			requireProblem(t, do(e, http.MethodGet, path), http.StatusNotImplemented, notImplCode)
 		})
 	}
@@ -174,7 +174,7 @@ func TestRouter_RequestBodyIsCappedAt64KB(t *testing.T) {
 	})
 
 	t.Run("exactly at the cap is not refused for size", func(t *testing.T) {
-		// The body is not valid JSON, so the stub or the decoder answers; the point
+		// The body is not valid JSON, so the 501 or the decoder answers; the point
 		// is only that the size limit does not fire. 64 KB means 65,536 bytes.
 		require.NotEqual(t, http.StatusRequestEntityTooLarge, post(64*1024).Code)
 	})

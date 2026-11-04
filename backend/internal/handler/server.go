@@ -17,10 +17,13 @@ type Server struct {
 	sync      SyncService
 	favicons  FaviconService
 	account   AccountService
+
+	login         LoginFlow // nil when OIDC login is not configured; the auth operations then answer 501
+	secureCookies bool
 }
 
-func NewServer(bookmarks BookmarkService, folders FolderService, sync SyncService, favicons FaviconService, account AccountService) *Server {
-	return &Server{bookmarks: bookmarks, folders: folders, sync: sync, favicons: favicons, account: account}
+func NewServer(bookmarks BookmarkService, folders FolderService, sync SyncService, favicons FaviconService, account AccountService, login LoginFlow, secureCookies bool) *Server {
+	return &Server{bookmarks: bookmarks, folders: folders, sync: sync, favicons: favicons, account: account, login: login, secureCookies: secureCookies}
 }
 
 // The compiler checks that Server covers every operation in the contract.

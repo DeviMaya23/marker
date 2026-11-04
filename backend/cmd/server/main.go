@@ -67,8 +67,25 @@ func main() {
 	syncService := usecase.NewSyncService(userRepo)
 	faviconService := usecase.NewFaviconService(repository.NewFaviconRepository(db))
 	authService := usecase.NewAuthService(userRepo, repository.NewSessionRepository(db))
+	// An untyped nil interface when OIDC is off: the handlers test `login == nil`, which a
+	// nil *usecase.LoginService would not satisfy.
+	var loginFlow handler.LoginFlow
+	if cfg.OIDCEnabled() {
+		idp := adaptor.NewOIDCClient(adaptor.OIDCConfig{
+			IssuerURL:    cfg.OIDCIssuerURL,
+			ClientID:     cfg.OIDCClientID,
+			ClientSecret: cfg.OIDCClientSecret,
+			RedirectURL:  cfg.AppBaseURL + "/auth/callback",
+		})
+		loginFlow = usecase.NewLoginService(idp, authService, usecase.LoginConfig{
+			StateSecret:         []byte(cfg.AuthStateSecret),
+			LogoutURL:           cfg.OIDCLogoutURL,
+			LogoutRedirectParam: cfg.OIDCLogoutRedirectParam,
+			LogoutReturnURL:     cfg.AppBaseURL + "/",
+		})
+	}
 	deps := handler.Deps{
-		Server:    handler.NewServer(bookmarkService, folderService, syncService, faviconService, usecase.NewAccountService(userRepo)),
+		Server:    handler.NewServer(bookmarkService, folderService, syncService, faviconService, usecase.NewAccountService(userRepo), loginFlow, cfg.CookieSecure()),
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
 	}

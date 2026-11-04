@@ -31,7 +31,7 @@ func (s *accountSpy) Delete(_ context.Context, userID uuid.UUID) error {
 }
 
 func accountRouter(spy *accountSpy) *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil, spy), Auth: authFor{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil, spy, nil, false), Auth: authFor{}, AppOrigin: testOrigin})
 }
 
 const accountPath = "/api/v1/account"

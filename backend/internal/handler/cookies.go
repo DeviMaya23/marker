@@ -10,16 +10,16 @@ import (
 	"marker/internal/usecase"
 )
 
-// setAuthCookies sets the two cookies that make up a login (NFR-13, NFR-15): the
+// authCookies builds the two cookies that make up a login (NFR-13, NFR-15): the
 // HttpOnly session cookie, and the csrf_token cookie the frontend reads and echoes
 // back in the X-CSRF-Token header. Both live as long as the session's absolute limit;
 // the server decides when the session actually expires.
 //
 // secure should be true whenever the app is served over https.
-func setAuthCookies(c echo.Context, grant usecase.Grant, secure bool) {
+func authCookies(grant usecase.Grant, secure bool) (session, csrf *http.Cookie) {
 	maxAge := int(time.Until(grant.ExpiresAt).Seconds())
 
-	c.SetCookie(&http.Cookie{
+	session = &http.Cookie{
 		Name:     middleware.SessionCookie,
 		Value:    grant.Token,
 		Path:     "/",
@@ -27,8 +27,8 @@ func setAuthCookies(c echo.Context, grant usecase.Grant, secure bool) {
 		HttpOnly: true,
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-	})
-	c.SetCookie(&http.Cookie{
+	}
+	csrf = &http.Cookie{
 		Name:     middleware.CSRFCookie,
 		Value:    grant.CSRFToken,
 		Path:     "/",
@@ -36,5 +36,13 @@ func setAuthCookies(c echo.Context, grant usecase.Grant, secure bool) {
 		HttpOnly: false, // the frontend must be able to read it
 		Secure:   secure,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	return session, csrf
+}
+
+// setAuthCookies sets the login cookies on an Echo response (dev login).
+func setAuthCookies(c echo.Context, grant usecase.Grant, secure bool) {
+	session, csrf := authCookies(grant, secure)
+	c.SetCookie(session)
+	c.SetCookie(csrf)
 }
