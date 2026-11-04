@@ -199,6 +199,8 @@ describe('FolderSection delete', () => {
     await openMenu(user, name, 'Delete')
     await user.click(await screen.findByRole('button', { name: 'Delete folder' }))
     await screen.findByText('Folder deleted.')
+    // The toast shows a tick before the navigation renders; the dialog closes after navigating.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete folder?' })).not.toBeInTheDocument())
     expect(where()).toBe(expected)
   })
 
