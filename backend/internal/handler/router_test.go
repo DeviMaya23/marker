@@ -95,8 +95,8 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 	})
 
 	t.Run("valid session reaches the handler", func(t *testing.T) {
-		// Operations are stubs for now, so reaching the handler means a 501.
-		rec := do(e, http.MethodGet, "/api/v1/bookmarks", withSession(goodSession))
+		// Folder operations are stubs for now, so reaching the handler means a 501.
+		rec := do(e, http.MethodGet, "/api/v1/folders", withSession(goodSession))
 		requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
 	})
 }

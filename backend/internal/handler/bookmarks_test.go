@@ -28,6 +28,17 @@ type bookmarkSpy struct {
 	gotInput   usecase.CreateBookmarkInput
 	gotGetID   uuid.UUID
 	gotGetUser uuid.UUID
+
+	page        domain.BookmarkPage
+	gotListUser uuid.UUID
+	gotList     domain.ListBookmarksInput
+	listCalls   int
+}
+
+func (s *bookmarkSpy) List(_ context.Context, userID uuid.UUID, in domain.ListBookmarksInput) (domain.BookmarkPage, error) {
+	s.gotListUser, s.gotList = userID, in
+	s.listCalls++
+	return s.page, s.err
 }
 
 func (s *bookmarkSpy) Create(_ context.Context, userID uuid.UUID, in usecase.CreateBookmarkInput) (domain.Bookmark, error) {

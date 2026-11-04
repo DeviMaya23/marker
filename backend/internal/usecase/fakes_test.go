@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +82,8 @@ type fakeBookmarkStore struct {
 	bookmarks []domain.Bookmark
 	contents  map[uuid.UUID]string
 	log       *[]string
+	// lastList is the query the last List call received.
+	lastList domain.BookmarkListQuery
 	// createErr, if set, is returned by Create (after nothing is stored).
 	createErr error
 }
@@ -130,6 +133,45 @@ func (f *fakeBookmarkStore) GetDetail(_ context.Context, userID, id uuid.UUID) (
 		}
 	}
 	return domain.BookmarkDetail{}, gorm.ErrRecordNotFound
+}
+
+// List serves the live list or the trash in the store's own order, honouring After and Limit.
+func (f *fakeBookmarkStore) List(_ context.Context, q domain.BookmarkListQuery) ([]domain.Bookmark, error) {
+	f.lastList = q
+	var rows []domain.Bookmark
+	for _, b := range f.bookmarks {
+		if b.UserID != q.UserID || (b.DeletedAt != nil) != (q.Mode == domain.ListTrash) {
+			continue
+		}
+		rows = append(rows, b)
+	}
+	key := func(b domain.Bookmark) time.Time {
+		if q.Mode == domain.ListTrash {
+			return *b.DeletedAt
+		}
+		return b.CreatedAt
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		ki, kj := key(rows[i]), key(rows[j])
+		if !ki.Equal(kj) {
+			return ki.After(kj)
+		}
+		return rows[i].ID.String() > rows[j].ID.String()
+	})
+	if q.After != nil {
+		var rest []domain.Bookmark
+		for _, b := range rows {
+			k := key(b)
+			if k.Before(q.After.At) || (k.Equal(q.After.At) && b.ID.String() < q.After.ID.String()) {
+				rest = append(rest, b)
+			}
+		}
+		rows = rest
+	}
+	if len(rows) > q.Limit {
+		rows = rows[:q.Limit]
+	}
+	return rows, nil
 }
 
 // fakeFolders knows which folders exist per user.
