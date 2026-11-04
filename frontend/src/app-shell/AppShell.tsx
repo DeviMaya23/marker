@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 import { Drawer } from '../components/ui/Drawer'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { SidebarContent } from './SidebarContent'
+import { useSyncPoll } from './useSyncPoll'
 
 /**
  * The page frame. Wide (768px and up): the sidebar sits beside the page. Narrow: a top bar
@@ -11,6 +12,7 @@ import { SidebarContent } from './SidebarContent'
  * the inline `aside` and the drawer are alternatives.
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  useSyncPoll()
   const narrow = useMediaQuery('(max-width: 767px)')
   const { key } = useLocation()
   // The location the drawer was opened at; any other location (or a wide viewport) closes it.
