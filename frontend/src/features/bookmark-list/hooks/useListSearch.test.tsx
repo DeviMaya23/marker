@@ -96,6 +96,26 @@ describe('useListSearch: typing', () => {
     expect(field().value).toBe('foo bar')
   })
 
+  it('writes exactly 200 characters for a 200-character term and cuts a longer one (boundary)', () => {
+    setup('/')
+    type('a'.repeat(200))
+    wait(300)
+    expect(search()).toBe(`?q=${'a'.repeat(200)}`)
+    type('b'.repeat(201))
+    wait(300)
+    expect(search()).toBe(`?q=${'b'.repeat(200)}`)
+    expect(field().value).toBe('b'.repeat(201))
+  })
+
+  it('writes terms with &, %, quotes and markup so the URL reads back the same text', () => {
+    setup('/')
+    for (const term of ['a&b', '100%', '"quoted phrase" -word or', '<script>']) {
+      type(term)
+      wait(300)
+      expect(new URLSearchParams(search() ?? '').get('q')).toBe(term)
+    }
+  })
+
   it('removes q for only spaces, and writes nothing for the text the URL already has', () => {
     setup('/?q=foo')
     type('foo  ')
@@ -201,6 +221,15 @@ describe('useListSearch: notes and scope', () => {
     expect(search()).toBe('?q=foobar&notes=1')
     click('notes')
     expect(search()).toBe('?q=foobar')
+  })
+
+  it('ends in the right state after rapid toggling, keeping q and other params', () => {
+    setup('/?q=foo&x=1')
+    for (let i = 0; i < 5; i++) click('notes')
+    expect(new URLSearchParams(search() ?? '').get('notes')).toBe('1')
+    click('notes')
+    expect(search()).toBe('?q=foo&x=1')
+    expect(navType()).toBe('REPLACE')
   })
 
   it('keeps a pending term when notes is toggled before the wait is over', () => {
