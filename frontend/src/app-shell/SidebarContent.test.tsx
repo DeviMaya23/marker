@@ -11,25 +11,21 @@ beforeEach(() => {
   vi.mocked(listFolders).mockReset().mockResolvedValue({ items: [] })
 })
 
-describe('SidebarContent account link', () => {
-  it('points to /account, comes after the folder section and is current only there', () => {
+describe('SidebarContent account menu', () => {
+  it('shows a menu button after the folder section and no account link', () => {
     renderApp(<SidebarContent />, { path: '/account' })
-    const link = screen.getByRole('link', { name: 'Account & help' })
-    expect(link).toHaveAttribute('href', '/account')
-    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('link', { name: 'Account & help' })).not.toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: 'Account & help' })
     const folders = screen.getByText('Folders')
-    expect(folders.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(folders.compareDocumentPosition(trigger) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('is not the current page at /', () => {
-    renderApp(<SidebarContent />, { path: '/' })
-    expect(screen.getByRole('link', { name: 'Account & help' })).not.toHaveAttribute('aria-current')
-  })
-
-  it('calls onNavigate once when clicked', async () => {
+  it('calls onNavigate once when "Account & help" is chosen from the menu', async () => {
     const onNavigate = vi.fn()
     renderApp(<SidebarContent onNavigate={onNavigate} />)
-    await userEvent.setup().click(screen.getByRole('link', { name: 'Account & help' }))
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Account & help' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Account & help' }))
     expect(onNavigate).toHaveBeenCalledTimes(1)
   })
 })
