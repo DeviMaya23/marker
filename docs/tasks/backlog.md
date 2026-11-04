@@ -28,7 +28,8 @@ State as of `main` at `82b9c17`: 11 of the 17 operations are real (bookmarks: cr
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
 - Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c, needs a who-am-I endpoint, which does not exist).
-- **Moving, the second half of the folder work** (split from `folder-sidebar`; the server side exists): "Move to…" for a bookmark (row action and the folder field on the bookmark page), "Move to…" for a folder with the invalid targets disabled (itself, its descendants, anything that would exceed depth 3), the folder picker in the save popup, and the mobile drawer for the sidebar. Needs a task file (FE-B).
+- Mobile drawer for the sidebar (below 768px it is stacked above the content). Split from the folder work; `folder-moves` leaves it out. Needs a task file.
+- Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
 - Top bar search (screen 2): search field, scope control (all or this folder), "include notes" toggle. Needs the backend search first.
 - Account area (screen 6): account menu, log out, bookmarklet install page, delete account.
 - Background sync: the 5-second poll that refreshes the list and folders without moving the scroll position.
