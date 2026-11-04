@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Inbox, Trash2, TriangleAlert } from 'lucide-react'
+import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { useBookmarkList } from '../hooks/useBookmarkList'
@@ -31,6 +32,9 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
   // row (gone or trashed), and the dialog with its message must stay. It keeps its own copy.
   const [editing, setEditing] = useState<BookmarkSummary | null>(null)
   const [editOpen, setEditOpen] = useState(false)
+  // The same for the move dialog: a 404 or a 409 refreshes the list and may drop the row.
+  const [moving, setMoving] = useState<BookmarkSummary | null>(null)
+  const [moveOpen, setMoveOpen] = useState(false)
 
   let body
   if (phase === 'signed-out') {
@@ -87,6 +91,10 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
                   setEditing(b)
                   setEditOpen(true)
                 }}
+                onMove={(b) => {
+                  setMoving(b)
+                  setMoveOpen(true)
+                }}
               />
             ),
           )}
@@ -109,6 +117,7 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
     <section aria-label={trashed ? 'Trash' : 'Bookmarks'} aria-busy={phase === 'loading'}>
       {body}
       {editing && <BookmarkEditor key={editing.id} bookmark={editing} open={editOpen} onClose={() => setEditOpen(false)} />}
+      {moving && <MoveBookmarkDialog key={moving.id} bookmark={moving} open={moveOpen} onClose={() => setMoveOpen(false)} />}
     </section>
   )
 }

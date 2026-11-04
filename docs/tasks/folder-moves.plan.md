@@ -29,10 +29,10 @@ Branch: `claude/folder-moves-task-kyi515`. All paths under `frontend/src/`. One 
 - [x] Bookmark move: sends once; invalidates lists, `['bookmark', id]` and `['folders']`; toasts "Moved to “X”." / "Moved to the top level."; `409 bookmark_in_trash` and `404` refresh — `lib/bookmarks/useMoveBookmark.ts`, test `lib/bookmarks/useMoveBookmark.test.tsx`
 - [x] Folder move: invalidates folders and lists; toast "Folder moved to …"; `409 folder_name_conflict` and `422` do not refresh, `404` does — `lib/folders/useMoveFolder.ts`, test `lib/folders/useMoveFolder.test.tsx`
 - [x] `useBookmarkFeedback.refresh` invalidates `['folders']` (asserted for delete and restore; empty-trash and edit tests still pass) — `lib/bookmarks/useBookmarkFeedback.ts`, tests `useBookmarkFeedback.test.tsx`, `useDeleteBookmark.test.tsx`, `useRestoreBookmark.test.tsx`
-- [ ] `AddUrlForm` invalidates `['folders']` after a successful save, not after a failed one — `features/bookmark-list/components/AddUrlForm.tsx`, test `AddUrlForm.test.tsx`
+- [x] `AddUrlForm` invalidates `['folders']` after a successful save, not after a failed one — `features/bookmark-list/components/AddUrlForm.tsx`, test `AddUrlForm.test.tsx`
 
 ## Where it appears
-- [ ] Bookmark row menu order "Open original link", "Edit title & note", "Move to…", "Delete"; opens the dialog; trashed row has none — `features/bookmark-list/components/BookmarkRow.tsx`, tests `BookmarkRow.test.tsx`, `TrashRow.test.tsx`
+- [x] Bookmark row menu order "Open original link", "Edit title & note", "Move to…", "Delete"; opens the dialog; trashed row has none — `features/bookmark-list/components/BookmarkRow.tsx`, tests `BookmarkRow.test.tsx`, `TrashRow.test.tsx`
 - [ ] Bookmark page: Folder fact (name, "Top level", placeholder, "Unknown folder" for failed list and unknown id), "Move" button, hidden when trashed; move refreshes and shows the new folder; `404`/`401` replace the page — `features/bookmark-detail/components/BookmarkView.tsx`, test `BookmarkView.test.tsx`
 - [ ] Folder row menu order "New subfolder", "Rename", "Move to…", "Delete"; "New subfolder" disabled at depth 3; "Move to…" opens the dialog with subtree and too-deep rows disabled — `features/folder-sidebar/components/FolderTree.tsx`, `FolderSection.tsx`, tests `FolderTree.test.tsx`, `FolderSection.test.tsx`
 

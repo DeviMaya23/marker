@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../../lib/api/ApiError'
 import { deleteBookmark, restoreBookmark, updateBookmark } from '../../../lib/api/bookmarks'
+import { listFolders } from '../../../lib/api/folders'
 import { goTo } from '../../../lib/goTo'
+import { folder } from '../../../test/builders'
 import { bookmark } from '../../../test/builders'
 import { renderApp } from '../../../test/wrap'
 import { BookmarkRow } from './BookmarkRow'
@@ -13,6 +15,7 @@ vi.mock('../../../lib/api/bookmarks', () => ({
   restoreBookmark: vi.fn(),
   updateBookmark: vi.fn(),
 }))
+vi.mock('../../../lib/api/folders', () => ({ listFolders: vi.fn() }))
 vi.mock('../../../lib/goTo', () => ({ goTo: vi.fn() }))
 
 const del = vi.mocked(deleteBookmark)
@@ -40,6 +43,7 @@ beforeEach(() => {
   del.mockReset()
   restore.mockReset()
   update.mockReset()
+  vi.mocked(listFolders).mockReset().mockResolvedValue({ items: [folder({ id: 'f-1', name: 'Recipes' })] })
   vi.mocked(goTo).mockReset()
 })
 
@@ -55,20 +59,44 @@ describe('BookmarkRow actions menu', () => {
     expect(screen.getByRole('button', { name: 'Actions for www.example.com' })).toBeInTheDocument()
   })
 
-  it('lists Open original link, Edit title & note and Delete, in that order, with no Move to…', async () => {
+  it('lists Open original link, Edit title & note, Move to… and Delete, in that order', async () => {
     const { user } = setup()
     await user.click(actionsButton())
     await screen.findByRole('menu')
     expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
       'Open original link',
       'Edit title & note',
+      'Move to…',
       'Delete',
     ])
-    expect(screen.queryByText(/move to/i)).not.toBeInTheDocument()
     const link = screen.getByRole('menuitem', { name: 'Open original link' })
     expect(link).toHaveAttribute('href', 'https://example.com/a')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+})
+
+describe('BookmarkRow Move to…', () => {
+  it('opens the move dialog for this bookmark, with its folder selected, and moves it', async () => {
+    update.mockResolvedValue(row)
+    vi.mocked(listFolders).mockResolvedValue({ items: [folder({ id: 'f-1', name: 'Recipes' }), folder({ id: 'f-2', name: 'Work' })] })
+    const { user } = setup()
+    await user.click(actionsButton())
+    await user.click(await screen.findByRole('menuitem', { name: 'Move to…' }))
+    expect(await screen.findByRole('dialog', { name: 'Move bookmark' })).toBeInTheDocument()
+    expect(screen.getByText('A page', { selector: '.move-dialog__item' })).toBeInTheDocument()
+    await user.click(await screen.findByRole('radio', { name: 'Work' }))
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { folder_id: 'f-2' }))
+    expect(await screen.findByText('Moved to “Work”.')).toBeInTheDocument()
+  })
+
+  it('selects the folder the bookmark is in', async () => {
+    renderApp(<BookmarkRow bookmark={{ ...row, folder_id: 'f-1' }} />)
+    const user = userEvent.setup()
+    await user.click(actionsButton())
+    await user.click(await screen.findByRole('menuitem', { name: 'Move to…' }))
+    expect(await screen.findByRole('radio', { name: 'Recipes' })).toBeChecked()
   })
 })
 
@@ -84,7 +112,7 @@ describe('BookmarkRow delete', () => {
     finish()
     expect(await screen.findByText('Moved to trash.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
-    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(actionsButton()).toBeEnabled()
   })
 
@@ -97,7 +125,7 @@ describe('BookmarkRow delete', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
     expect(restore).toHaveBeenCalledExactlyOnceWith('b-1')
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
   it('an Undo of a bookmark that was already restored (409 not in trash) says it could not undo and refreshes', async () => {
@@ -109,7 +137,7 @@ describe('BookmarkRow delete', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(await screen.findByText("Couldn't undo. It may have been changed elsewhere.")).toBeInTheDocument()
     expect(screen.queryByText('It was already restored.')).not.toBeInTheDocument()
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
   it('an Undo that fails says it could not undo', async () => {
@@ -131,7 +159,7 @@ describe('BookmarkRow delete', () => {
     const { user, invalidate } = setup()
     await chooseDelete(user)
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 
@@ -159,7 +187,7 @@ describe('BookmarkRow edit', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { title: 'A page!' }))
     expect(await screen.findByText('Saved.')).toBeInTheDocument()
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit bookmark' })).not.toBeInTheDocument())
   })
 

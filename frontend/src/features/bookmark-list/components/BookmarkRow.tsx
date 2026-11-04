@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { ExternalLink, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { ExternalLink, FolderInput, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
 import { Favicon } from '../../../components/ui/Favicon'
 import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 import { Menu } from '../../../components/ui/Menu'
+import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
 import type { BookmarkSummary } from '../../../lib/api/bookmarks'
 import { useDeleteBookmark } from '../../../lib/bookmarks/useDeleteBookmark'
 import { hostOf } from '../../../lib/hostOf'
@@ -13,13 +14,22 @@ import { BookmarkEditor } from './BookmarkEditor'
 
 /**
  * One live bookmark: icon, title, fetch state, and host and date. The whole text area is a
- * link; a button on the right opens the actions (open the original, edit, delete).
+ * link; a button on the right opens the actions (open the original, edit, move, delete).
  *
- * With `onEdit` the owner shows the edit dialog (the list does, so the dialog outlives the row
- * when a refresh drops it); without it the row shows its own.
+ * With `onEdit` or `onMove` the owner shows that dialog (the list does, so the dialog outlives
+ * the row when a refresh drops it); without it the row shows its own.
  */
-export function BookmarkRow({ bookmark, onEdit }: { bookmark: BookmarkSummary; onEdit?: (bookmark: BookmarkSummary) => void }) {
+export function BookmarkRow({
+  bookmark,
+  onEdit,
+  onMove,
+}: {
+  bookmark: BookmarkSummary
+  onEdit?: (bookmark: BookmarkSummary) => void
+  onMove?: (bookmark: BookmarkSummary) => void
+}) {
   const [editing, setEditing] = useState(false)
+  const [moving, setMoving] = useState(false)
   const del = useDeleteBookmark(bookmark.id, { undo: true })
   const title = displayTitle(bookmark)
 
@@ -55,6 +65,12 @@ export function BookmarkRow({ bookmark, onEdit }: { bookmark: BookmarkSummary; o
               icon: <Pencil size={14} aria-hidden="true" />,
             },
             {
+              key: 'move',
+              label: 'Move to…',
+              onSelect: () => (onMove ? onMove(bookmark) : setMoving(true)),
+              icon: <FolderInput size={14} aria-hidden="true" />,
+            },
+            {
               key: 'delete',
               label: 'Delete',
               danger: true,
@@ -67,6 +83,7 @@ export function BookmarkRow({ bookmark, onEdit }: { bookmark: BookmarkSummary; o
         </Menu>
       </div>
       {!onEdit && <BookmarkEditor bookmark={bookmark} open={editing} onClose={() => setEditing(false)} />}
+      {!onMove && <MoveBookmarkDialog bookmark={bookmark} open={moving} onClose={() => setMoving(false)} />}
     </div>
   )
 }

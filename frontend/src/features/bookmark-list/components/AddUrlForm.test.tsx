@@ -17,9 +17,12 @@ function problem(status: number, code: ProblemBody['code'], extra: Partial<Probl
   return new ApiError(status, { type: 'about:blank', title: 't', status, code, ...extra }, null)
 }
 
+let client: QueryClient
+
 function renderForm() {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/']}>
         <Routes>
           <Route
@@ -73,6 +76,23 @@ describe('AddUrlForm', () => {
       expect(screen.getByLabelText('Link to save')).toBeInTheDocument()
     })
 
+    it('refreshes the folder list (the sidebar counts) after a successful save', async () => {
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      const user = renderForm()
+      const invalidate = vi.spyOn(client, 'invalidateQueries')
+      await user.type(input(), 'https://a.test{Enter}')
+      await waitFor(() => expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(['folders']))
+    })
+
+    it('does not refresh the folder list after a failed save', async () => {
+      vi.mocked(createBookmark).mockRejectedValue(problem(409, 'duplicate_bookmark'))
+      const user = renderForm()
+      const invalidate = vi.spyOn(client, 'invalidateQueries')
+      await user.type(input(), 'https://a.test{Enter}')
+      await screen.findByRole('alert')
+      expect(invalidate).not.toHaveBeenCalled()
+    })
+
     it('saves when the button is clicked', async () => {
       vi.mocked(createBookmark).mockResolvedValue(created)
       const user = renderForm()
@@ -124,6 +144,7 @@ describe('AddUrlForm', () => {
         "You're at the 1,000 bookmark limit. Empty the trash or delete some bookmarks first.",
       ],
       ['a rate limit', problem(429, 'rate_limited'), 'Too many saves. Try again in a moment.'],
+      ['a folder that was deleted meanwhile', problem(404, 'not_found'), 'That folder no longer exists.'],
       ['a server error', new ApiError(500, null, null), "Couldn't save that link."],
       ['a network failure', new TypeError('Failed to fetch'), "Couldn't save that link."],
     ])('shows the message for %s and keeps what was typed', async (_name, error, message) => {

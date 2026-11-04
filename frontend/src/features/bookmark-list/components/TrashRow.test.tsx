@@ -46,7 +46,7 @@ describe('TrashRow', () => {
     expect(restore).toHaveBeenCalledExactlyOnceWith('t-1')
     finish()
     expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
-    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 't-1']])
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 't-1'], ['folders']])
     expect(button).toBeEnabled()
   })
 
@@ -60,7 +60,7 @@ describe('TrashRow', () => {
     const { invalidate } = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(invalidate).toHaveBeenCalledTimes(2)
+    expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
   it('401: the logged-out toast with a Log in action', async () => {

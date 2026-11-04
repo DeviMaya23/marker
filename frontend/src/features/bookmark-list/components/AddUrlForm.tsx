@@ -5,9 +5,11 @@ import { Banner } from '../../../components/ui/Banner'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
 import { BOOKMARK_LIST_KEY } from '../../../lib/bookmarks/queryKeys'
+import { FOLDERS_KEY } from '../../../lib/folders/queryKeys'
 
 /**
- * The paste-a-URL field. A save clears it and refreshes the list; the page stays where it is.
+ * The paste-a-URL field. A save clears it and refreshes the list and the folder counts; the page
+ * stays where it is.
  * With a `folderId` the bookmark is saved into that folder, otherwise at the top level.
  */
 export function AddUrlForm({ folderId }: { folderId?: string }) {
@@ -25,6 +27,8 @@ export function AddUrlForm({ folderId }: { folderId?: string }) {
     if (bookmark) {
       setUrl('')
       void queryClient.invalidateQueries({ queryKey: BOOKMARK_LIST_KEY })
+      // The sidebar's counts changed.
+      void queryClient.invalidateQueries({ queryKey: FOLDERS_KEY })
     }
   }
 
