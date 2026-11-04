@@ -345,3 +345,7 @@
   cursor: pointer;
   flex-shrink: 0;
 }
+.dropdown__item[data-disabled] {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}

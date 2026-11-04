@@ -5,11 +5,11 @@ import { listBookmarks, type BookmarkSummary } from '../../../lib/api/bookmarks'
 import { bookmarkListKey } from '../../../lib/bookmarks/queryKeys'
 
 /**
- * What the screen shows: `loading` the first page, `signed-out` after any 401, `error` when the
- * first page failed, `empty` when there is nothing, otherwise `ready` (rows, maybe with a failed
- * later page).
+ * What the screen shows: `loading` the first page, `signed-out` after any 401, `not-found` when
+ * the list itself answered 404 (a folder that does not exist), `error` when the first page
+ * failed, `empty` when there is nothing, otherwise `ready` (rows, maybe with a failed later page).
  */
-export type ListPhase = 'loading' | 'signed-out' | 'error' | 'empty' | 'ready'
+export type ListPhase = 'loading' | 'signed-out' | 'not-found' | 'error' | 'empty' | 'ready'
 
 export type BookmarkListState = {
   phase: ListPhase
@@ -23,11 +23,15 @@ export type BookmarkListState = {
   retry: () => void
 }
 
-/** The live list, or the trash with `{ trashed: true }`, as pages fetched on demand. */
-export function useBookmarkList({ trashed }: { trashed: boolean }): BookmarkListState {
+/**
+ * The live list, or the trash with `{ trashed: true }`, or one folder's bookmarks (and its
+ * subfolders') with a `folderId`, as pages fetched on demand.
+ */
+export function useBookmarkList({ trashed, folderId }: { trashed: boolean; folderId?: string }): BookmarkListState {
   const query = useInfiniteQuery({
-    queryKey: bookmarkListKey(trashed),
-    queryFn: ({ pageParam }) => listBookmarks({ trashed, cursor: pageParam }),
+    queryKey: bookmarkListKey(trashed, folderId),
+    queryFn: ({ pageParam }) =>
+      listBookmarks({ trashed, cursor: pageParam, ...(folderId !== undefined ? { folderId } : {}) }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     retry: false,
@@ -62,6 +66,7 @@ export function useBookmarkList({ trashed }: { trashed: boolean }): BookmarkList
   const signedOut = error instanceof ApiError && error.status === 401
   let phase: ListPhase
   if (signedOut) phase = 'signed-out'
+  else if (!data && error instanceof ApiError && error.status === 404) phase = 'not-found'
   else if (query.isPending) phase = 'loading'
   else if (!data) phase = 'error'
   else if (rows.length === 0 && !hasNextPage && !error) phase = 'empty'
