@@ -441,3 +441,59 @@
   display: flex;
   color: var(--accent-600);
 }
+
+/* Drawer: a modal panel from the left. Layers 50 are below the dialogs (60), menus (70) and
+   toasts (80). The slide is only switched on by .drawer--animated, which is left off when the
+   user asks for reduced motion. */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(21, 23, 31, 0.45);
+}
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  width: min(var(--sidebar-width), 85vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.drawer-panel__close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+}
+.drawer-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.drawer-panel .sidebar__brand {
+  padding-right: calc(32px + var(--space-4));
+}
+.drawer--animated.drawer-panel {
+  transition: transform 180ms ease;
+}
+.drawer--animated.drawer-backdrop {
+  transition: opacity 180ms ease;
+}
+.drawer--animated.drawer-panel[data-starting-style],
+.drawer--animated.drawer-panel[data-ending-style] {
+  transform: translateX(-100%);
+}
+.drawer--animated.drawer-backdrop[data-starting-style],
+.drawer--animated.drawer-backdrop[data-ending-style] {
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer--animated.drawer-panel,
+  .drawer--animated.drawer-backdrop {
+    transition: none;
+  }
+}
