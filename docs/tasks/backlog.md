@@ -22,8 +22,9 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c, needs a who-am-I endpoint, which does not exist).
 - Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
-- Account area (screen 6): account menu, log out, bookmarklet install page, delete account.
+- Log out and the sidebar's account menu (screen 6). Split from `account-area`: it waits for the auth backend (`authLogout`); the sidebar's plain "Account & help" link becomes the menu.
 - The "1,000 bookmark limit reached" message on the list.
+
 ## Loose ends from verifier reports
 
 - Check in a real browser: on a tall screen with a short first page, the list may not request page 2, because `IntersectionObserver` fires only when visibility changes (`bookmark-list` report, finding 1). Not reproducible in jsdom.
@@ -48,6 +49,8 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `css-lint-cleanup`: `.folder-error` is defined twice in `layout.css` (once in the `.folder-empty, .folder-error` list, once alone). The properties do not overlap, so nothing changes in the cascade; stylelint does not flag it.
 - `get-favicon`: `RecordFetchSuccess` overwrites the bytes behind an existing favicon id (`ON CONFLICT (user_id, host) DO UPDATE`), but the contract says the content behind an id never changes. The task follows the contract (a one-year `max-age`), so a browser can show an outdated icon for up to a year. Decide: change the upsert to `DO NOTHING`, or reword the contract.
 - `top-bar-search`: after a scope change, Back returns to the folder page with the typed search still applied, not as it was before; the task file does not say which it wants. Decide.
+- `sync-version`: `BookmarkRepository.Update` with an empty `BookmarkUpdate{}` increments `users.version`; the "only when something changed" rule is held by `usecase/bookmark_update.go`, not the repository. Unreachable through the API today; matters if a later caller bypasses the usecase.
+- `delete-account`: the lock test's `pg_stat_activity` query matches any backend waiting on a lock, not only the `DeleteUser` one. Safe while the package's tests run one at a time; a future `t.Parallel()` in the package could make it pass for the wrong reason.
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
 
 ## Later, after the app is finished
