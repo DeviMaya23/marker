@@ -2,9 +2,14 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../../../lib/api/ApiError'
+import { createFolder } from '../../../lib/api/folders'
+import { useCreateFolder } from '../../../lib/folders/useCreateFolder'
 import type { FolderFailure } from '../../../lib/folders/folderFailureMessage'
 import { renderApp } from '../../../test/wrap'
 import { FolderFormDialog } from './FolderFormDialog'
+
+vi.mock('../../../lib/api/folders', () => ({ createFolder: vi.fn() }))
 
 type HarnessProps = {
   mode?: 'create' | 'rename'
@@ -233,9 +238,37 @@ describe('FolderFormDialog failures', () => {
     expect(alert.closest('.field')).toBeNull()
   })
 
-  it('a signed-out failure shows the signed-out message', async () => {
-    await open({ failure: { kind: 'signed-out', message: "You're logged out.", refresh: true } })
-    expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument()
+})
+
+function CreateHarness() {
+  const create = useCreateFolder()
+  return (
+    <FolderFormDialog
+      open
+      mode="create"
+      initialName=""
+      saving={create.pending}
+      failure={create.failure}
+      onSubmit={async (name) => (await create.create({ name })) !== null}
+      onEdit={create.reset}
+      onClose={() => {}}
+    />
+  )
+}
+
+describe('FolderFormDialog with the real create', () => {
+  it('a 401 shows no message, keeps the dialog open and the field editable', async () => {
+    vi.mocked(createFolder).mockRejectedValue(new ApiError(401, null, null))
+    renderApp(<CreateHarness />)
+    const user = userEvent.setup()
+    await user.type(nameField(), 'Soups')
+    await user.click(saveButton())
+    await waitFor(() => expect(createFolder).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(saveButton()).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't create/)).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(nameField()).toHaveValue('Soups')
+    expect(nameField()).toBeEnabled()
   })
 })

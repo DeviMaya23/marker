@@ -3,10 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../lib/api/ApiError'
-import type { BookmarkChanges } from '../../lib/api/bookmarks'
+import { updateBookmark, type BookmarkChanges } from '../../lib/api/bookmarks'
 import { describeFailure, type FailureDisplay } from '../../lib/bookmarks/describeFailure'
+import { useEditBookmark } from '../../lib/bookmarks/useEditBookmark'
 import { renderApp } from '../../test/wrap'
 import { EditBookmarkDialog } from './EditBookmarkDialog'
+
+vi.mock('../../lib/api/bookmarks', () => ({ updateBookmark: vi.fn() }))
 
 type HarnessProps = {
   title?: string
@@ -241,9 +244,36 @@ describe('EditBookmarkDialog failures', () => {
     expect(titleField()).toHaveValue('Stored')
   })
 
-  it('shows the signed-out message for a 401', async () => {
-    await open({ failure: describeFailure(new ApiError(401, null, null), 'edit') })
-    expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument()
+})
+
+function EditHarness() {
+  const edit = useEditBookmark('b-1')
+  return (
+    <EditBookmarkDialog
+      open
+      title="Stored"
+      note={null}
+      onClose={() => {}}
+      onSave={edit.save}
+      saving={edit.pending}
+      failure={edit.failure}
+    />
+  )
+}
+
+describe('EditBookmarkDialog with the real save', () => {
+  it('a 401 shows no banner and no text, and the dialog stays usable', async () => {
+    vi.mocked(updateBookmark).mockRejectedValue(new ApiError(401, null, null))
+    renderApp(<EditHarness />)
+    const user = userEvent.setup()
+    await user.type(titleField(), 'x')
+    await user.click(save())
+    await waitFor(() => expect(updateBookmark).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(save()).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't save/)).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Edit bookmark' })).toBeInTheDocument()
+    expect(titleField()).toHaveValue('Storedx')
+    expect(titleField()).toBeEnabled()
   })
 })
