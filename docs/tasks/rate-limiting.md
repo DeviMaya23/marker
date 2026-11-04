@@ -34,7 +34,7 @@ Role: Backend, see `AGENTS.md`.
 
 You may change `backend/**` except `backend/migration/` and `backend/internal/api/` (generated), and `.env.example` (one commented line, below). You may not change `openapi.yaml`, `oapi-codegen.yaml`, `docs/**` (except your own plan file, `docs/tasks/rate-limiting.plan.md`, see `AGENTS.md`), `STACK.md`, `CONVENTIONS.md`, the frontend, migrations or the Makefile.
 
-Shared files: this task changes `handler/router.go`, `handler/problem.go`, `cmd/server/main.go`, `internal/platform/config/config.go` and `config_test.go`, `go.mod` and `go.sum`, and adds files in `handler/middleware/`. No other backend task is drafted or running, and the frontend tasks do not touch these, so they can run alongside. Do not run it together with any other backend task that changes `router.go`, `problem.go` or `go.mod` (for example the backlog items for login hardening or the callback failure page).
+Shared files: this task changes `handler/router.go`, `handler/problem.go`, `cmd/server/main.go`, `internal/platform/config/config.go` and `config_test.go`, `go.mod` and `go.sum`, and adds files in `handler/middleware/`. The frontend tasks do not touch these, so they can run alongside. Do not run it together with `login-binding` (it adds a per-operation middleware in `router.go`) or any other backend task that changes `router.go`, `problem.go` or `go.mod`: start the second one after the first has merged. Either may go first.
 
 ## Operations used
 

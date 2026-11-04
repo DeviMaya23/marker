@@ -11,14 +11,13 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 ## Backend: cross-cutting
 
-- Login hardening (both parts need a contract change, which the user makes first; decide before production): bind a login attempt to the browser with a cookie on the `/auth/login` redirect (today an attacker can sign a victim in as the attacker), and clear the `session` and `csrf_token` cookies on logout (today they stay in the browser, dead). Needs `Set-Cookie` on the login `302` and the logout `200`.
 - Rate limiting behind the proxy (left out of `rate-limiting`): the app trusts the header named by `CLIENT_IP_HEADER` as sent, which is safe only if the server is reachable through the proxy alone (restrict the Cloud Run address so Cloudflare is the only way in). Limits are per process, so more than one instance multiplies them. Decide when deployment is scoped.
-- Login callback failure page: when the identity provider's callback fails (bad or expired state, denied consent, token or ID-token error), `authCallback` answers `400` with a JSON problem document, so the user sees raw JSON in the browser. Redirect the browser to the login screen (`/login`) instead, with a short error code the screen can show. Needs a contract change first (a `302` on the callback's failure paths), which the user makes, and a small frontend change to show the message on `/login`. Noticed while drafting `login-screen`, which leaves it out.
 
 ## Frontend: screens and features not built
 
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
+- Show the login failure on the `/login` screen. Split from `login-binding`: the backend now redirects every failed login to `/login?error=login_failed` or `/login?error=access_denied` (with `return_to` when known). `LoginPage` and `LoginCard` should show "Login didn't complete. Please try again." and "Login was cancelled." and keep the Log in link pointing at `return_to`. Needs `login-screen` merged (it is) and runs after `login-binding` only for testing against the real flow; the screen can be built from the contract alone.
 - The footer's "Account & help" no longer shows as the current page on `/account`. Split from `logout-menu`: the link became a menu button, which cannot carry `aria-current`. Cosmetic.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
 
