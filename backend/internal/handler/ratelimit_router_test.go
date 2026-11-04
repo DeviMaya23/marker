@@ -281,3 +281,26 @@ func TestRateLimit_LogoutCounts(t *testing.T) {
 		require.Equal(t, http.StatusOK, logout(e, tokenB).Code)
 	})
 }
+
+func TestRateLimit_RefusedSaveSpendsCeiling(t *testing.T) {
+	e := newLimitedRouter()
+	for i := 0; i < middleware.SavesPerMinute; i++ {
+		require.Equal(t, http.StatusCreated, save(e, tokenA).Code)
+	}
+	requireRateLimited(t, save(e, tokenA)) // refused by the saves bucket, ceiling token spent
+	spent := middleware.SavesPerMinute + 1
+	for i := 0; i < middleware.CeilingPerMinute-spent; i++ {
+		require.Equal(t, http.StatusOK, list(e, tokenA).Code, "call %d", i+1)
+	}
+	requireRateLimited(t, list(e, tokenA))
+}
+
+func TestRateLimit_NoUserIs500(t *testing.T) {
+	e := echo.New()
+	e.HTTPErrorHandler = ErrorHandler
+	e.GET("/", func(echo.Context) error { return nil }, middleware.UserLimit(middleware.NewLimiter(1, frozenClock())))
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	require.Empty(t, rec.Header().Get("Retry-After"))
+}
