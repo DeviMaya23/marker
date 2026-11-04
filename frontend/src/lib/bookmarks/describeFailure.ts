@@ -29,7 +29,7 @@ const GENERIC: Record<BookmarkAction, string> = {
 
 export const LOGGED_OUT_TOAST = "You're logged out."
 
-function rateLimitMessage(retryAfter: number | null): string {
+export function rateLimitMessage(retryAfter: number | null): string {
   if (retryAfter !== null && Number.isInteger(retryAfter) && retryAfter >= 0) {
     return `Too many requests. Try again in about ${retryAfter} seconds.`
   }
