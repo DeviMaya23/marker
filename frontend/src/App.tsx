@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router'
+import { AccountPage } from './pages/AccountPage'
 import { BookmarkPage } from './pages/BookmarkPage'
 import { BookmarksPage } from './pages/BookmarksPage'
 import { FolderPage } from './pages/FolderPage'
@@ -14,6 +15,7 @@ function App() {
       <Route path="/trash" element={<TrashPage />} />
       <Route path="/save" element={<SavePage />} />
       <Route path="/bookmarks/:id" element={<BookmarkPage />} />
+      <Route path="/account" element={<AccountPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

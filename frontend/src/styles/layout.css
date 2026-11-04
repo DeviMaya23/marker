@@ -141,6 +141,49 @@
   max-width: 640px;
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+}
+.account-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.account-section__title {
+  font-size: 15px;
+  margin-bottom: var(--space-2);
+}
+.account-section__desc {
+  color: var(--text-muted);
+  margin-bottom: var(--space-3);
+  font-size: 13.5px;
+}
+.account-section--danger {
+  border-color: var(--danger-100);
+}
+.account-section__steps {
+  margin: var(--space-3) 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bookmarklet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--accent-500);
+  color: white;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  cursor: grab;
+}
+.bookmarklet-link:hover {
+  text-decoration: none;
+  background: var(--accent-600);
 }
 
 /* Save popup */
@@ -364,6 +407,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-height: 100%;
 }
 .sidebar__brand {
   display: flex;
@@ -376,6 +420,11 @@
 }
 .sidebar__scroll {
   padding: 0 var(--space-2) var(--space-3);
+}
+.sidebar__footer {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding: var(--space-3) var(--space-2);
 }
 .sidebar__top-links {
   margin-bottom: var(--space-2);
