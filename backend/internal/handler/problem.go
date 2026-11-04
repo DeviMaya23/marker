@@ -32,6 +32,8 @@ var domainProblems = []struct {
 	{middleware.ErrCSRFFailed, http.StatusForbidden, api.ErrorCodeCsrfFailed, "CSRF check failed"},
 	{domain.ErrInvalidURL, http.StatusUnprocessableEntity, api.ErrorCodeInvalidUrl, "Invalid URL"},
 	{domain.ErrBookmarkLimitReached, http.StatusConflict, api.ErrorCodeBookmarkLimitReached, "Bookmark limit reached"},
+	{domain.ErrBookmarkInTrash, http.StatusConflict, api.ErrorCodeBookmarkInTrash, "Bookmark is in the trash"},
+	{domain.ErrBookmarkNotInTrash, http.StatusConflict, api.ErrorCodeBookmarkNotInTrash, "Bookmark is not in the trash"},
 	{gorm.ErrRecordNotFound, http.StatusNotFound, api.ErrorCodeNotFound, "Not found"},
 }
 

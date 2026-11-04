@@ -57,7 +57,12 @@ func NewRouter(deps Deps) *echo.Echo {
 		session: middleware.Session(deps.Auth),
 		csrf:    middleware.CSRF(deps.AppOrigin),
 	}
-	api.RegisterHandlers(router, api.NewStrictHandler(deps.Server, nil))
+	api.RegisterHandlersWithOptions(router, api.NewStrictHandler(deps.Server, nil), api.RegisterHandlersOptions{
+		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
+			// updateBookmark must tell an absent key from a null one (see body_keys.go).
+			"updateBookmark": {recordBodyKeys},
+		},
+	})
 
 	if deps.DevLogin != nil {
 		e.GET("/auth/dev-login", deps.DevLogin)

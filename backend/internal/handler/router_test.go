@@ -107,7 +107,7 @@ func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 	writes := []struct{ method, path string }{
 		{http.MethodPost, "/api/v1/folders"},
 		{http.MethodPatch, "/api/v1/folders/" + someFolderID},
-		{http.MethodDelete, "/api/v1/trash"},
+		{http.MethodDelete, "/api/v1/folders/" + someFolderID},
 		{http.MethodPost, "/auth/logout"},
 	}
 
