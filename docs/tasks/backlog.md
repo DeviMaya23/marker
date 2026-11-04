@@ -8,21 +8,20 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works; the login screen and the account area's log out wait for these) | FR-1, 2 |
 
 ## Backend: cross-cutting
 
-- Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all.
-- Kinde "Phase B": needs the Kinde domain, client ID and registered URLs. The client secret goes in a gitignored `.env`, never in chat or the repo.
+- Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all. Touches `router.go`, `main.go` and `config.go`, which `auth-backend` also changes: run it after that task.
+- Login hardening, follow-up to `auth-backend` (both need contract changes; decide before production): bind a login attempt to the browser with a cookie on the `/auth/login` redirect (today an attacker can sign a victim in as the attacker), and clear the `session` and `csrf_token` cookies on logout (today they stay in the browser, dead). Needs `Set-Cookie` on the login `302` and the logout `200`.
 
 ## Frontend: screens and features not built
 
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
-- Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c, needs a who-am-I endpoint, which does not exist).
+- Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c). Needs `auth-backend` merged, and a who-am-I endpoint (does not exist; a contract change to decide).
 - Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
-- Log out and the sidebar's account menu (screen 6). Split from `account-area`: it waits for the auth backend (`authLogout`); the sidebar's plain "Account & help" link becomes the menu.
+- Log out and the sidebar's account menu (screen 6). Split from `account-area`: it needs `auth-backend` (`authLogout`) merged; the sidebar's plain "Account & help" link becomes the menu.
 - The "1,000 bookmark limit reached" message on the list.
 
 ## Loose ends from verifier reports
