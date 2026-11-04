@@ -34,7 +34,7 @@ generate: ## Regenerate Go and TypeScript code from openapi.yaml
 generate-check: generate ## Fail if generated code is stale
 	git diff --exit-code -- backend/internal/api frontend/src/lib/api
 
-lint: lint-backend lint-frontend ## Lint backend and frontend
+lint: lint-backend lint-frontend lint-css ## Lint backend and frontend
 
 lint-backend: ## gofmt check and go vet
 	@test -z "$$(gofmt -l backend)" || (echo "gofmt needed on:"; gofmt -l backend; exit 1)
