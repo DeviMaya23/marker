@@ -40,7 +40,7 @@ Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes
 | Data fetching | TanStack Query, for the sync poll, refetching and infinite scroll |
 | Routing | `react-router` with browser history (`/save`, `/bookmarks/:id`), not hash routes: the backend's `return_to` after login is a plain path |
 | Icons | `lucide-react`, the only icon library |
-| Styling and components | Plain CSS with the design tokens from `docs/design/ui-reference/src/styles/`; no UI library yet. Choose one when a slice first needs dialogs or menus, and record it here before that slice |
+| Styling and components | Plain CSS with the design tokens from `docs/design/ui-reference/src/styles/`. Base UI (`@base-ui/react`, headless and unstyled) provides dialogs, menus and toasts, and any later overlay or form control it has (select, popover, tooltip); it is wrapped in `frontend/src/components/ui/`, and only those wrappers import it. No other UI library, no Tailwind, and no hand-written replacement for something Base UI already has |
 | API types | Generated from `openapi.yaml` with `openapi-typescript` (types only, no generated client) into `src/lib/api/schema.d.ts` |
 
 ## Contract
