@@ -11,7 +11,7 @@ import (
 )
 
 // ListBookmarks implements GET /api/v1/bookmarks; it shadows the 501 stub. This slice
-// serves the live list and the trash; search and the folder filter answer 501.
+// serves the live list (optionally one folder and its subfolders) and the trash; search answers 501.
 func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequestObject) (api.ListBookmarksResponseObject, error) {
 	auth, ok := middleware.AuthFrom(ctx)
 	if !ok {
@@ -31,6 +31,7 @@ func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequest
 	}
 	hasQ := p.Q != nil && strings.TrimSpace(*p.Q) != ""
 	hasFolder := p.FolderId != nil
+	in.FolderID = p.FolderId
 
 	// The checks run in this order and the first failure answers.
 	if p.Limit != nil && (*p.Limit < 1 || *p.Limit > domain.MaxListLimit) {
@@ -51,7 +52,7 @@ func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequest
 			return listProblem(domain.FieldError{Field: "cursor", Code: domain.FieldCodeInvalid}), nil
 		}
 	}
-	if !in.Trashed && (hasQ || hasFolder) {
+	if !in.Trashed && hasQ {
 		return nil, ErrNotImplemented
 	}
 

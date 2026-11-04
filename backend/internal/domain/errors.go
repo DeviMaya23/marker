@@ -29,6 +29,17 @@ var (
 	ErrBookmarkNotInTrash = errors.New("bookmark not in trash")
 )
 
+// Sentinel errors of the folder operations.
+var (
+	// ErrFolderNameConflict means a sibling already has the name, ignoring case (FR-26).
+	ErrFolderNameConflict = errors.New("folder name conflict")
+	// ErrFolderDepthExceeded means the folder or its subtree would sit deeper than
+	// MaxFolderDepth (FR-13).
+	ErrFolderDepthExceeded = errors.New("folder depth exceeded")
+	// ErrFolderCycle means a folder would be moved into itself or one of its descendants.
+	ErrFolderCycle = errors.New("folder cycle")
+)
+
 // DuplicateError is the ErrDuplicateBookmark outcome of a save, naming the bookmark
 // that already holds the URL.
 type DuplicateError struct {
@@ -51,6 +62,7 @@ type FieldError struct {
 const (
 	FieldCodeTooLong      = "too_long"
 	FieldCodeUnknownField = "unknown_field"
+	FieldCodeRequired     = "required"
 )
 
 // ValidationError is the ErrValidation outcome of a request with invalid fields.

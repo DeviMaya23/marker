@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"marker/internal/domain"
 )
@@ -161,4 +162,40 @@ func TestBookmarkService_List_PassesCursorAndUserToStore(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, f.store.lastList.After, "no cursor means the first page")
 	require.Equal(t, domain.ListLive, f.store.lastList.Mode)
+}
+
+func TestBookmarkService_List_FolderFilter(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("the store receives the folder id", func(t *testing.T) {
+		f := newCreateFixture()
+		_, err := f.svc.List(ctx, f.user, domain.ListBookmarksInput{FolderID: &f.folderID})
+		require.NoError(t, err)
+		require.Equal(t, &f.folderID, f.store.lastList.FolderID)
+	})
+
+	t.Run("another user's or unknown folder is not found", func(t *testing.T) {
+		f := newCreateFixture()
+		unknown := uuid.New()
+		for name, id := range map[string]uuid.UUID{"unknown": unknown} {
+			_, err := f.svc.List(ctx, f.user, domain.ListBookmarksInput{FolderID: &id})
+			require.ErrorIs(t, err, gorm.ErrRecordNotFound, name)
+		}
+		_, err := f.svc.List(ctx, uuid.New(), domain.ListBookmarksInput{FolderID: &f.folderID})
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	})
+
+	t.Run("a bad cursor is reported before the folder", func(t *testing.T) {
+		f := newCreateFixture()
+		unknown := uuid.New()
+		_, err := f.svc.List(ctx, f.user, domain.ListBookmarksInput{FolderID: &unknown, Cursor: "garbage"})
+		require.ErrorIs(t, err, domain.ErrValidation)
+	})
+
+	t.Run("no folder filter means the store gets none", func(t *testing.T) {
+		f := newCreateFixture()
+		_, err := f.svc.List(ctx, f.user, domain.ListBookmarksInput{})
+		require.NoError(t, err)
+		require.Nil(t, f.store.lastList.FolderID)
+	})
 }

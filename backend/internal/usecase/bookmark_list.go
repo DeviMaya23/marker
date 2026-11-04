@@ -27,6 +27,14 @@ func (s *BookmarkService) List(ctx context.Context, userID uuid.UUID, in domain.
 		q.After = &c
 	}
 
+	// The folder is checked after the cursor, and only for the live list.
+	if in.FolderID != nil && mode == domain.ListLive {
+		if _, err := s.folders.GetFolder(ctx, userID, *in.FolderID); err != nil {
+			return domain.BookmarkPage{}, err
+		}
+		q.FolderID = in.FolderID
+	}
+
 	rows, err := s.bookmarks.List(ctx, q)
 	if err != nil {
 		return domain.BookmarkPage{}, err

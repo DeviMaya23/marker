@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -364,4 +365,142 @@ func (f *fakeFetchStore) RecordFetchFailure(_ context.Context, b domain.Bookmark
 	f.bookmarks[b.ID] = cur
 	f.versions[b.UserID]++
 	return nil
+}
+
+// fakeFolderStore is an in-memory FolderStore. The rules tests read the existing tree
+// and assert what was written, so a fake fits better than a spy. It enforces the
+// sibling-name rule the way the unique index does (ignoring case, the folder itself
+// excluded) and counts the writes per user, as users.version would.
+type fakeFolderStore struct {
+	folders  []domain.Folder
+	counts   map[uuid.UUID]int // live bookmarks directly in a folder
+	versions map[uuid.UUID]int64
+	// deletion is what Delete reports.
+	deletion domain.FolderDeletion
+	// lastCreated and lastUpdate are what the store was asked to write.
+	lastCreated domain.Folder
+	lastUpdate  domain.FolderUpdate
+	updates     int
+}
+
+func newFakeFolderStore() *fakeFolderStore {
+	return &fakeFolderStore{counts: map[uuid.UUID]int{}, versions: map[uuid.UUID]int64{}}
+}
+
+// add stores a folder of user under parent (nil for the top) and returns it. Its depth
+// follows from the parent.
+func (f *fakeFolderStore) add(user uuid.UUID, parent *domain.Folder, name string) domain.Folder {
+	fo := domain.Folder{ID: domain.NewID(), UserID: user, Name: name, Depth: 1}
+	if parent != nil {
+		fo.ParentID, fo.Depth = &parent.ID, parent.Depth+1
+	}
+	f.folders = append(f.folders, fo)
+	return fo
+}
+
+func (f *fakeFolderStore) index(userID, id uuid.UUID) int {
+	for i, fo := range f.folders {
+		if fo.ID == id && fo.UserID == userID {
+			return i
+		}
+	}
+	return -1
+}
+
+func (f *fakeFolderStore) withCount(fo domain.Folder) domain.FolderWithCount {
+	return domain.FolderWithCount{Folder: fo, BookmarkCount: f.counts[fo.ID]}
+}
+
+func sameParent(a, b *uuid.UUID) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func (f *fakeFolderStore) conflicts(userID uuid.UUID, self uuid.UUID, parent *uuid.UUID, name string) bool {
+	for _, o := range f.folders {
+		if o.UserID == userID && o.ID != self && sameParent(o.ParentID, parent) && strings.EqualFold(o.Name, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeFolderStore) List(_ context.Context, userID uuid.UUID) ([]domain.FolderWithCount, error) {
+	var out []domain.FolderWithCount
+	for _, fo := range f.folders {
+		if fo.UserID == userID {
+			out = append(out, f.withCount(fo))
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeFolderStore) Get(_ context.Context, userID, id uuid.UUID) (domain.FolderWithCount, error) {
+	i := f.index(userID, id)
+	if i < 0 {
+		return domain.FolderWithCount{}, gorm.ErrRecordNotFound
+	}
+	return f.withCount(f.folders[i]), nil
+}
+
+func (f *fakeFolderStore) Subtree(_ context.Context, userID, id uuid.UUID) ([]domain.Folder, error) {
+	i := f.index(userID, id)
+	if i < 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	out := []domain.Folder{f.folders[i]}
+	for n := 0; n < len(out); n++ {
+		for _, fo := range f.folders {
+			if fo.UserID == userID && fo.ParentID != nil && *fo.ParentID == out[n].ID {
+				out = append(out, fo)
+			}
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeFolderStore) Create(_ context.Context, fo domain.Folder) (domain.FolderWithCount, error) {
+	f.lastCreated = fo
+	if f.conflicts(fo.UserID, fo.ID, fo.ParentID, fo.Name) {
+		return domain.FolderWithCount{}, domain.ErrFolderNameConflict
+	}
+	f.folders = append(f.folders, fo)
+	f.versions[fo.UserID]++
+	return f.withCount(fo), nil
+}
+
+func (f *fakeFolderStore) Update(_ context.Context, userID, id uuid.UUID, u domain.FolderUpdate) (domain.FolderWithCount, error) {
+	f.lastUpdate = u
+	f.updates++
+	i := f.index(userID, id)
+	if i < 0 {
+		return domain.FolderWithCount{}, gorm.ErrRecordNotFound
+	}
+	fo := f.folders[i]
+	if u.Name.Set {
+		fo.Name = u.Name.Value
+	}
+	if u.ParentID.Set {
+		fo.ParentID = nil
+		if !u.ParentID.Null {
+			p := u.ParentID.Value
+			fo.ParentID = &p
+		}
+	}
+	if f.conflicts(userID, id, fo.ParentID, fo.Name) {
+		return domain.FolderWithCount{}, domain.ErrFolderNameConflict
+	}
+	f.folders[i] = fo
+	f.versions[userID]++
+	return f.withCount(fo), nil
+}
+
+func (f *fakeFolderStore) Delete(_ context.Context, userID, id uuid.UUID) (domain.FolderDeletion, error) {
+	if f.index(userID, id) < 0 {
+		return domain.FolderDeletion{}, gorm.ErrRecordNotFound
+	}
+	f.versions[userID]++
+	return f.deletion, nil
 }

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"sort"
 	"testing"
 	"time"
 
@@ -333,4 +334,102 @@ func TestBookmarkRepository_List_ReturnsNoPageContent(t *testing.T) {
 	require.NotContains(t, sql.String(), "normalized_url")
 	require.NotContains(t, sql.String(), "OFFSET")
 	require.Contains(t, sql.String(), "user_id =", "every query filters by user_id")
+}
+
+func TestBookmarkRepository_List_FolderFilter(t *testing.T) {
+	db := testutil.NewDB(t)
+	repo := repository.NewBookmarkRepository(db)
+	folders := repository.NewFolderRepository(db)
+	user, other := newUser(t, db), newUser(t, db)
+	ctx := context.Background()
+
+	root := mkFolder(t, folders, user.ID, nil, "root")
+	d2 := mkFolder(t, folders, user.ID, &root, "d2")
+	d3 := mkFolder(t, folders, user.ID, &d2, "d3")
+	sibling := mkFolder(t, folders, user.ID, nil, "sibling")
+	theirs := mkFolder(t, folders, other.ID, nil, "theirs")
+
+	// 120 live bookmarks spread over the subtree, created a microsecond apart; ones
+	// that share a created_at test the id tie-break.
+	var want []domain.Bookmark
+	targets := []*domain.Folder{&root, &d2, &d3}
+	for i := 0; i < 120; i++ {
+		at := listTestBase.Add(time.Duration(i/2) * time.Microsecond)
+		b := newBookmark(user.ID, "https://example.com/in/"+domain.NewID().String())
+		b.CreatedAt, b.FolderID = at, &targets[i%3].ID
+		require.NoError(t, db.Create(&b).Error)
+		want = append(want, b)
+	}
+	// Bookmarks that must not appear.
+	skip := map[uuid.UUID]bool{}
+	for _, spec := range []struct {
+		owner   uuid.UUID
+		folder  *domain.Folder
+		trashed bool
+	}{
+		{user.ID, &sibling, false}, {user.ID, nil, false}, {user.ID, &d2, true}, {other.ID, &theirs, false},
+	} {
+		var at *time.Time
+		if spec.trashed {
+			at = pagePtr(listTestBase)
+		}
+		b := newBookmark(spec.owner, "https://example.com/out/"+domain.NewID().String())
+		b.CreatedAt, b.DeletedAt = listTestBase.Add(time.Hour), at
+		if spec.folder != nil {
+			b.FolderID = &spec.folder.ID
+		}
+		require.NoError(t, db.Create(&b).Error)
+		skip[b.ID] = true
+	}
+
+	t.Run("a folder's list holds its subtree, live only, newest first, paged without gaps or repeats", func(t *testing.T) {
+		sort.Slice(want, func(i, j int) bool {
+			if !want[i].CreatedAt.Equal(want[j].CreatedAt) {
+				return want[i].CreatedAt.After(want[j].CreatedAt)
+			}
+			return want[i].ID.String() > want[j].ID.String()
+		})
+		var got []domain.Bookmark
+		var after *domain.Cursor
+		pages := 0
+		for {
+			rows, err := repo.List(ctx, domain.BookmarkListQuery{UserID: user.ID, Mode: domain.ListLive, FolderID: &root.ID, After: after, Limit: 51})
+			require.NoError(t, err)
+			pages++
+			if len(rows) <= 50 {
+				got = append(got, rows...)
+				break
+			}
+			rows = rows[:50]
+			got = append(got, rows...)
+			last := rows[49]
+			after = &domain.Cursor{Mode: domain.ListLive, At: last.CreatedAt, ID: last.ID}
+		}
+		require.Equal(t, 3, pages)
+		require.Equal(t, ids(want), ids(got))
+		for _, b := range got {
+			require.False(t, skip[b.ID])
+		}
+	})
+
+	t.Run("a subfolder's list holds only its own subtree", func(t *testing.T) {
+		rows, err := repo.List(ctx, domain.BookmarkListQuery{UserID: user.ID, Mode: domain.ListLive, FolderID: &d2.ID, Limit: 200})
+		require.NoError(t, err)
+		require.Len(t, rows, 80, "d2 and d3, not root")
+		rows, err = repo.List(ctx, domain.BookmarkListQuery{UserID: user.ID, Mode: domain.ListLive, FolderID: &d3.ID, Limit: 200})
+		require.NoError(t, err)
+		require.Len(t, rows, 40)
+	})
+
+	t.Run("another user's folder lists nothing", func(t *testing.T) {
+		rows, err := repo.List(ctx, domain.BookmarkListQuery{UserID: user.ID, Mode: domain.ListLive, FolderID: &theirs.ID, Limit: 200})
+		require.NoError(t, err)
+		require.Empty(t, rows)
+	})
+
+	t.Run("no filter still lists everything live", func(t *testing.T) {
+		rows, err := repo.List(ctx, domain.BookmarkListQuery{UserID: user.ID, Mode: domain.ListLive, Limit: 500})
+		require.NoError(t, err)
+		require.Len(t, rows, 122)
+	})
 }

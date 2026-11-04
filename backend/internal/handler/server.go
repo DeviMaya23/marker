@@ -13,10 +13,11 @@ type Server struct {
 	unimplemented
 
 	bookmarks BookmarkService
+	folders   FolderService
 }
 
-func NewServer(bookmarks BookmarkService) *Server {
-	return &Server{bookmarks: bookmarks}
+func NewServer(bookmarks BookmarkService, folders FolderService) *Server {
+	return &Server{bookmarks: bookmarks, folders: folders}
 }
 
 // The compiler checks that Server covers every operation in the contract.

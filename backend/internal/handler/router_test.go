@@ -18,11 +18,10 @@ import (
 )
 
 const (
-	testOrigin   = "http://localhost:5175"
-	goodSession  = "good-session"
-	testCSRF     = "csrf-value"
-	notImplCode  = api.ErrorCode("not_implemented")
-	someFolderID = "0192f3a0-0000-7000-8000-000000000001"
+	testOrigin  = "http://localhost:5175"
+	goodSession = "good-session"
+	testCSRF    = "csrf-value"
+	notImplCode = api.ErrorCode("not_implemented")
 )
 
 // stubAuth accepts exactly one session token.
@@ -36,7 +35,7 @@ func (stubAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func newTestRouter() *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil), Auth: stubAuth{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
 }
 
 func withSession(token string) func(*http.Request) {
@@ -95,8 +94,8 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 	})
 
 	t.Run("valid session reaches the handler", func(t *testing.T) {
-		// Folder operations are stubs for now, so reaching the handler means a 501.
-		rec := do(e, http.MethodGet, "/api/v1/folders", withSession(goodSession))
+		// The sync version is a stub for now, so reaching the handler means a 501.
+		rec := do(e, http.MethodGet, "/api/v1/sync/version", withSession(goodSession))
 		requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
 	})
 }
@@ -105,9 +104,7 @@ func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 	e := newTestRouter()
 
 	writes := []struct{ method, path string }{
-		{http.MethodPost, "/api/v1/folders"},
-		{http.MethodPatch, "/api/v1/folders/" + someFolderID},
-		{http.MethodDelete, "/api/v1/folders/" + someFolderID},
+		{http.MethodDelete, "/api/v1/account"},
 		{http.MethodPost, "/auth/logout"},
 	}
 
