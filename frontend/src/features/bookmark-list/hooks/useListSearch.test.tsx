@@ -1,14 +1,17 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { MemoryRouter, useLocation, useNavigate, useNavigationType } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useListSearch } from './useListSearch'
 
-let go: ReturnType<typeof useNavigate>
+const nav: { go: ReturnType<typeof useNavigate> } = { go: () => {} }
 
 function Probe() {
   const location = useLocation()
-  go = useNavigate()
+  const navigate = useNavigate()
+  useEffect(() => {
+    nav.go = navigate
+  })
   return (
     <>
       <output data-testid="path">{location.pathname}</output>
@@ -46,12 +49,12 @@ function setup(path = '/', folderId?: string) {
 const field = () => screen.getByLabelText('field') as HTMLInputElement
 const search = () => screen.getByTestId('search').textContent
 const path = () => screen.getByTestId('path').textContent
-const nav = () => screen.getByTestId('nav').textContent
+const navType = () => screen.getByTestId('nav').textContent
 const key = () => screen.getByTestId('key').textContent
 const type = (value: string) => fireEvent.change(field(), { target: { value } })
 const wait = (ms: number) => act(() => void vi.advanceTimersByTime(ms))
 const click = (name: string) => fireEvent.click(screen.getByText(name))
-const navigateTo = (to: string | number) => act(() => void go(to as string))
+const navigateTo = (to: string | number) => act(() => void nav.go(to as string))
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
@@ -66,7 +69,7 @@ describe('useListSearch: typing', () => {
     expect(search()).toBe('')
     wait(1)
     expect(search()).toBe('?q=foo')
-    expect(nav()).toBe('REPLACE')
+    expect(navType()).toBe('REPLACE')
   })
 
   it('makes one write, 300 ms after the second of two keystrokes 200 ms apart', () => {
@@ -192,7 +195,7 @@ describe('useListSearch: notes and scope', () => {
     setup('/?q=foo')
     click('notes')
     expect(search()).toBe('?q=foo&notes=1')
-    expect(nav()).toBe('REPLACE')
+    expect(navType()).toBe('REPLACE')
     type('foobar')
     wait(300)
     expect(search()).toBe('?q=foobar&notes=1')
@@ -213,7 +216,7 @@ describe('useListSearch: notes and scope', () => {
     type('foo bar')
     click('scope-all')
     expect(path()).toBe('/')
-    expect(nav()).toBe('PUSH')
+    expect(navType()).toBe('PUSH')
     const params = new URLSearchParams(search() ?? '')
     expect(params.get('q')).toBe('foo bar')
     expect(params.get('notes')).toBe('1')
