@@ -134,4 +134,32 @@ describe('DeleteAccountSection', () => {
     await waitFor(() => expect(dialog()).not.toBeInTheDocument())
     expect(del).toHaveBeenCalledTimes(1)
   })
+
+  it('sends one request on a double click of confirm', async () => {
+    let finish: () => void = () => {}
+    del.mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))
+    const { user, onDeleted } = await openDialog()
+    await user.type(field(), 'delete my account')
+    await user.dblClick(confirm())
+    expect(del).toHaveBeenCalledTimes(1)
+    finish()
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1))
+  })
+
+  it('retries after a 429 and succeeds, with the old failure gone while it runs', async () => {
+    let finish: () => void = () => {}
+    del.mockImplementationOnce(() => Promise.reject(new ApiError(429, null, 3)))
+    del.mockImplementationOnce(() => new Promise<void>((resolve) => (finish = resolve)))
+    const { user, onDeleted } = await openDialog()
+    await user.type(field(), 'delete my account')
+    await user.click(confirm())
+    await screen.findByText('Too many requests. Try again in about 3 seconds.')
+    await user.click(confirm())
+    await waitFor(() => expect(del).toHaveBeenCalledTimes(2))
+    expect(screen.queryByText(/Too many requests/)).not.toBeInTheDocument()
+    expect(onDeleted).not.toHaveBeenCalled()
+    finish()
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1))
+    expect(dialog()).not.toBeInTheDocument()
+  })
 })
