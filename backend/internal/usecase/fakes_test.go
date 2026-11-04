@@ -86,6 +86,113 @@ type fakeBookmarkStore struct {
 	lastList domain.BookmarkListQuery
 	// createErr, if set, is returned by Create (after nothing is stored).
 	createErr error
+	// updateErr, if set, is returned by Update after nothing is stored (for example a
+	// folder that vanished between the check and the write).
+	updateErr error
+	// updates is every update the store was asked to write, as received.
+	updates []domain.BookmarkUpdate
+	// versions counts the writes per user, as users.version would.
+	versions map[uuid.UUID]int64
+}
+
+func (f *fakeBookmarkStore) index(userID, id uuid.UUID) int {
+	for i, b := range f.bookmarks {
+		if b.ID == id && b.UserID == userID {
+			return i
+		}
+	}
+	return -1
+}
+
+func (f *fakeBookmarkStore) bump(userID uuid.UUID) {
+	if f.versions == nil {
+		f.versions = map[uuid.UUID]int64{}
+	}
+	f.versions[userID]++
+}
+
+func (f *fakeBookmarkStore) Get(_ context.Context, userID, id uuid.UUID) (domain.Bookmark, error) {
+	i := f.index(userID, id)
+	if i < 0 {
+		return domain.Bookmark{}, gorm.ErrRecordNotFound
+	}
+	return f.bookmarks[i], nil
+}
+
+// Update applies exactly the fields that are set, as the repository does.
+func (f *fakeBookmarkStore) Update(_ context.Context, userID, id uuid.UUID, u domain.BookmarkUpdate) (domain.Bookmark, error) {
+	f.updates = append(f.updates, u)
+	if f.updateErr != nil {
+		return domain.Bookmark{}, f.updateErr
+	}
+	i := f.index(userID, id)
+	if i < 0 {
+		return domain.Bookmark{}, gorm.ErrRecordNotFound
+	}
+	b := f.bookmarks[i]
+	if b.DeletedAt != nil {
+		return domain.Bookmark{}, domain.ErrBookmarkInTrash
+	}
+	if u.Title.Set {
+		b.Title = u.Title.Value
+	}
+	if u.Note.Set {
+		b.Note = u.Note.Value // the zero value when null
+	}
+	if u.FolderID.Set {
+		b.FolderID = nil
+		if !u.FolderID.Null {
+			fid := u.FolderID.Value
+			b.FolderID = &fid
+		}
+	}
+	f.bookmarks[i] = b
+	f.bump(userID)
+	return b, nil
+}
+
+func (f *fakeBookmarkStore) Trash(_ context.Context, userID, id uuid.UUID) error {
+	i := f.index(userID, id)
+	if i < 0 {
+		return gorm.ErrRecordNotFound
+	}
+	if f.bookmarks[i].DeletedAt != nil {
+		return domain.ErrBookmarkInTrash
+	}
+	now := time.Now().UTC()
+	f.bookmarks[i].DeletedAt = &now
+	f.bump(userID)
+	return nil
+}
+
+func (f *fakeBookmarkStore) Restore(_ context.Context, userID, id uuid.UUID) (domain.Bookmark, error) {
+	i := f.index(userID, id)
+	if i < 0 {
+		return domain.Bookmark{}, gorm.ErrRecordNotFound
+	}
+	if f.bookmarks[i].DeletedAt == nil {
+		return domain.Bookmark{}, domain.ErrBookmarkNotInTrash
+	}
+	f.bookmarks[i].DeletedAt, f.bookmarks[i].FolderID = nil, nil
+	f.bump(userID)
+	return f.bookmarks[i], nil
+}
+
+func (f *fakeBookmarkStore) EmptyTrash(_ context.Context, userID uuid.UUID) (int64, error) {
+	var kept []domain.Bookmark
+	var n int64
+	for _, b := range f.bookmarks {
+		if b.UserID == userID && b.DeletedAt != nil {
+			n++
+			continue
+		}
+		kept = append(kept, b)
+	}
+	f.bookmarks = kept
+	if n > 0 {
+		f.bump(userID)
+	}
+	return n, nil
 }
 
 func newFakeBookmarkStore(log *[]string) *fakeBookmarkStore {

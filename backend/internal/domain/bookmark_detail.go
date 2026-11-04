@@ -4,6 +4,7 @@ package domain
 const (
 	MaxURLLength    = 2048
 	MaxTitleLength  = 300
+	MaxNoteLength   = 500
 	MaxBookmarks    = 1000
 	MaxContentBytes = 500 << 10
 	MaxFaviconBytes = 32 << 10

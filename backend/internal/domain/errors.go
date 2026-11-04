@@ -22,6 +22,11 @@ var (
 	// ErrValidation means one or more input fields are invalid. A *ValidationError
 	// carries the per-field codes.
 	ErrValidation = errors.New("validation error")
+	// ErrBookmarkInTrash means the bookmark is in the trash and cannot be edited or
+	// deleted again (FR-21a).
+	ErrBookmarkInTrash = errors.New("bookmark in trash")
+	// ErrBookmarkNotInTrash means the bookmark is live and so cannot be restored.
+	ErrBookmarkNotInTrash = errors.New("bookmark not in trash")
 )
 
 // DuplicateError is the ErrDuplicateBookmark outcome of a save, naming the bookmark
@@ -43,7 +48,10 @@ type FieldError struct {
 }
 
 // Per-field validation codes.
-const FieldCodeTooLong = "too_long"
+const (
+	FieldCodeTooLong      = "too_long"
+	FieldCodeUnknownField = "unknown_field"
+)
 
 // ValidationError is the ErrValidation outcome of a request with invalid fields.
 type ValidationError struct {
