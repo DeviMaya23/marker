@@ -16,10 +16,11 @@ type Server struct {
 	folders   FolderService
 	sync      SyncService
 	favicons  FaviconService
+	account   AccountService
 }
 
-func NewServer(bookmarks BookmarkService, folders FolderService, sync SyncService, favicons FaviconService) *Server {
-	return &Server{bookmarks: bookmarks, folders: folders, sync: sync, favicons: favicons}
+func NewServer(bookmarks BookmarkService, folders FolderService, sync SyncService, favicons FaviconService, account AccountService) *Server {
+	return &Server{bookmarks: bookmarks, folders: folders, sync: sync, favicons: favicons, account: account}
 }
 
 // The compiler checks that Server covers every operation in the contract.

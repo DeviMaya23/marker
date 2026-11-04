@@ -53,3 +53,24 @@ func (r *UserRepository) Version(ctx context.Context, userID uuid.UUID) (int64, 
 	}
 	return versions[0], nil
 }
+
+// DeleteUser erases the user's row; the database cascades the delete to sessions,
+// folders, bookmarks (trashed ones too), favicons and saved content (FR-25). It takes
+// the user's lock first, so a write in flight finishes before the delete and one that
+// comes after finds no user. It does not bump users.version: that row is going away.
+// A missing user is gorm.ErrRecordNotFound.
+func (r *UserRepository) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
+		res := tx.Exec(`DELETE FROM users WHERE id = ?`, userID)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
+}

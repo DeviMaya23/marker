@@ -35,7 +35,7 @@ func (stubAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func newTestRouter() *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
 }
 
 func withSession(token string) func(*http.Request) {
@@ -94,8 +94,8 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 	})
 
 	t.Run("valid session reaches the handler", func(t *testing.T) {
-		// Account deletion is a stub for now, so reaching the handler means a 501.
-		rec := do(e, http.MethodDelete, "/api/v1/account", withSession(goodSession), withCSRF())
+		// authLogout is a stub for now, so reaching the handler means a 501.
+		rec := do(e, http.MethodPost, "/auth/logout", withSession(goodSession), withCSRF())
 		requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
 	})
 }
@@ -103,9 +103,15 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 	e := newTestRouter()
 
-	writes := []struct{ method, path string }{
-		{http.MethodDelete, "/api/v1/account"},
-		{http.MethodPost, "/auth/logout"},
+	// reachesStub: with a token the request ends at a 501 stub. The account route is
+	// implemented (see account_test.go) and newTestRouter has no service behind it, so
+	// only its 403 half is checked here.
+	writes := []struct {
+		method, path string
+		reachesStub  bool
+	}{
+		{http.MethodDelete, "/api/v1/account", false},
+		{http.MethodPost, "/auth/logout", true},
 	}
 
 	for _, w := range writes {
@@ -113,8 +119,10 @@ func TestRouter_WritesNeedCSRFProtection(t *testing.T) {
 			rec := do(e, w.method, w.path, withSession(goodSession))
 			requireProblem(t, rec, http.StatusForbidden, api.ErrorCodeCsrfFailed)
 
-			rec = do(e, w.method, w.path, withSession(goodSession), withCSRF())
-			requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
+			if w.reachesStub {
+				rec = do(e, w.method, w.path, withSession(goodSession), withCSRF())
+				requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
+			}
 		})
 	}
 }
