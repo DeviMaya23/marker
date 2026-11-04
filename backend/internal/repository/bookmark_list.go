@@ -3,6 +3,9 @@ package repository
 import (
 	"context"
 
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
 	"marker/internal/domain"
 )
 
@@ -27,13 +30,7 @@ func (r *BookmarkRepository) List(ctx context.Context, q domain.BookmarkListQuer
 		tx = tx.Where("deleted_at IS NULL")
 	}
 	if q.FolderID != nil {
-		// The folder and every descendant, walking only the caller's folders.
-		tx = tx.Where(`folder_id IN (
-WITH RECURSIVE sub AS (
-    SELECT id FROM folders WHERE id = ? AND user_id = ?
-    UNION ALL
-    SELECT f.id FROM folders f JOIN sub ON f.parent_id = sub.id WHERE f.user_id = ?
-) SELECT id FROM sub)`, *q.FolderID, q.UserID, q.UserID)
+		tx = inFolderSubtree(tx, q.UserID, *q.FolderID)
 	}
 	if q.After != nil {
 		// sortCol is one of two constants above, never request input.
@@ -43,4 +40,15 @@ WITH RECURSIVE sub AS (
 	var rows []domain.Bookmark
 	err := tx.Order(sortCol + " DESC, id DESC").Limit(q.Limit).Find(&rows).Error
 	return rows, err
+}
+
+// inFolderSubtree limits tx to bookmarks in the folder and every descendant, walking
+// only the caller's folders. The list and the search share it.
+func inFolderSubtree(tx *gorm.DB, userID, folderID uuid.UUID) *gorm.DB {
+	return tx.Where(`folder_id IN (
+WITH RECURSIVE sub AS (
+    SELECT id FROM folders WHERE id = ? AND user_id = ?
+    UNION ALL
+    SELECT f.id FROM folders f JOIN sub ON f.parent_id = sub.id WHERE f.user_id = ?
+) SELECT id FROM sub)`, folderID, userID, userID)
 }

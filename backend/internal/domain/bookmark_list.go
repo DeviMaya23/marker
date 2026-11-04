@@ -1,6 +1,10 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"strings"
+
+	"github.com/google/uuid"
+)
 
 // DefaultListLimit is the page size when a list request names none.
 const DefaultListLimit = 50
@@ -25,7 +29,15 @@ type ListBookmarksInput struct {
 	FolderID *uuid.UUID
 	Cursor   string
 	Limit    int
+	// Query is the trimmed search text. Non-empty makes the request a search of the
+	// live bookmarks; empty is a plain list.
+	Query string
+	// IncludeNotes also searches the notes. Only meaningful with a Query.
+	IncludeNotes bool
 }
+
+// IsSearch reports whether the request is a search.
+func (in ListBookmarksInput) IsSearch() bool { return !in.Trashed && strings.TrimSpace(in.Query) != "" }
 
 // Mode is the list the request reads.
 func (in ListBookmarksInput) Mode() ListMode {
@@ -44,6 +56,18 @@ type BookmarkListQuery struct {
 	Limit  int
 	// FolderID, if set, limits the live list to that folder and all its descendants.
 	FolderID *uuid.UUID
+}
+
+// BookmarkSearchQuery is what a store runs for a search: the user's live bookmarks that
+// match Query, best first, Limit rows from Offset.
+type BookmarkSearchQuery struct {
+	UserID       uuid.UUID
+	Query        string
+	IncludeNotes bool
+	// FolderID, if set, limits the search to that folder and all its descendants.
+	FolderID *uuid.UUID
+	Offset   int
+	Limit    int
 }
 
 // BookmarkPage is one page of bookmarks. NextCursor is nil on the last page.

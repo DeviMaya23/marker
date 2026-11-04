@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -91,6 +92,8 @@ func TestListBookmarks_PageShape(t *testing.T) {
 	})
 }
 
+var searchFolder = uuid.New()
+
 func TestListBookmarks_PassesParametersDown(t *testing.T) {
 	cursor := liveCursor()
 	tests := []struct {
@@ -104,6 +107,12 @@ func TestListBookmarks_PassesParametersDown(t *testing.T) {
 		{"cursor and limit", "?cursor=" + cursor + "&limit=25", domain.ListBookmarksInput{Cursor: cursor, Limit: 25}},
 		{"include_notes alone is ignored", "?include_notes=true", domain.ListBookmarksInput{}},
 		{"empty q after trimming counts as absent", "?q=%20%20", domain.ListBookmarksInput{}},
+		{"empty q with include_notes is a plain list", "?q=%20&include_notes=true", domain.ListBookmarksInput{}},
+		{"q is trimmed", "?q=%20go%20", domain.ListBookmarksInput{Query: "go"}},
+		{"q alone does not set include_notes", "?q=go", domain.ListBookmarksInput{Query: "go"}},
+		{"include_notes with q is passed down", "?include_notes=true&q=go", domain.ListBookmarksInput{Query: "go", IncludeNotes: true}},
+		{"include_notes=false with q", "?include_notes=false&q=go", domain.ListBookmarksInput{Query: "go"}},
+		{"q with a folder and limit", "?q=go&limit=5&folder_id=" + searchFolder.String(), domain.ListBookmarksInput{Query: "go", Limit: 5, FolderID: &searchFolder}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -214,21 +223,6 @@ func TestListBookmarks_CursorLengthBoundary(t *testing.T) {
 	require.Zero(t, spy.listCalls)
 }
 
-func TestListBookmarks_SearchIsNotImplemented(t *testing.T) {
-	for _, query := range []string{
-		"?q=go",
-		"?q=go&include_notes=true",
-		"?q=go&folder_id=" + uuid.NewString(),
-	} {
-		t.Run(query, func(t *testing.T) {
-			spy := &bookmarkSpy{}
-			rec := listBookmarks(spy, query)
-			requireProblem(t, rec, http.StatusNotImplemented, "not_implemented")
-			require.Zero(t, spy.listCalls)
-		})
-	}
-}
-
 func TestListBookmarks_UsecaseValidationErrorIs422(t *testing.T) {
 	spy := &bookmarkSpy{err: &domain.ValidationError{Fields: []domain.FieldError{{Field: "cursor", Code: "invalid"}}}}
 	requireListProblem(t, listBookmarks(spy, ""), fieldErr{"cursor", "invalid"})
@@ -279,9 +273,112 @@ func TestListBookmarks_FolderFilter(t *testing.T) {
 		requireListProblem(t, listBookmarks(spy, "?limit=0&trashed=true&folder_id="+folder.String()), fieldErr{"limit", "out_of_range"})
 	})
 
-	t.Run("a non-empty q is 501 even with a folder", func(t *testing.T) {
+	t.Run("with q, an unknown folder is 404", func(t *testing.T) {
 		spy := &bookmarkSpy{err: gorm.ErrRecordNotFound}
-		requireProblem(t, listBookmarks(spy, "?q=go&folder_id="+folder.String()), http.StatusNotImplemented, "not_implemented")
-		require.Zero(t, spy.listCalls)
+		requireProblem(t, listBookmarks(spy, "?q=go&folder_id="+folder.String()), http.StatusNotFound, api.ErrorCodeNotFound)
+		require.Equal(t, 1, spy.listCalls)
 	})
+}
+
+func TestListBookmarks_Query(t *testing.T) {
+	t.Run("q reaches the usecase and answers 200", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		rec := listBookmarks(spy, "?q=go")
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, 1, spy.listCalls)
+		require.Equal(t, "go", spy.gotList.Query)
+	})
+
+	t.Run("a blank q is a plain list", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		require.Equal(t, http.StatusOK, listBookmarks(spy, "?q=%20%20").Code)
+		require.Empty(t, spy.gotList.Query)
+		require.False(t, spy.gotList.IsSearch())
+	})
+
+	t.Run("an empty page answers an empty array and a null cursor", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		rec := listBookmarks(spy, "?q=the")
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.JSONEq(t, `{"items":[],"next_cursor":null}`, rec.Body.String())
+	})
+
+	length := []struct {
+		name   string
+		q      string
+		wantOK bool
+	}{
+		{"200 ASCII characters", strings.Repeat("a", 200), true},
+		{"201 ASCII characters", strings.Repeat("a", 201), false},
+		{"200 two-byte characters", strings.Repeat("é", 200), true},
+		{"201 two-byte characters", strings.Repeat("é", 201), false},
+		{"200 emoji", strings.Repeat("😀", 200), true},
+		{"201 emoji", strings.Repeat("😀", 201), false},
+		{"200 characters inside spaces", "  " + strings.Repeat("a", 200) + " ", true},
+		{"201 characters inside spaces", "  " + strings.Repeat("a", 201) + " ", false},
+	}
+	for _, tt := range length {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := &bookmarkSpy{}
+			rec := listBookmarks(spy, "?q="+url.QueryEscape(tt.q))
+			if tt.wantOK {
+				require.Equal(t, http.StatusOK, rec.Code)
+				require.Equal(t, 1, spy.listCalls)
+				return
+			}
+			requireListProblem(t, rec, fieldErr{"q", "too_long"})
+			require.Zero(t, spy.listCalls)
+		})
+	}
+}
+
+func TestListBookmarks_CheckOrder(t *testing.T) {
+	long := strings.Repeat("a", 201)
+	folder := uuid.NewString()
+	tests := []struct {
+		name  string
+		query string
+		want  []fieldErr
+	}{
+		{"limit comes before a too long q", "?limit=0&q=" + long, []fieldErr{{"limit", "out_of_range"}}},
+		{"trashed comes before a too long q", "?trashed=true&q=" + long, []fieldErr{{"q", "not_allowed_with_trashed"}}},
+		{"a too long q comes before a bad cursor", "?q=" + long + "&cursor=garbage", []fieldErr{{"q", "too_long"}}},
+		{"a bad cursor comes before the folder lookup", "?q=go&cursor=garbage&folder_id=" + folder, []fieldErr{{"cursor", "invalid"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := &bookmarkSpy{}
+			requireListProblem(t, listBookmarks(spy, tt.query), tt.want...)
+			require.Zero(t, spy.listCalls)
+		})
+	}
+}
+
+func TestListBookmarks_SearchCursor(t *testing.T) {
+	folderID := uuid.New()
+	mine := domain.EncodeSearchCursor(10, domain.SearchFingerprint("go", true, &folderID))
+
+	t.Run("the cursor of the same search passes", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		rec := listBookmarks(spy, "?q=%20go&include_notes=true&folder_id="+folderID.String()+"&cursor="+mine)
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, mine, spy.gotList.Cursor)
+	})
+
+	rejected := []struct{ name, query string }{
+		{"another q", "?q=rust&include_notes=true&folder_id=" + folderID.String() + "&cursor=" + mine},
+		{"include_notes flipped", "?q=go&folder_id=" + folderID.String() + "&cursor=" + mine},
+		{"another folder", "?q=go&include_notes=true&folder_id=" + uuid.NewString() + "&cursor=" + mine},
+		{"no folder", "?q=go&include_notes=true&cursor=" + mine},
+		{"a plain-list cursor", "?q=go&cursor=" + liveCursor()},
+		{"a search cursor sent to the plain list", "?cursor=" + mine},
+		{"a search cursor sent to the trash", "?trashed=true&cursor=" + mine},
+	}
+	for _, tt := range rejected {
+		t.Run("rejects "+tt.name, func(t *testing.T) {
+			spy := &bookmarkSpy{}
+			requireListProblem(t, listBookmarks(spy, tt.query), fieldErr{"cursor", "invalid"})
+			require.Zero(t, spy.listCalls)
+		})
+	}
 }
