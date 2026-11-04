@@ -43,7 +43,7 @@ lint-backend: ## gofmt check and go vet
 lint-frontend: ## ESLint
 	cd frontend && npm run lint
 
-lint-css: ## Stylelint over frontend/src/**/*.css (not part of check yet)
+lint-css: ## Stylelint over frontend/src/**/*.css
 	cd frontend && npm run lint:css
 
 test: test-backend test-frontend ## Unit tests (no Docker needed)
