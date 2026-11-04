@@ -34,6 +34,9 @@ var domainProblems = []struct {
 	{domain.ErrBookmarkLimitReached, http.StatusConflict, api.ErrorCodeBookmarkLimitReached, "Bookmark limit reached"},
 	{domain.ErrBookmarkInTrash, http.StatusConflict, api.ErrorCodeBookmarkInTrash, "Bookmark is in the trash"},
 	{domain.ErrBookmarkNotInTrash, http.StatusConflict, api.ErrorCodeBookmarkNotInTrash, "Bookmark is not in the trash"},
+	{domain.ErrFolderNameConflict, http.StatusConflict, api.ErrorCodeFolderNameConflict, "Folder name already used"},
+	{domain.ErrFolderDepthExceeded, http.StatusUnprocessableEntity, api.ErrorCodeFolderDepthExceeded, "Folder depth exceeded"},
+	{domain.ErrFolderCycle, http.StatusUnprocessableEntity, api.ErrorCodeFolderCycle, "Folder cannot move into itself"},
 	{gorm.ErrRecordNotFound, http.StatusNotFound, api.ErrorCodeNotFound, "Not found"},
 }
 

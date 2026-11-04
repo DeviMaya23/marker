@@ -61,9 +61,11 @@ func main() {
 	}
 
 	bookmarkService := usecase.NewBookmarkService(bookmarkRepo, repository.NewFolderRepository(db), queue)
+	folderRepo := repository.NewFolderRepository(db)
+	folderService := usecase.NewFolderService(folderRepo)
 	authService := usecase.NewAuthService(repository.NewUserRepository(db), repository.NewSessionRepository(db))
 	deps := handler.Deps{
-		Server:    handler.NewServer(bookmarkService),
+		Server:    handler.NewServer(bookmarkService, folderService),
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
 	}

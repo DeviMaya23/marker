@@ -21,8 +21,10 @@ const MaxListLimit = 100
 // Limit is zero when the caller named none.
 type ListBookmarksInput struct {
 	Trashed bool
-	Cursor  string
-	Limit   int
+	// FolderID limits the live list to that folder and its descendants. Nil means all.
+	FolderID *uuid.UUID
+	Cursor   string
+	Limit    int
 }
 
 // Mode is the list the request reads.
@@ -40,6 +42,8 @@ type BookmarkListQuery struct {
 	Mode   ListMode
 	After  *Cursor
 	Limit  int
+	// FolderID, if set, limits the live list to that folder and all its descendants.
+	FolderID *uuid.UUID
 }
 
 // BookmarkPage is one page of bookmarks. NextCursor is nil on the last page.

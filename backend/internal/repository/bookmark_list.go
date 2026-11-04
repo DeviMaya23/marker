@@ -26,6 +26,15 @@ func (r *BookmarkRepository) List(ctx context.Context, q domain.BookmarkListQuer
 	} else {
 		tx = tx.Where("deleted_at IS NULL")
 	}
+	if q.FolderID != nil {
+		// The folder and every descendant, walking only the caller's folders.
+		tx = tx.Where(`folder_id IN (
+WITH RECURSIVE sub AS (
+    SELECT id FROM folders WHERE id = ? AND user_id = ?
+    UNION ALL
+    SELECT f.id FROM folders f JOIN sub ON f.parent_id = sub.id WHERE f.user_id = ?
+) SELECT id FROM sub)`, *q.FolderID, q.UserID, q.UserID)
+	}
 	if q.After != nil {
 		// sortCol is one of two constants above, never request input.
 		tx = tx.Where("("+sortCol+", id) < (?, ?)", q.After.At, q.After.ID)
