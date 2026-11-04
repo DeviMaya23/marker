@@ -268,9 +268,6 @@
 .bookmark-row--skeleton {
   align-items: center;
 }
-.list-sentinel {
-  height: 1px;
-}
 
 /* Written for this slice: the "couldn't load more" line. */
 .list-error {
@@ -416,9 +413,6 @@
 .folder-row:has(.folder-row__link[aria-current='page']) {
   background: var(--accent-50);
 }
-.folder-row:has(.folder-row__link[aria-current='page']) .folder-row__link {
-  color: var(--accent-700);
-}
 .folder-row__chevron {
   width: 20px;
   height: 28px;
@@ -447,6 +441,9 @@
 }
 .folder-row__link:hover {
   text-decoration: none;
+}
+.folder-row:has(.folder-row__link[aria-current='page']) .folder-row__link {
+  color: var(--accent-700);
 }
 .folder-row__icon {
   flex-shrink: 0;
