@@ -6,6 +6,7 @@ import { useEmptyTrash } from '../../../lib/bookmarks/useEmptyTrash'
 import { useBookmarkList } from '../hooks/useBookmarkList'
 
 export const CONFIRM_PHRASE = 'empty trash'
+const FORM_ID = 'empty-trash-form'
 
 /** "1 bookmark", "3 bookmarks". */
 function countText(n: number): string {
@@ -19,10 +20,17 @@ export function EmptyTrash() {
   const [open, setOpen] = useState(false)
   const empty = useEmptyTrash()
   const fieldRef = useRef<HTMLInputElement>(null)
+  const [typed, setTyped] = useState('')
+  const canConfirm = typed.trim().toLowerCase() === CONFIRM_PHRASE && !empty.pending
 
   function close() {
     setOpen(false)
+    setTyped('')
     empty.reset()
+  }
+
+  async function confirmEmpty() {
+    if (await empty.run()) close()
   }
 
   // With more pages the count is unknown, so the text does not give one.
@@ -40,15 +48,33 @@ export function EmptyTrash() {
       >
         <Trash2 size={14} aria-hidden="true" /> Empty trash
       </button>
-      <Dialog open={open} title="Empty trash?" onClose={close} busy={empty.pending} size="sm" initialFocus={fieldRef}>
+      <Dialog
+        open={open}
+        title="Empty trash?"
+        onClose={close}
+        busy={empty.pending}
+        size="sm"
+        initialFocus={fieldRef}
+        footer={
+          <>
+            <button type="button" className="btn btn--secondary" onClick={close} disabled={empty.pending}>
+              Cancel
+            </button>
+            <button type="submit" form={FORM_ID} className="btn btn--danger" disabled={!canConfirm}>
+              Empty trash
+            </button>
+          </>
+        }
+      >
         <ConfirmForm
           text={text}
           fieldRef={fieldRef}
+          typed={typed}
+          onTyped={setTyped}
           pending={empty.pending}
           failure={empty.failure}
-          onCancel={close}
-          onConfirm={async () => {
-            if (await empty.run()) close()
+          onSubmit={() => {
+            if (canConfirm) void confirmEmpty()
           }}
         />
       </Dialog>
@@ -59,27 +85,26 @@ export function EmptyTrash() {
 function ConfirmForm({
   text,
   fieldRef,
+  typed,
+  onTyped,
   pending,
   failure,
-  onCancel,
-  onConfirm,
+  onSubmit,
 }: {
   text: string
   fieldRef: RefObject<HTMLInputElement | null>
+  typed: string
+  onTyped: (value: string) => void
   pending: boolean
   failure: ReturnType<typeof useEmptyTrash>['failure']
-  onCancel: () => void
-  onConfirm: () => Promise<void>
+  onSubmit: () => void
 }) {
-  const [typed, setTyped] = useState('')
-  const confirmed = typed.trim().toLowerCase() === CONFIRM_PHRASE
-  const canConfirm = confirmed && !pending
-
   return (
     <form
+      id={FORM_ID}
       onSubmit={(event) => {
         event.preventDefault()
-        if (canConfirm) void onConfirm()
+        onSubmit()
       }}
     >
       {failure?.signedOut && <SignedOutMessage />}
@@ -99,18 +124,10 @@ function ConfirmForm({
           className="input"
           type="text"
           value={typed}
-          onChange={(e) => setTyped(e.target.value)}
+          onChange={(e) => onTyped(e.target.value)}
           disabled={pending}
           autoComplete="off"
         />
-      </div>
-      <div className="modal-footer">
-        <button type="button" className="btn btn--secondary" onClick={onCancel} disabled={pending}>
-          Cancel
-        </button>
-        <button type="submit" className="btn btn--danger" disabled={!canConfirm}>
-          Empty trash
-        </button>
       </div>
     </form>
   )

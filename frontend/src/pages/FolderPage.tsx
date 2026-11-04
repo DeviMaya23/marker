@@ -38,7 +38,7 @@ export function FolderPage() {
       ) : (
         <>
           <SearchBar folder={{ id, name }} />
-          <AddUrlForm folderId={id} />
+          <AddUrlForm key={id} folderId={id} />
           <BookmarkList
             folderId={id}
             notFound={<FolderMissing />}
