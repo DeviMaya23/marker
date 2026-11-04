@@ -306,7 +306,7 @@
 }
 
 /* Carried over from docs/design/ui-reference (app-shell*, sidebar*, folder-row*), adapted:
-   the sidebar is stacked above the content below 768px (no drawer yet), the row menu is
+   below 768px the sidebar is a drawer (see components.css) under a top bar, the row menu is
    always visible, and the active row follows the link's aria-current. */
 .app-shell {
   display: flex;
@@ -315,8 +315,6 @@
 }
 .app-shell__sidebar {
   flex-shrink: 0;
-  width: 100%;
-  border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 .app-shell__main {
@@ -327,6 +325,25 @@
 }
 .app-shell__main > .page {
   width: 100%;
+}
+
+/* Narrow only: the top bar. Later controls join it next to the menu button. */
+.app-shell__topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.app-shell__topbar-title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text);
 }
 
 @media (min-width: 768px) {
