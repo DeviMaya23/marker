@@ -11,8 +11,8 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 ## Backend: cross-cutting
 
-- Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all. Touches `router.go`, `main.go` and `config.go`. `x/time/rate` is adopted in `STACK.md` (v0.15.0, already an indirect requirement in `go.mod`).
 - Login hardening (both parts need a contract change, which the user makes first; decide before production): bind a login attempt to the browser with a cookie on the `/auth/login` redirect (today an attacker can sign a victim in as the attacker), and clear the `session` and `csrf_token` cookies on logout (today they stay in the browser, dead). Needs `Set-Cookie` on the login `302` and the logout `200`.
+- Rate limiting behind the proxy (left out of `rate-limiting`): the app trusts the header named by `CLIENT_IP_HEADER` as sent, which is safe only if the server is reachable through the proxy alone (restrict the Cloud Run address so Cloudflare is the only way in). Limits are per process, so more than one instance multiplies them. Decide when deployment is scoped.
 - Login callback failure page: when the identity provider's callback fails (bad or expired state, denied consent, token or ID-token error), `authCallback` answers `400` with a JSON problem document, so the user sees raw JSON in the browser. Redirect the browser to the login screen (`/login`) instead, with a short error code the screen can show. Needs a contract change first (a `302` on the callback's failure paths), which the user makes, and a small frontend change to show the message on `/login`. Noticed while drafting `login-screen`, which leaves it out.
 
 ## Frontend: screens and features not built

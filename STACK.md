@@ -31,7 +31,7 @@ Fetch jobs run on their own queue with a concurrency cap (`FETCH_CONCURRENCY`, d
 
 ### Rate limiting
 
-Two layers (NFR-16): a reverse proxy or edge limits per IP address (login routes, overall volume), and the app limits per user (saves, general ceiling), since only the app knows who the user is.
+Two layers (NFR-16): a reverse proxy or edge limits per IP address (overall volume), and the app limits per user (saves, general ceiling), since only the app knows who the user is. The app also limits the two login routes per IP address, in process, as a second guard behind the proxy. It finds the caller's address from the connection, or from the header named by `CLIENT_IP_HEADER` when the server runs behind a proxy (for example `CF-Connecting-IP` behind Cloudflare); that header is trusted as sent, so the server must be reachable through the proxy alone. In-process limits are per instance, so they multiply when more than one instance runs.
 
 ## Frontend
 
