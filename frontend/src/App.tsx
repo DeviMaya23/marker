@@ -3,6 +3,7 @@ import { AccountPage } from './pages/AccountPage'
 import { BookmarkPage } from './pages/BookmarkPage'
 import { BookmarksPage } from './pages/BookmarksPage'
 import { FolderPage } from './pages/FolderPage'
+import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { TrashPage } from './pages/TrashPage'
 import { SavePage } from './pages/SavePage'
@@ -16,6 +17,7 @@ function App() {
       <Route path="/save" element={<SavePage />} />
       <Route path="/bookmarks/:id" element={<BookmarkPage />} />
       <Route path="/account" element={<AccountPage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   )

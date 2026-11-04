@@ -3,12 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
 import { logout as requestLogout } from '../../../lib/api/auth'
+import { suppressLoginRedirect } from '../../../lib/api/loginRedirect'
 import { goTo } from '../../../lib/goTo'
 import { hookWrapper } from '../../../test/hookWrapper'
 import { testClient } from '../../../test/wrap'
 import { useLogout } from './useLogout'
 
 vi.mock('../../../lib/api/auth', () => ({ logout: vi.fn() }))
+vi.mock('../../../lib/api/loginRedirect', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/api/loginRedirect')>()),
+  suppressLoginRedirect: vi.fn(),
+}))
 vi.mock('../../../lib/goTo', () => ({ goTo: vi.fn() }))
 
 const URL_OK = 'https://id.example/logout?x=1'
@@ -25,6 +30,7 @@ const tone = (text: string) => screen.getByText(text).closest('.toast')
 beforeEach(() => {
   vi.mocked(requestLogout).mockReset()
   vi.mocked(goTo).mockReset()
+  vi.mocked(suppressLoginRedirect).mockReset()
 })
 
 describe('useLogout', () => {
@@ -122,5 +128,35 @@ describe('useLogout', () => {
     await act(() => result.current.logout())
     expect(requestLogout).toHaveBeenCalledTimes(2)
     expect(goTo).toHaveBeenCalledWith(URL_OK)
+  })
+
+  it('suppresses the login redirect right before goTo on a 200, for a URL and for the / fallback', async () => {
+    const order: string[] = []
+    vi.mocked(suppressLoginRedirect).mockImplementation(() => void order.push('suppress'))
+    vi.mocked(goTo).mockImplementation(() => void order.push('goTo'))
+    vi.mocked(requestLogout).mockResolvedValueOnce({ logout_url: URL_OK })
+    const first = setup()
+    await act(() => first.result.current.logout())
+    expect(order).toEqual(['suppress', 'goTo'])
+    first.unmount()
+    order.length = 0
+    vi.mocked(requestLogout).mockResolvedValueOnce({ logout_url: '' })
+    const second = setup()
+    await act(() => second.result.current.logout())
+    expect(order).toEqual(['suppress', 'goTo'])
+    expect(goTo).toHaveBeenLastCalledWith('/')
+  })
+
+  it.each([
+    new ApiError(401, null, null),
+    new ApiError(403, null, null),
+    new ApiError(429, null, 3),
+    new ApiError(500, null, null),
+    new TypeError('Failed to fetch'),
+  ])('does not suppress the login redirect on a failure (%s)', async (error) => {
+    vi.mocked(requestLogout).mockRejectedValue(error)
+    const { result } = setup()
+    await act(() => result.current.logout())
+    expect(suppressLoginRedirect).not.toHaveBeenCalled()
   })
 })

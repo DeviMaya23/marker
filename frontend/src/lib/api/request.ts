@@ -1,4 +1,5 @@
 import { ApiError, type ProblemBody } from './ApiError'
+import { redirectToLogin } from './loginRedirect'
 
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 
@@ -60,6 +61,7 @@ export async function apiRequest<T>(
   })
 
   if (!res.ok) {
+    if (res.status === 401) redirectToLogin()
     const problem = await readProblem(res)
     const retryAfter = res.status === 429 ? parseRetryAfter(res.headers.get('Retry-After')) : null
     throw new ApiError(res.status, problem, retryAfter)

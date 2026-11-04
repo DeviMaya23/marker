@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './ApiError'
+import { goTo } from '../goTo'
+import { loginPageHref } from '../loginHref'
+import { resetLoginRedirectForTests, suppressLoginRedirect } from './loginRedirect'
 import { apiRequest } from './request'
+
+vi.mock('../goTo', () => ({ goTo: vi.fn() }))
 
 function problemResponse(status: number, body: object, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -203,5 +208,95 @@ describe('apiRequest base option', () => {
     vi.stubGlobal('fetch', spy)
     await apiRequest('POST', '/auth/logout', undefined, { base: '' })
     expect(spy.mock.calls[0][0]).toBe('/auth/logout')
+  })
+})
+
+describe('apiRequest 401 redirect', () => {
+  let spy: ReturnType<typeof vi.fn>
+  const reply = (status: number) =>
+    status === 204 || status === 200
+      ? new Response(status === 204 ? null : '{}', { status })
+      : new Response(JSON.stringify({ type: 'about:blank', title: 't', status, code: 'c' }), {
+          status,
+          headers: { 'Content-Type': 'application/problem+json' },
+        })
+  beforeEach(() => {
+    vi.mocked(goTo).mockReset()
+    spy = vi.fn()
+    vi.stubGlobal('fetch', spy)
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('sends the browser to login with the current path and query and still rejects', async () => {
+    window.history.pushState({}, '', '/trash?x=1')
+    spy.mockResolvedValue(reply(401))
+    const err = await apiRequest('GET', '/bookmarks').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).status).toBe(401)
+    expect((err as ApiError).problem?.status).toBe(401)
+    expect(goTo).toHaveBeenCalledExactlyOnceWith('/login?return_to=%2Ftrash%3Fx%3D1')
+  })
+
+  it('round-trips a nested query exactly', async () => {
+    const path = '/save?url=https%3A%2F%2Fx.test%2Fa%3Fb%3D1&title=A%20B'
+    window.history.pushState({}, '', path)
+    spy.mockResolvedValue(reply(401))
+    await apiRequest('GET', '/folders').catch(() => {})
+    const arg = vi.mocked(goTo).mock.calls[0][0]
+    expect(arg).toBe(loginPageHref(path, ''))
+    expect(new URLSearchParams(arg.split('?')[1]).get('return_to')).toBe(path)
+  })
+
+  it('redirects once for 401s in a row and in parallel', async () => {
+    spy.mockImplementation(() => Promise.resolve(reply(401)))
+    await Promise.all([
+      apiRequest('GET', '/a').catch(() => {}),
+      apiRequest('GET', '/b').catch(() => {}),
+      apiRequest('GET', '/c').catch(() => {}),
+    ])
+    await apiRequest('GET', '/d').catch(() => {})
+    expect(goTo).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['/login', '/login/', '/login?return_to=%2F'])(
+    'does not redirect at %s, still rejects, and leaves the guard unused',
+    async (location) => {
+      window.history.pushState({}, '', location)
+      spy.mockImplementation(() => Promise.resolve(reply(401)))
+      await expect(apiRequest('GET', '/sync/version')).rejects.toBeInstanceOf(ApiError)
+      expect(goTo).not.toHaveBeenCalled()
+      window.history.pushState({}, '', '/trash')
+      await apiRequest('GET', '/x').catch(() => {})
+      expect(goTo).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it('does not redirect after suppressLoginRedirect, but does without it', async () => {
+    spy.mockImplementation(() => Promise.resolve(reply(401)))
+    suppressLoginRedirect()
+    await apiRequest('GET', '/x').catch(() => {})
+    expect(goTo).not.toHaveBeenCalled()
+    resetLoginRedirectForTests()
+    await apiRequest('GET', '/x').catch(() => {})
+    expect(goTo).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([200, 204, 403, 404, 429, 500])('does not redirect on %i', async (status) => {
+    spy.mockResolvedValue(reply(status))
+    await apiRequest('GET', '/x').catch(() => {})
+    expect(goTo).not.toHaveBeenCalled()
+  })
+
+  it('does not redirect on a network failure', async () => {
+    spy.mockRejectedValue(new TypeError('Failed to fetch'))
+    await apiRequest('GET', '/x').catch(() => {})
+    expect(goTo).not.toHaveBeenCalled()
+  })
+
+  it('redirects on a 401 from the logout call too', async () => {
+    window.history.pushState({}, '', '/account')
+    spy.mockResolvedValue(reply(401))
+    await apiRequest('POST', '/auth/logout', undefined, { base: '' }).catch(() => {})
+    expect(goTo).toHaveBeenCalledExactlyOnceWith('/login?return_to=%2Faccount')
   })
 })

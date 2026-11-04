@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './ApiError'
+import { goTo } from '../goTo'
 import { logout } from './auth'
+
+vi.mock('../goTo', () => ({ goTo: vi.fn() }))
 
 function problem(status: number, headers: Record<string, string> = {}) {
   const body = { type: 'about:blank', title: 't', status, code: 'unauthenticated' }
@@ -13,6 +16,7 @@ function problem(status: number, headers: Record<string, string> = {}) {
 describe('logout', () => {
   let fetchSpy: ReturnType<typeof vi.fn>
   beforeEach(() => {
+    vi.mocked(goTo).mockReset()
     fetchSpy = vi.fn()
     vi.stubGlobal('fetch', fetchSpy)
     document.cookie = 'csrf_token=tok1'
