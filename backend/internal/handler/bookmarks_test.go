@@ -96,7 +96,7 @@ func (authFor) Authenticate(_ context.Context, token string) (domain.Session, er
 }
 
 func routerWith(spy *bookmarkSpy) *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(spy, nil, nil, nil, nil), Auth: authFor{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(spy, nil, nil, nil, nil, nil, false), Auth: authFor{}, AppOrigin: testOrigin})
 }
 
 func postBookmark(e *echo.Echo, body string) *httptest.ResponseRecorder {

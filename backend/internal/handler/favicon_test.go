@@ -34,7 +34,7 @@ func (s *faviconSpy) Get(_ context.Context, userID, id uuid.UUID) (domain.Favico
 }
 
 func faviconRouter(spy *faviconSpy) *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, nil, spy, nil), Auth: authFor{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, nil, spy, nil, nil, false), Auth: authFor{}, AppOrigin: testOrigin})
 }
 
 func faviconPath(id uuid.UUID) string { return "/api/v1/favicons/" + id.String() }

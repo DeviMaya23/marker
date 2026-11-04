@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"marker/internal/domain"
@@ -73,6 +74,14 @@ func (s *AuthService) StartSession(ctx context.Context, idpID string) (Grant, er
 	_ = s.sessions.DeleteExpiredSessions(ctx, now)
 
 	return Grant{Token: token, CSRFToken: csrf, ExpiresAt: session.AbsoluteExpiresAt}, nil
+}
+
+// EndSession deletes a session. A session that is already gone is not an error.
+func (s *AuthService) EndSession(ctx context.Context, sessionID uuid.UUID) error {
+	if err := s.sessions.DeleteSession(ctx, sessionID); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+	return nil
 }
 
 // Authenticate returns the session for a cookie token, or domain.ErrUnauthenticated if

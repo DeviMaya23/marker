@@ -30,6 +30,7 @@ var domainProblems = []struct {
 }{
 	{domain.ErrUnauthenticated, http.StatusUnauthorized, api.ErrorCodeUnauthenticated, "Authentication required"},
 	{middleware.ErrCSRFFailed, http.StatusForbidden, api.ErrorCodeCsrfFailed, "CSRF check failed"},
+	{domain.ErrInvalidLogin, http.StatusBadRequest, api.ErrorCodeValidationError, "Invalid login attempt"},
 	{domain.ErrInvalidURL, http.StatusUnprocessableEntity, api.ErrorCodeInvalidUrl, "Invalid URL"},
 	{domain.ErrBookmarkLimitReached, http.StatusConflict, api.ErrorCodeBookmarkLimitReached, "Bookmark limit reached"},
 	{domain.ErrBookmarkInTrash, http.StatusConflict, api.ErrorCodeBookmarkInTrash, "Bookmark is in the trash"},
