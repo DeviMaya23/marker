@@ -16,6 +16,8 @@ describe('listBookmarks', () => {
     ['trashed: false', { trashed: false }, '/bookmarks'],
     ['a plain cursor', { cursor: 'abc' }, '/bookmarks?cursor=abc'],
     ['trashed and a cursor', { trashed: true, cursor: 'abc' }, '/bookmarks?trashed=true&cursor=abc'],
+    ['a folder', { folderId: 'f-1' }, '/bookmarks?folder_id=f-1'],
+    ['a folder and a cursor', { folderId: 'f-1', cursor: 'abc' }, '/bookmarks?folder_id=f-1&cursor=abc'],
     ['a cursor with + / = &', { cursor: 'a+b/c=d&e' }, '/bookmarks?cursor=a%2Bb%2Fc%3Dd%26e'],
   ])('requests the right path for %s', async (_name, params, path) => {
     await listBookmarks(params)
