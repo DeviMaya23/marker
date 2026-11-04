@@ -4,6 +4,7 @@ package repository_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -154,6 +155,43 @@ func TestUserRepository_Version(t *testing.T) {
 
 		require.Equal(t, beforeA, version(t, a))
 		require.Equal(t, beforeB+1, version(t, b))
+	})
+
+	t.Run("no increment: folder update with no fields", func(t *testing.T) {
+		u := newUserID(t)
+		f := saveFolder(t, u)
+		before := version(t, u)
+
+		_, err := folders.Update(ctx, u, f.ID, domain.FolderUpdate{})
+
+		require.NoError(t, err)
+		require.Equal(t, before, version(t, u))
+	})
+
+	t.Run("concurrent writes each count once, and another user polling is unaffected", func(t *testing.T) {
+		a, b := newUserID(t), newUserID(t)
+		beforeA, beforeB := version(t, a), version(t, b)
+		const writers = 12
+		var wg sync.WaitGroup
+		errs := make(chan error, writers)
+		for range writers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				errs <- bookmarks.Create(ctx, newBookmark(a, "https://example.com/"+domain.NewID().String()))
+			}()
+		}
+		for range 20 { // user B polls while A writes
+			require.Equal(t, beforeB, version(t, b))
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			require.NoError(t, err)
+		}
+
+		require.Equal(t, beforeA+writers, version(t, a))
+		require.Equal(t, beforeB, version(t, b))
 	})
 
 	t.Run("unknown user is not found", func(t *testing.T) {
