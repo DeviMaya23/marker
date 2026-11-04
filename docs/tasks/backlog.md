@@ -9,7 +9,6 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 | Area | Operations | Requirements |
 |---|---|---|
 | Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works; the login screen and the account area's log out wait for these) | FR-1, 2 |
-| Account | `deleteAccount` (the account area's delete button waits for this) | FR-25, NFR-3 |
 
 ## Backend: cross-cutting
 
