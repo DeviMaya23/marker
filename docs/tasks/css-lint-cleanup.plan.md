@@ -52,7 +52,7 @@ Same seven as the task file lists; nothing extra.
 ## Judgment calls
 - `folder-moves` is not merged: only its task file is on `main`, and `frontend/src/styles/` has no folder-move CSS. The task says to run after it, but "stop and ask" does not list this, so I started from the current `main` and fixed what the linter reports now (the same seven). If `folder-moves` merges later, re-run `npm run lint:css` on the merged result.
 - `.list-sentinel` is used by no component (`BookmarkList` only uses it as a `data-testid`). I kept the one definition and deleted the later duplicate, as the task says; I did not delete the class.
-- The `lint-css` help text in the `Makefile` still says "(not part of check yet)". The task limits the `Makefile` change to the `lint` line, so I left it; it is now stale and the user may want it fixed.
+- The `lint-css` help text in the `Makefile` said "(not part of check yet)". The task limited the `Makefile` change to the `lint` line, so I first left it. The user then asked for it to be fixed, so a later commit removes that phrase. That is a second `Makefile` line changed beyond the task file, on the user's explicit request.
 - The `README.md` sentence now reads "It is part of `make check` (through `make lint`)."
 - One `make check` run failed on `EmptyTrash.test.tsx` "focuses the field on open" (focus assertion). That test passes on its own and on the next full `make check` (584 passed). It looks flaky and is unrelated to CSS; I did not touch it.
 - `make test-integration-local`: run, passed.
