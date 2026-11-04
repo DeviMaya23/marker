@@ -524,3 +524,15 @@ func (f *fakeFolderStore) Delete(_ context.Context, userID, id uuid.UUID) (domai
 	f.versions[userID]++
 	return f.deletion, nil
 }
+
+// fakeFaviconStore returns a fixed favicon or error and records the ids it was asked for.
+type fakeFaviconStore struct {
+	favicon             domain.Favicon
+	err                 error
+	gotUser, gotFavicon uuid.UUID
+}
+
+func (f *fakeFaviconStore) Find(_ context.Context, userID, id uuid.UUID) (domain.Favicon, error) {
+	f.gotUser, f.gotFavicon = userID, id
+	return f.favicon, f.err
+}
