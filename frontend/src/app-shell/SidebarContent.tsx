@@ -1,10 +1,10 @@
 import type { MouseEvent } from 'react'
-import { Bookmark, Trash2 } from 'lucide-react'
+import { Bookmark, CircleUser, Trash2 } from 'lucide-react'
 import { NavLink } from 'react-router'
 import { FolderSection } from '../features/folder-sidebar/components/FolderSection'
 
 /**
- * The sidebar's content: the app name, "All bookmarks", "Trash" and the Folders section.
+ * The sidebar's content: the app name, "All bookmarks", "Trash", the Folders section and the "Account & help" link.
  * `onNavigate` is called when a link inside it is clicked, including the current page's.
  */
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
@@ -30,6 +30,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </NavLink>
         </div>
         <FolderSection />
+      </div>
+      <div className="sidebar__footer">
+        <NavLink to="/account" className="sidebar__top-link">
+          <CircleUser size={16} aria-hidden="true" />
+          Account &amp; help
+        </NavLink>
       </div>
     </nav>
   )

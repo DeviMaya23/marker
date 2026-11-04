@@ -97,6 +97,12 @@ describe('App routes', () => {
     expect(screen.getByText('Save bookmark')).toBeInTheDocument()
   })
 
+  it('shows the account page at /account', () => {
+    openAt('/account')
+    expect(screen.getByRole('heading', { level: 1, name: 'Account & help' })).toBeInTheDocument()
+    expect(screen.queryByText('Page not found')).not.toBeInTheDocument()
+  })
+
   it('shows the bookmark page at /bookmarks/:id', () => {
     openAt('/bookmarks/b-1')
     expect(screen.getByText('Loading…')).toBeInTheDocument()

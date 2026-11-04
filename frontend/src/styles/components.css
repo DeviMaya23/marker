@@ -473,6 +473,8 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 .drawer-panel .sidebar__brand {
   padding-right: calc(32px + var(--space-4));
