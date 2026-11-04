@@ -19,7 +19,7 @@ function matches(query: string): boolean {
 
 /** jsdom has no `matchMedia`; this stand-in understands max-width, min-width and reduced motion. */
 export function installMatchMedia() {
-  if (typeof window.matchMedia === 'function') return
+  if (typeof window === 'undefined' || typeof window.matchMedia === 'function') return
   window.matchMedia = (query: string) => {
     const entry: Entry = { query, listeners: new Set() }
     lists.push(entry)
