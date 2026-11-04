@@ -194,3 +194,14 @@ describe('apiRequest', () => {
     })
   })
 })
+
+describe('apiRequest base option', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('requests the path under the given base instead of /api/v1', async () => {
+    const spy = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', spy)
+    await apiRequest('POST', '/auth/logout', undefined, { base: '' })
+    expect(spy.mock.calls[0][0]).toBe('/auth/logout')
+  })
+})

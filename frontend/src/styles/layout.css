@@ -435,6 +435,12 @@
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2);
   border-radius: var(--radius-sm);
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   color: var(--text);
   font-weight: 500;
 }
@@ -445,6 +451,16 @@
 .sidebar__top-link[aria-current='page'] {
   background: var(--accent-50);
   color: var(--accent-700);
+}
+.sidebar__top-link[data-popup-open] {
+  background: var(--n-100);
+}
+.sidebar__top-link:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sidebar__top-link:disabled:hover {
+  background: none;
 }
 .sidebar__section-header {
   display: flex;

@@ -110,4 +110,17 @@ describe('Menu', () => {
     await user.click(item)
     expect(onSelect).not.toHaveBeenCalled()
   })
+
+  it('passes side and align to the positioner', async () => {
+    const user = userEvent.setup()
+    render(
+      <Menu label="Actions" side="top" align="start" items={[{ key: 'a', label: 'A', onSelect: () => {} }]}>
+        …
+      </Menu>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Actions' }))
+    const popup = await screen.findByRole('menu')
+    expect(popup).toHaveAttribute('data-side', 'top')
+    expect(popup).toHaveAttribute('data-align', 'start')
+  })
 })
