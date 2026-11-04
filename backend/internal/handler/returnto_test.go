@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,8 @@ func TestSafeReturnTo(t *testing.T) {
 		{"slash then backslash", "\\/evil.example", "/"},
 		{"header injection", "/ok\r\nSet-Cookie: x=1", "/"},
 		{"newline", "/ok\nnext", "/"},
+		{"exactly the length cap is kept", "/" + strings.Repeat("a", maxReturnToLen-1), "/" + strings.Repeat("a", maxReturnToLen-1)},
+		{"one byte over the length cap", "/" + strings.Repeat("a", maxReturnToLen), "/"},
 	}
 
 	for _, tt := range tests {

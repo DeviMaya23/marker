@@ -9,6 +9,11 @@ import (
 // ErrUnauthenticated means the request carries no valid session.
 var ErrUnauthenticated = errors.New("unauthenticated")
 
+// ErrInvalidLogin means a login attempt is bad or has expired: a malformed, tampered
+// or expired state, a rejected authorization code, or an ID token that fails
+// verification. It is the caller's problem (400), unlike a fault in the identity provider.
+var ErrInvalidLogin = errors.New("invalid login attempt")
+
 // Sentinel errors of the bookmark save and fetch flow.
 var (
 	// ErrInvalidURL means the submitted URL does not parse or is not http or https (FR-4).
