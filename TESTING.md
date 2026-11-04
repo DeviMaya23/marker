@@ -38,13 +38,22 @@ A behavior that spans layers is split at the seam. The persistence side is teste
 
 ### Running integration tests
 
-Repository integration tests need Docker, so they carry the build tag and are excluded from `go test ./...`:
+Repository integration tests need a real PostgreSQL, so they carry the build tag and are excluded from `go test ./...`:
 
 ```go
 //go:build integration
 ```
 
-Run them with `make test-integration`. `make lint` still compiles them (`go vet -tags integration`), so a broken integration test is caught without Docker. The shared helper is `testutil.NewDB(t)`: one container per test process, so tests create their own users and never assume empty tables. `repository/schema_integration_test.go` is the pattern to copy. Agents write these tests but usually cannot run them: in a report, say "integration tests written, not run" rather than claiming they pass.
+There are two ways to run them:
+
+- **`make test-integration`** needs Docker. It starts a PostgreSQL 17 container through testcontainers. CI and the user's Mac use this path.
+- **`make test-integration-local`** needs no Docker. It runs `scripts/test-integration-local.sh`, which starts a throwaway PostgreSQL from the server binaries in `/usr/lib/postgresql/<version>/bin` (newest version found) as a non-root OS user, on a unix socket in a temp directory, and removes it on exit, including on failure and Ctrl-C. Extra arguments are passed to `go test`. It works by setting `TEST_DATABASE_URL`, which `testutil` uses instead of starting a container; each test process creates its own database on that server and applies the app's and River's migrations exactly as the container path does.
+
+Agents in a cloud session (no Docker daemon) run `make test-integration-local` and report the result as "run, passed" or "run, failed", never "written, not run". If the script cannot start a database, the report says "not run" and why (for example, no PostgreSQL binaries found).
+
+The local path uses the PostgreSQL version the image provides (16 at the time of writing), while CI and `make test-integration` use 17. A failure that shows on only one of them is reported with the PostgreSQL version.
+
+`make lint` still compiles the integration tests (`go vet -tags integration`), so a broken integration test is caught without a database. The shared helper is `testutil.NewDB(t)`: one database per test process, so tests create their own users and never assume empty tables. `repository/schema_integration_test.go` is the pattern to copy.
 
 ### What to test in usecases
 
