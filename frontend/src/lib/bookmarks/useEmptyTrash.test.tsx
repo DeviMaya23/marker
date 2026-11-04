@@ -64,12 +64,15 @@ describe('useEmptyTrash', () => {
     expect(screen.queryByRole('status')?.textContent ?? '').toBe('')
   })
 
-  it('401 is marked signed out; reset clears the failure', async () => {
+  it('a 401 is silent: no failure, no refresh, no toast, resolves false and is not pending', async () => {
     empty.mockRejectedValue(new ApiError(401, null, null))
-    const { result } = setup()
-    await act(async () => void (await result.current.run()))
-    expect(result.current.failure?.signedOut).toBe(true)
-    act(() => result.current.reset())
+    const { result, invalidate } = setup()
+    let ok: boolean | undefined
+    await act(async () => void (ok = await result.current.run()))
+    expect(ok).toBe(false)
     expect(result.current.failure).toBeNull()
+    expect(result.current.pending).toBe(false)
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(document.querySelector('.toast')).toBeNull()
   })
 })

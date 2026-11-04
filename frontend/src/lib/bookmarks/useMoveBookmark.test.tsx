@@ -79,14 +79,18 @@ describe('useMoveBookmark', () => {
     expect(screen.queryByText(/^Moved to/)).not.toBeInTheDocument()
   })
 
-  it('a 401 is a signed-out failure and still refreshes', async () => {
+  it('a 401 is silent: no failure, no refresh, no toast, resolves false and is not pending', async () => {
     update.mockRejectedValue(new ApiError(401, null, null))
     const { result, invalidate } = setup()
+    let ok: boolean | undefined
     await act(async () => {
-      await result.current.move(null)
+      ok = await result.current.move(null)
     })
-    expect(result.current.failure?.signedOut).toBe(true)
-    expect(invalidate).toHaveBeenCalled()
+    expect(ok).toBe(false)
+    expect(result.current.failure).toBeNull()
+    expect(result.current.pending).toBe(false)
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(document.querySelector('.toast')).toBeNull()
   })
 
   it('a network failure says it could not move the bookmark; reset forgets it', async () => {

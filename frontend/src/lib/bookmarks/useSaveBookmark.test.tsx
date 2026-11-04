@@ -53,7 +53,6 @@ describe('useSaveBookmark', () => {
   it.each([
     [409, 'duplicate_bookmark', 'duplicate'],
     [422, 'invalid_url', 'error'],
-    [401, 'unauthenticated', 'needs-login'],
   ] as const)('maps a %s %s failure to the %s phase', async (status, code, phase) => {
     vi.mocked(createBookmark).mockRejectedValue(
       new ApiError(status, { type: 'about:blank', title: 't', status, code }, null),
@@ -84,7 +83,7 @@ describe('useSaveBookmark', () => {
     expect(result.current.phase).toBe('saved')
   })
 
-  it('keeps the signed-out state when dismissed', async () => {
+  it('a 401 is silent: no failure, back to the form, and another save is allowed', async () => {
     vi.mocked(createBookmark).mockRejectedValue(
       new ApiError(401, { type: 'about:blank', title: 't', status: 401, code: 'unauthenticated' }, null),
     )
@@ -92,7 +91,13 @@ describe('useSaveBookmark', () => {
     await act(async () => {
       await result.current.save({ url: 'https://a.test' })
     })
-    act(() => result.current.dismiss())
-    expect(result.current.phase).toBe('needs-login')
+    expect(result.current.phase).toBe('form')
+    expect(result.current.failure).toBeNull()
+
+    vi.mocked(createBookmark).mockResolvedValueOnce(created)
+    await act(async () => {
+      await result.current.save({ url: 'https://a.test' })
+    })
+    expect(result.current.phase).toBe('saved')
   })
 })

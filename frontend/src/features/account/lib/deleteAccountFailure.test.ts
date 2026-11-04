@@ -14,7 +14,7 @@ describe('describeDeleteAccountFailure', () => {
     [0, 'Too many requests. Try again in about 0 seconds.'],
     [null, 'Too many requests. Try again in a moment.'],
   ])('describes a 429 with Retry-After %s', (retryAfter, message) => {
-    expect(describeDeleteAccountFailure(new ApiError(429, null, retryAfter))).toEqual({ message }
+    expect(describeDeleteAccountFailure(new ApiError(429, null, retryAfter))).toEqual({ message })
   })
 
   it.each([

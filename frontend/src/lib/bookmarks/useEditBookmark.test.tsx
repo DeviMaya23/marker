@@ -87,10 +87,15 @@ describe('useEditBookmark', () => {
     expect(result.current.failure).toBeNull()
   })
 
-  it('a 401 is marked signed out', async () => {
+  it('a 401 is silent: no failure, no refresh, no toast, resolves false and is not pending', async () => {
     update.mockRejectedValue(new ApiError(401, null, null))
-    const { result } = setup()
-    await act(async () => void (await result.current.save({ title: 'a' })))
-    expect(result.current.failure?.signedOut).toBe(true)
+    const { result, invalidate } = setup()
+    let ok: boolean | undefined
+    await act(async () => void (ok = await result.current.save({ title: 'a' })))
+    expect(ok).toBe(false)
+    expect(result.current.failure).toBeNull()
+    expect(result.current.pending).toBe(false)
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(document.querySelector('.toast')).toBeNull()
   })
 })

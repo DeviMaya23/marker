@@ -54,7 +54,7 @@ describe('describeLogoutFailure', () => {
     [0, 'Too many requests. Try again in about 0 seconds.'],
     [null, 'Too many requests. Try again in a moment.'],
   ])('words a 429 with retryAfter %s', (retryAfter, message) => {
-    expect(describeLogoutFailure(new ApiError(429, null, retryAfter))).toEqual({ message }
+    expect(describeLogoutFailure(new ApiError(429, null, retryAfter))).toEqual({ message })
   })
 
   it.each([
