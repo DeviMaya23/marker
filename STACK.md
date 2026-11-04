@@ -19,7 +19,9 @@
 
 OIDC login libraries (adopted for the auth backend): `github.com/coreos/go-oidc/v3` at `v3.21.0` (provider discovery, ID token verification) and `golang.org/x/oauth2` at `v0.37.0` (authorization URL, PKCE, code exchange). Both are compatible with the `go 1.26.0` directive. Only `adaptor/oidc.go` imports them.
 
-Suggested, not yet adopted: `go-readability` for text extraction, `x/time/rate` for in-process limiting.
+Rate limiting library (adopted for the rate-limiting task): `golang.org/x/time/rate` at `golang.org/x/time v0.15.0`, the version `backend/go.mod` already resolves as an indirect dependency, so adopting it only moves that line to a direct requirement. It provides the in-process token-bucket limiters for the per-user and per-IP limits (NFR-16). Only the rate-limit middleware imports it.
+
+Suggested, not yet adopted: `go-readability` for text extraction.
 
 ### Fetch queue
 

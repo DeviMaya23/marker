@@ -10,9 +10,9 @@ A signed-out user who opens the app, or whose session ends while they use it, is
 
 Requirements covered: FR-1 (the login screen's button starts the identity-provider login), FR-3c (the save page, opened signed out, goes through login and returns to the same page with the same parameters), NFR-15 (an expired session sends the user through login and then back to where they were).
 
-Out of scope, and why (the first item is its own task, in the backlog):
+Out of scope, and why (the first item is its own task, `remove-signed-out-ui`):
 
-- **Removing the old per-screen signed-out UI.** Every screen still has its own `SignedOutMessage` banner, "Log in" toast action, `signedOut` failure flags and the save popup's `needs-login` phase. They stay as they are in this task: after a `401` the redirect starts at once, so a banner shows for a moment at most. Removing them is the follow-up task (backlog: "Split from `login-screen`").
+- **Removing the old per-screen signed-out UI.** Every screen still has its own `SignedOutMessage` banner, "Log in" toast action, `signedOut` failure flags and the save popup's `needs-login` phase. They stay as they are in this task: after a `401` the redirect starts at once, so a banner shows for a moment at most. Removing them is the follow-up task `remove-signed-out-ui`.
 - **Who-am-I or any new endpoint.** Not needed (above); the brief never shows who you are.
 - **Login hardening** (binding the login to the browser, clearing cookies on logout): backend and contract, backlog.
 - **What a user sees when the login callback fails** (`authCallback` answers `400` as a problem document, which the browser shows as plain text). Not handled here.
