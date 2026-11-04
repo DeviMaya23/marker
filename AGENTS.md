@@ -38,4 +38,4 @@ Checks the finished work against the requirements, runs the tests and linters, a
 
 ## Handing back
 
-Before pushing, an agent runs `make check`. A fresh checkout has no `node_modules`: run `npm ci` in `frontend/` first. Integration tests (build tag `integration`) are written but not run by agents; the report says so. Each agent commits and pushes its own branch (never `main`), then finishes with a short report: branch name, what changed, which requirement IDs it covers, and anything it was unsure about. The user is the only one who merges.
+Before pushing, an agent runs `make check`. A fresh checkout has no `node_modules`: run `npm ci` in `frontend/` first. In a cloud session an agent also runs `make test-integration-local` (no Docker needed; see `TESTING.md`) and reports "run, passed" or "run, failed", or "not run" with the reason if the script cannot start a database. Each agent commits and pushes its own branch (never `main`), then finishes with a short report: branch name, what changed, which requirement IDs it covers, and anything it was unsure about. The user is the only one who merges.
