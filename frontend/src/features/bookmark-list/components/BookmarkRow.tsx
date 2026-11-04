@@ -30,7 +30,7 @@ export function BookmarkRow({
 }) {
   const [editing, setEditing] = useState(false)
   const [moving, setMoving] = useState(false)
-  const del = useDeleteBookmark(bookmark.id, { undo: true })
+  const del = useDeleteBookmark(bookmark.id, { undo: true, folderId: bookmark.folder_id })
   const title = displayTitle(bookmark)
 
   return (
