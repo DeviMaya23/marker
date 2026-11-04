@@ -49,6 +49,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `folder-moves`: a bookmark move that answers `422` refreshes the list, though the task says a `422` does not. The server has no `422` for a bookmark move, so it cannot happen today.
 - `css-lint-cleanup`: `.folder-error` is defined twice in `layout.css` (once in the `.folder-empty, .folder-error` list, once alone). The properties do not overlap, so nothing changes in the cascade; stylelint does not flag it.
 - `get-favicon`: `RecordFetchSuccess` overwrites the bytes behind an existing favicon id (`ON CONFLICT (user_id, host) DO UPDATE`), but the contract says the content behind an id never changes. The task follows the contract (a one-year `max-age`), so a browser can show an outdated icon for up to a year. Decide: change the upsert to `DO NOTHING`, or reword the contract.
+- `top-bar-search`: after a scope change, Back returns to the folder page with the typed search still applied, not as it was before; the task file does not say which it wants. Decide.
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
 
 ## Later, after the app is finished
