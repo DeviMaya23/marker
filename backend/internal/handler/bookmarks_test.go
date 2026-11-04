@@ -29,10 +29,42 @@ type bookmarkSpy struct {
 	gotGetID   uuid.UUID
 	gotGetUser uuid.UUID
 
+	// result is what Update and Restore return; emptied is what EmptyTrash returns.
+	result      domain.Bookmark
+	emptied     int64
+	gotID       uuid.UUID
+	gotUpdate   domain.BookmarkUpdate
+	updateCalls int
+	deleteCalls int
+	emptyCalls  int
+
 	page        domain.BookmarkPage
 	gotListUser uuid.UUID
 	gotList     domain.ListBookmarksInput
 	listCalls   int
+}
+
+func (s *bookmarkSpy) Update(_ context.Context, userID, id uuid.UUID, in domain.BookmarkUpdate) (domain.Bookmark, error) {
+	s.gotUser, s.gotID, s.gotUpdate = userID, id, in
+	s.updateCalls++
+	return s.result, s.err
+}
+
+func (s *bookmarkSpy) Delete(_ context.Context, userID, id uuid.UUID) error {
+	s.gotUser, s.gotID = userID, id
+	s.deleteCalls++
+	return s.err
+}
+
+func (s *bookmarkSpy) Restore(_ context.Context, userID, id uuid.UUID) (domain.Bookmark, error) {
+	s.gotUser, s.gotID = userID, id
+	return s.result, s.err
+}
+
+func (s *bookmarkSpy) EmptyTrash(_ context.Context, userID uuid.UUID) (int64, error) {
+	s.gotUser = userID
+	s.emptyCalls++
+	return s.emptied, s.err
 }
 
 func (s *bookmarkSpy) List(_ context.Context, userID uuid.UUID, in domain.ListBookmarksInput) (domain.BookmarkPage, error) {
