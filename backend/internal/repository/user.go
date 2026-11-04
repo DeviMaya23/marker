@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -36,4 +37,19 @@ func (r *UserRepository) FindOrCreateUserByIdpID(ctx context.Context, idpID stri
 	var user domain.User
 	err = db.Where("idp_id = ?", idpID).First(&user).Error
 	return user, err
+}
+
+// Version returns the user's change counter (users.version). It is one primary-key read
+// of that column and takes no lock. A missing user is gorm.ErrRecordNotFound.
+func (r *UserRepository) Version(ctx context.Context, userID uuid.UUID) (int64, error) {
+	var versions []int64
+	err := r.db.WithContext(ctx).Model(&domain.User{}).
+		Select("version").Where("id = ?", userID).Limit(1).Scan(&versions).Error
+	if err != nil {
+		return 0, err
+	}
+	if len(versions) == 0 {
+		return 0, gorm.ErrRecordNotFound
+	}
+	return versions[0], nil
 }
