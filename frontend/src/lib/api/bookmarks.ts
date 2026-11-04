@@ -17,16 +17,28 @@ export function getBookmark(id: string): Promise<BookmarkDetail> {
 
 export type BookmarkPage = Schemas['BookmarkPage']
 
-export type ListBookmarksParams = { trashed?: boolean; cursor?: string; folderId?: string }
+export type ListBookmarksParams = {
+  trashed?: boolean
+  cursor?: string
+  folderId?: string
+  /** The search term; the list is then in relevance order. Never sent with `trashed`. */
+  q?: string
+  /** Also search notes. Sent only together with `q`. */
+  includeNotes?: boolean
+}
 
 /**
  * One page of the live list, or of the trash with `trashed: true`. With `folderId`, the live
- * bookmarks of that folder and its subfolders. Sends only what is given.
+ * bookmarks of that folder and its subfolders. With `q`, a search. Sends only what is given.
  */
-export function listBookmarks({ trashed, cursor, folderId }: ListBookmarksParams = {}): Promise<BookmarkPage> {
+export function listBookmarks({ trashed, cursor, folderId, q, includeNotes }: ListBookmarksParams = {}): Promise<BookmarkPage> {
   const query = new URLSearchParams()
   if (trashed) query.set('trashed', 'true')
   if (folderId !== undefined) query.set('folder_id', folderId)
+  if (q) {
+    query.set('q', q)
+    if (includeNotes) query.set('include_notes', 'true')
+  }
   if (cursor !== undefined) query.set('cursor', cursor)
   const qs = query.toString()
   return apiRequest<BookmarkPage>('GET', qs ? `/bookmarks?${qs}` : '/bookmarks')

@@ -23,6 +23,35 @@ describe('listBookmarks', () => {
     await listBookmarks(params)
     expect(apiRequest).toHaveBeenCalledWith('GET', path)
   })
+
+  const sentQuery = async (params: Parameters<typeof listBookmarks>[0]) => {
+    await listBookmarks(params)
+    const path = vi.mocked(apiRequest).mock.calls[0][1]
+    return new URLSearchParams(path.split('?')[1] ?? '')
+  }
+
+  it('sends q URL-encoded: a space, &, a quote and a non-ASCII letter round-trip', async () => {
+    const q = 'a b&c "d" é'
+    await listBookmarks({ q })
+    const path = vi.mocked(apiRequest).mock.calls[0][1]
+    expect(path).not.toMatch(/[ "é]/)
+    expect(new URLSearchParams(path.split('?')[1]).get('q')).toBe(q)
+  })
+
+  it('sends include_notes=true only with a q and includeNotes: true', async () => {
+    expect((await sentQuery({ q: 'foo', includeNotes: true })).get('include_notes')).toBe('true')
+    vi.mocked(apiRequest).mockClear()
+    expect((await sentQuery({ includeNotes: true })).has('include_notes')).toBe(false)
+    vi.mocked(apiRequest).mockClear()
+    expect((await sentQuery({ q: 'foo', includeNotes: false })).has('include_notes')).toBe(false)
+    vi.mocked(apiRequest).mockClear()
+    expect((await sentQuery({ q: 'foo' })).has('include_notes')).toBe(false)
+  })
+
+  it('sends q with a folder and a cursor, and nothing else changes without q', async () => {
+    await listBookmarks({ q: 'foo', folderId: 'f-1', cursor: 'c1' })
+    expect(apiRequest).toHaveBeenCalledWith('GET', '/bookmarks?folder_id=f-1&q=foo&cursor=c1')
+  })
 })
 
 describe('write wrappers', () => {
