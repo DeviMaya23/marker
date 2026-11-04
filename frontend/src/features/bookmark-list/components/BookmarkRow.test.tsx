@@ -128,6 +128,40 @@ describe('BookmarkRow delete', () => {
     expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
+  it('Undo of a bookmark that was in a folder restores it, then moves it back', async () => {
+    del.mockResolvedValue(undefined)
+    restore.mockResolvedValue(row)
+    update.mockResolvedValue(row)
+    renderApp(<BookmarkRow bookmark={{ ...row, folder_id: 'f-1' }} />)
+    await chooseDelete(userEvent.setup())
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText('Restored to its folder.')).toBeInTheDocument()
+    expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { folder_id: 'f-1' })
+    expect(restore.mock.invocationCallOrder[0]).toBeLessThan(update.mock.invocationCallOrder[0])
+  })
+
+  it('Undo of a top-level bookmark does not call updateBookmark', async () => {
+    del.mockResolvedValue(undefined)
+    restore.mockResolvedValue(row)
+    const { user } = setup()
+    await chooseDelete(user)
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('Undo in a folder whose move back fails with 404 says it is at the top level', async () => {
+    del.mockResolvedValue(undefined)
+    restore.mockResolvedValue(row)
+    update.mockRejectedValue(problem(404, 'not_found'))
+    renderApp(<BookmarkRow bookmark={{ ...row, folder_id: 'f-1' }} />)
+    await chooseDelete(userEvent.setup())
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(
+      await screen.findByText("Restored to the top level. Couldn't move it back to its folder."),
+    ).toBeInTheDocument()
+  })
+
   it('an Undo of a bookmark that was already restored (409 not in trash) says it could not undo and refreshes', async () => {
     del.mockResolvedValue(undefined)
     restore.mockRejectedValue(problem(409, 'bookmark_not_in_trash'))

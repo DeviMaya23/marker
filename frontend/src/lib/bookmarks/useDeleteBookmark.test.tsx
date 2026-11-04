@@ -1,32 +1,36 @@
 import { act, fireEvent, renderHook, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../api/ApiError'
-import { deleteBookmark, restoreBookmark } from '../api/bookmarks'
+import { deleteBookmark, restoreBookmark, updateBookmark } from '../api/bookmarks'
 import { goTo } from '../goTo'
 import { hookWrapper } from '../../test/hookWrapper'
 import { testClient } from '../../test/wrap'
-import { useDeleteBookmark } from './useDeleteBookmark'
+import { RESTORED_BUT_NOT_MOVED, RESTORED_TO_FOLDER, UNDO_FAILED, useDeleteBookmark } from './useDeleteBookmark'
 
-vi.mock('../api/bookmarks', () => ({ deleteBookmark: vi.fn(), restoreBookmark: vi.fn() }))
+vi.mock('../api/bookmarks', () => ({ deleteBookmark: vi.fn(), restoreBookmark: vi.fn(), updateBookmark: vi.fn() }))
 vi.mock('../goTo', () => ({ goTo: vi.fn() }))
 
 const del = vi.mocked(deleteBookmark)
 const restore = vi.mocked(restoreBookmark)
+const update = vi.mocked(updateBookmark)
 const problem = (status: number, code: string) =>
   new ApiError(status, { type: 'x', title: 't', status, code } as ProblemBody, null)
 
-function setup(undo = true) {
+function setup(undo = true, folderId: string | null = null) {
   const client = testClient()
   const invalidate = vi.spyOn(client, 'invalidateQueries')
-  const hook = renderHook(() => useDeleteBookmark('b-1', { undo }), { wrapper: hookWrapper(client, '/trash?x=1') })
+  const hook = renderHook(() => useDeleteBookmark('b-1', { undo, folderId }), { wrapper: hookWrapper(client, '/trash?x=1') })
   return { ...hook, invalidate }
 }
 
+const toneOf = (text: string) => screen.getByText(text).closest('.toast')
+const KEYS = [['bookmark-list'], ['bookmark', 'b-1'], ['folders']]
 const invalidatedKeys = (spy: ReturnType<typeof setup>['invalidate']) => spy.mock.calls.map(([f]) => f?.queryKey)
 
 beforeEach(() => {
   del.mockReset()
   restore.mockReset()
+  update.mockReset()
   vi.mocked(goTo).mockReset()
 })
 
@@ -72,7 +76,9 @@ describe('useDeleteBookmark', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
     expect(restore).toHaveBeenCalledExactlyOnceWith('b-1')
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
+    expect(update).not.toHaveBeenCalled()
+    expect(toneOf('Restored to the top level.')).toHaveClass('toast--success')
+    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
   })
 
   it('Undo that fails refreshes and says it could not undo', async () => {
@@ -82,8 +88,9 @@ describe('useDeleteBookmark', () => {
     await act(() => result.current.remove())
     invalidate.mockClear()
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
-    expect(await screen.findByText("Couldn't undo. It may have been changed elsewhere.")).toBeInTheDocument()
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
+    expect(await screen.findByText(UNDO_FAILED)).toBeInTheDocument()
+    expect(toneOf(UNDO_FAILED)).toHaveClass('toast--error')
+    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
   })
 
   it.each([
@@ -110,5 +117,101 @@ describe('useDeleteBookmark', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
     await waitFor(() => expect(goTo).toHaveBeenCalledTimes(1))
     expect(vi.mocked(goTo).mock.calls[0][0]).toContain('return_to=%2Ftrash%3Fx%3D1')
+  })
+})
+
+async function undoInFolder(folderId: string | null = 'f-1') {
+  del.mockResolvedValue(undefined)
+  const hook = setup(true, folderId)
+  await act(() => hook.result.current.remove())
+  hook.invalidate.mockClear()
+  fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+  return hook
+}
+
+describe('useDeleteBookmark Undo of a bookmark that was in a folder', () => {
+  it('restores, then moves it back with a body of folder_id alone, and refreshes once', async () => {
+    restore.mockResolvedValue({} as never)
+    update.mockResolvedValue({} as never)
+    const { invalidate } = await undoInFolder()
+    expect(await screen.findByText(RESTORED_TO_FOLDER)).toBeInTheDocument()
+    expect(toneOf(RESTORED_TO_FOLDER)).toHaveClass('toast--success')
+    expect(screen.queryByText('Restored to the top level.')).not.toBeInTheDocument()
+    expect(restore).toHaveBeenCalledExactlyOnceWith('b-1')
+    expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { folder_id: 'f-1' })
+    expect(restore.mock.invocationCallOrder[0]).toBeLessThan(update.mock.invocationCallOrder[0])
+    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
+  })
+
+  it('uses the folder of the render whose remove was called', async () => {
+    del.mockResolvedValue(undefined)
+    restore.mockResolvedValue({} as never)
+    update.mockResolvedValue({} as never)
+    const client = testClient()
+    const hook = renderHook(
+      ({ folderId }: { folderId: string }) => useDeleteBookmark('b-1', { undo: true, folderId }),
+      { wrapper: hookWrapper(client, '/'), initialProps: { folderId: 'f-1' } },
+    )
+    const first = hook.result.current
+    hook.rerender({ folderId: 'f-2' })
+    await act(() => first.remove())
+    hook.rerender({ folderId: 'f-3' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText(RESTORED_TO_FOLDER)).toBeInTheDocument()
+    expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { folder_id: 'f-1' })
+  })
+
+  it.each([
+    ['404', problem(404, 'not_found')],
+    ['409 not in trash', problem(409, 'bookmark_not_in_trash')],
+    ['429', new ApiError(429, null, 3)],
+    ['network', new TypeError('Failed to fetch')],
+  ])('restore fails with %s: no second call, "could not undo" as an error', async (_n, error) => {
+    restore.mockRejectedValue(error)
+    await undoInFolder()
+    expect(await screen.findByText(UNDO_FAILED)).toBeInTheDocument()
+    expect(toneOf(UNDO_FAILED)).toHaveClass('toast--error')
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it('restore fails with 401: logged-out toast with Log in, no second call', async () => {
+    restore.mockRejectedValue(new ApiError(401, null, null))
+    await undoInFolder()
+    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['404 not_found', problem(404, 'not_found')],
+    ['409 in trash', problem(409, 'bookmark_in_trash')],
+    ['429', new ApiError(429, null, 3)],
+    ['network', new TypeError('Failed to fetch')],
+  ])('move back fails with %s: neutral toast, one refresh', async (_n, error) => {
+    restore.mockResolvedValue({} as never)
+    update.mockRejectedValue(error)
+    const { invalidate } = await undoInFolder()
+    expect(await screen.findByText(RESTORED_BUT_NOT_MOVED)).toBeInTheDocument()
+    expect(toneOf(RESTORED_BUT_NOT_MOVED)).toHaveClass('toast--neutral')
+    expect(screen.queryByText(RESTORED_TO_FOLDER)).not.toBeInTheDocument()
+    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
+  })
+
+  it('move back fails with 401: logged-out toast with Log in, one refresh, no neutral text', async () => {
+    restore.mockResolvedValue({} as never)
+    update.mockRejectedValue(new ApiError(401, null, null))
+    const { invalidate } = await undoInFolder()
+    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(screen.queryByText(RESTORED_BUT_NOT_MOVED)).not.toBeInTheDocument()
+    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
+  })
+
+  it('with undo: false there is no Undo, whatever the folder', async () => {
+    del.mockResolvedValue(undefined)
+    const { result } = setup(false, 'f-1')
+    await act(() => result.current.remove())
+    expect(await screen.findByText('Moved to trash.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 })
