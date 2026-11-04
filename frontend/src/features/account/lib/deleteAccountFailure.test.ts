@@ -20,7 +20,7 @@ describe('describeDeleteAccountFailure', () => {
   it.each([
     ['a 403', new ApiError(403, null, null)],
     ['a 500', new ApiError(500, null, null)],
-    ['an error with a problem body', new ApiError(500, { code: 'internal_error', title: 'x', status: 500 }, null)],
+    ['an error with a problem body', new ApiError(500, { type: 'about:blank', code: 'internal_error', title: 'x', status: 500 }, null)],
     ['a network failure', new TypeError('Failed to fetch')],
   ])('gives the generic message for %s', (_name, error) => {
     expect(describeDeleteAccountFailure(error)).toEqual({ signedOut: false, message: GENERIC })
