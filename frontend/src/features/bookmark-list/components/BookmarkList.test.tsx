@@ -464,6 +464,13 @@ describe('BookmarkList (search)', () => {
     expect(screen.getByRole('region', { name: 'Trash' })).toBeInTheDocument()
   })
 
+  it('shows the trash\'s own empty state, not a no-match panel, for /trash?q=foo', async () => {
+    list.mockResolvedValue(page([]))
+    renderSearch('/trash?q=foo', { trashed: true })
+    expect(await screen.findByText('Trash is empty')).toBeInTheDocument()
+    expect(screen.queryByText(/No bookmarks match/)).not.toBeInTheDocument()
+  })
+
   it('shows rows in the order the server returned, not newest first or alphabetical', async () => {
     list.mockResolvedValue(
       page([
