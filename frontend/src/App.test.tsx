@@ -1,14 +1,20 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { listBookmarks } from './lib/api/bookmarks'
+import { bookmark, page } from './test/builders'
 
-vi.mock('./lib/api/bookmarks', () => ({ createBookmark: vi.fn(), getBookmark: vi.fn(() => new Promise(() => {})) }))
+vi.mock('./lib/api/bookmarks', () => ({
+  createBookmark: vi.fn(),
+  getBookmark: vi.fn(() => new Promise(() => {})),
+  listBookmarks: vi.fn(),
+}))
 
 function openAt(path: string) {
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
         <App />
       </MemoryRouter>
@@ -17,9 +23,39 @@ function openAt(path: string) {
 }
 
 describe('App routes', () => {
-  it('shows the paste-a-URL field at /', () => {
+  beforeEach(() => {
+    vi.mocked(listBookmarks).mockReset()
+    vi.mocked(listBookmarks).mockImplementation(({ trashed } = {}) =>
+      Promise.resolve(
+        page([
+          bookmark({
+            id: trashed ? 't-1' : 'l-1',
+            title: trashed ? 'In the trash' : 'In the list',
+            deleted_at: trashed ? '2026-01-02T00:00:00Z' : null,
+          }),
+        ]),
+      ),
+    )
+  })
+
+  it('shows the list with the paste-a-URL field at /', async () => {
     openAt('/')
+    expect(screen.getByRole('heading', { level: 1, name: 'All bookmarks' })).toBeInTheDocument()
     expect(screen.getByLabelText('Link to save')).toBeInTheDocument()
+    expect(await screen.findByText('In the list')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'All bookmarks' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Trash' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('shows the read-only trash at /trash, with no add field', async () => {
+    openAt('/trash')
+    expect(screen.getByRole('heading', { level: 1, name: 'Trash' })).toBeInTheDocument()
+    expect(await screen.findByText('In the trash')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Link to save')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Trash' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'All bookmarks' })).not.toHaveAttribute('aria-current')
+    expect(listBookmarks).toHaveBeenCalledWith({ trashed: true, cursor: undefined })
   })
 
   it('shows the save popup at /save', () => {

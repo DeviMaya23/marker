@@ -1,12 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../../lib/api/ApiError'
-import { createBookmark } from '../../../lib/api/bookmarks'
+import { createBookmark, listBookmarks } from '../../../lib/api/bookmarks'
+import { page } from '../../../test/builders'
 import { AddUrlForm } from './AddUrlForm'
+import { BookmarkList } from './BookmarkList'
 
-vi.mock('../../../lib/api/bookmarks', () => ({ createBookmark: vi.fn() }))
+vi.mock('../../../lib/api/bookmarks', () => ({ createBookmark: vi.fn(), listBookmarks: vi.fn() }))
 
 const created = { id: 'new-1' } as Awaited<ReturnType<typeof createBookmark>>
 
@@ -16,12 +19,22 @@ function problem(status: number, code: ProblemBody['code'], extra: Partial<Probl
 
 function renderForm() {
   render(
-    <MemoryRouter initialEntries={['/']}>
-      <Routes>
-        <Route path="/" element={<AddUrlForm />} />
-        <Route path="/bookmarks/:id" element={<p>bookmark page</p>} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={['/']}>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <>
+                <AddUrlForm />
+                <BookmarkList />
+              </>
+            }
+          />
+          <Route path="/bookmarks/:id" element={<p>bookmark page</p>} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
   return userEvent.setup()
 }
@@ -32,6 +45,8 @@ const button = () => screen.getByRole('button', { name: /^Sav/ })
 describe('AddUrlForm', () => {
   beforeEach(() => {
     vi.mocked(createBookmark).mockReset()
+    vi.mocked(listBookmarks).mockReset()
+    vi.mocked(listBookmarks).mockResolvedValue(page([]))
   })
 
   describe('submitting', () => {
@@ -44,12 +59,18 @@ describe('AddUrlForm', () => {
       expect(button()).toBeEnabled()
     })
 
-    it('saves on Enter and goes to the new bookmark', async () => {
+    it('saves on Enter, clears the field, refetches the list and stays on the page', async () => {
       vi.mocked(createBookmark).mockResolvedValue(created)
       const user = renderForm()
+      await screen.findByText('No bookmarks yet')
+      expect(listBookmarks).toHaveBeenCalledTimes(1)
+
       await user.type(input(), '  https://a.test/x?y=1&z=2#f {Enter}')
       expect(createBookmark).toHaveBeenCalledWith({ url: 'https://a.test/x?y=1&z=2#f' })
-      expect(await screen.findByText('bookmark page')).toBeInTheDocument()
+      await waitFor(() => expect(input()).toHaveValue(''))
+      await waitFor(() => expect(listBookmarks).toHaveBeenCalledTimes(2))
+      expect(screen.queryByText('bookmark page')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Link to save')).toBeInTheDocument()
     })
 
     it('saves when the button is clicked', async () => {
@@ -57,7 +78,8 @@ describe('AddUrlForm', () => {
       const user = renderForm()
       await user.type(input(), 'https://a.test')
       await user.click(button())
-      expect(await screen.findByText('bookmark page')).toBeInTheDocument()
+      await waitFor(() => expect(input()).toHaveValue(''))
+      expect(createBookmark).toHaveBeenCalledTimes(1)
     })
 
     it('does nothing on Enter with an empty field', async () => {
@@ -74,7 +96,7 @@ describe('AddUrlForm', () => {
       expect(createBookmark).toHaveBeenCalledTimes(1)
       expect(button()).toBeDisabled()
       resolve(created)
-      await screen.findByText('bookmark page')
+      await waitFor(() => expect(input()).toHaveValue(''))
     })
   })
 

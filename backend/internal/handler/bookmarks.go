@@ -19,6 +19,7 @@ import (
 type BookmarkService interface {
 	Create(ctx context.Context, userID uuid.UUID, in usecase.CreateBookmarkInput) (domain.Bookmark, error)
 	Get(ctx context.Context, userID, id uuid.UUID) (domain.BookmarkDetail, error)
+	List(ctx context.Context, userID uuid.UUID, in domain.ListBookmarksInput) (domain.BookmarkPage, error)
 }
 
 // CreateBookmark implements POST /api/v1/bookmarks; it shadows the 501 stub.
