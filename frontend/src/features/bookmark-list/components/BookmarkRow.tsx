@@ -1,24 +1,25 @@
 import { useState } from 'react'
 import { ExternalLink, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { Link } from 'react-router'
-import { EditBookmarkDialog } from '../../../components/ui/EditBookmarkDialog'
 import { Favicon } from '../../../components/ui/Favicon'
 import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 import { Menu } from '../../../components/ui/Menu'
 import type { BookmarkSummary } from '../../../lib/api/bookmarks'
 import { useDeleteBookmark } from '../../../lib/bookmarks/useDeleteBookmark'
-import { useEditBookmark } from '../../../lib/bookmarks/useEditBookmark'
 import { hostOf } from '../../../lib/hostOf'
 import { displayTitle } from '../lib/displayTitle'
 import { formatDate } from '../lib/formatDate'
+import { BookmarkEditor } from './BookmarkEditor'
 
 /**
  * One live bookmark: icon, title, fetch state, and host and date. The whole text area is a
  * link; a button on the right opens the actions (open the original, edit, delete).
+ *
+ * With `onEdit` the owner shows the edit dialog (the list does, so the dialog outlives the row
+ * when a refresh drops it); without it the row shows its own.
  */
-export function BookmarkRow({ bookmark }: { bookmark: BookmarkSummary }) {
+export function BookmarkRow({ bookmark, onEdit }: { bookmark: BookmarkSummary; onEdit?: (bookmark: BookmarkSummary) => void }) {
   const [editing, setEditing] = useState(false)
-  const edit = useEditBookmark(bookmark.id)
   const del = useDeleteBookmark(bookmark.id, { undo: true })
   const title = displayTitle(bookmark)
 
@@ -50,7 +51,7 @@ export function BookmarkRow({ bookmark }: { bookmark: BookmarkSummary }) {
             {
               key: 'edit',
               label: 'Edit title & note',
-              onSelect: () => setEditing(true),
+              onSelect: () => (onEdit ? onEdit(bookmark) : setEditing(true)),
               icon: <Pencil size={14} aria-hidden="true" />,
             },
             {
@@ -65,18 +66,7 @@ export function BookmarkRow({ bookmark }: { bookmark: BookmarkSummary }) {
           <MoreHorizontal size={16} aria-hidden="true" />
         </Menu>
       </div>
-      <EditBookmarkDialog
-        open={editing}
-        title={bookmark.title}
-        note={bookmark.note}
-        saving={edit.pending}
-        failure={edit.failure}
-        onSave={edit.save}
-        onClose={() => {
-          setEditing(false)
-          edit.reset()
-        }}
-      />
+      {!onEdit && <BookmarkEditor bookmark={bookmark} open={editing} onClose={() => setEditing(false)} />}
     </div>
   )
 }

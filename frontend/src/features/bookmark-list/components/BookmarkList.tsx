@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { Inbox, Trash2, TriangleAlert } from 'lucide-react'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { useBookmarkList } from '../hooks/useBookmarkList'
 import { useVisibleSentinel } from '../hooks/useVisibleSentinel'
+import type { BookmarkSummary } from '../../../lib/api/bookmarks'
+import { BookmarkEditor } from './BookmarkEditor'
 import { BookmarkRow } from './BookmarkRow'
 import { ListSkeleton } from './ListSkeleton'
 import { TrashRow } from './TrashRow'
@@ -11,7 +14,10 @@ import { TrashRow } from './TrashRow'
 export function BookmarkList({ trashed = false }: { trashed?: boolean }) {
   const { phase, rows, hasNextPage, isLoadingMore, loadMoreFailed, fetchNext, retry } = useBookmarkList({ trashed })
   const sentinelRef = useVisibleSentinel(fetchNext)
-  const Row = trashed ? TrashRow : BookmarkRow
+  // The edit dialog lives here, not in a row: a failed save refreshes the list, which may drop the
+  // row (gone or trashed), and the dialog with its message must stay. It keeps its own copy.
+  const [editing, setEditing] = useState<BookmarkSummary | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
 
   let body
   if (phase === 'signed-out') {
@@ -53,9 +59,20 @@ export function BookmarkList({ trashed = false }: { trashed?: boolean }) {
     body = (
       <>
         <div className="bookmark-list">
-          {rows.map((bookmark) => (
-            <Row key={bookmark.id} bookmark={bookmark} />
-          ))}
+          {rows.map((bookmark) =>
+            trashed ? (
+              <TrashRow key={bookmark.id} bookmark={bookmark} />
+            ) : (
+              <BookmarkRow
+                key={bookmark.id}
+                bookmark={bookmark}
+                onEdit={(b) => {
+                  setEditing(b)
+                  setEditOpen(true)
+                }}
+              />
+            ),
+          )}
           {isLoadingMore && <ListSkeleton rows={2} />}
         </div>
         {loadMoreFailed && (
@@ -74,6 +91,7 @@ export function BookmarkList({ trashed = false }: { trashed?: boolean }) {
   return (
     <section aria-label={trashed ? 'Trash' : 'Bookmarks'} aria-busy={phase === 'loading'}>
       {body}
+      {editing && <BookmarkEditor key={editing.id} bookmark={editing} open={editOpen} onClose={() => setEditOpen(false)} />}
     </section>
   )
 }

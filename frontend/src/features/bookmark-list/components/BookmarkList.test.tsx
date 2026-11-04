@@ -368,11 +368,7 @@ describe('BookmarkList (row delete)', () => {
 })
 
 describe('BookmarkList (row edit that finds the bookmark gone)', () => {
-  // Known bug (report: bookmark-actions.report.md, Blocking 1). The edit dialog lives inside the
-  // row, so the refresh that follows a 404 or 409 removes the row and the dialog with it, and the
-  // message is never seen. `it.fails` passes while that is so; when it is fixed this test starts
-  // failing: change `it.fails` to `it`.
-  it.fails('keeps the dialog open with its message when Save gets a 404 and the refreshed list no longer has the row', async () => {
+  it('keeps the dialog open with its message when Save gets a 404 and the refreshed list no longer has the row', async () => {
     const user = userEvent.setup()
     vi.mocked(updateBookmark).mockReset().mockRejectedValue(new ApiError(404, null, null))
     list.mockResolvedValueOnce(page([bookmark({ id: 'a', title: 'Gone soon' })])).mockResolvedValue(page([]))
