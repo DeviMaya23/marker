@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
-import { listBookmarks } from '../../../lib/api/bookmarks'
+import { deleteBookmark, listBookmarks } from '../../../lib/api/bookmarks'
 import { ToastProvider } from '../../../components/ui/Toast'
 import { bookmark, page } from '../../../test/builders'
 import { BookmarkList } from './BookmarkList'
 
-vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn() }))
+vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn(), deleteBookmark: vi.fn() }))
 
 const list = vi.mocked(listBookmarks)
 
@@ -341,5 +341,28 @@ describe('BookmarkList (trash)', () => {
       { trashed: true, cursor: undefined },
       { trashed: true, cursor: 'c1' },
     ])
+  })
+})
+
+describe('BookmarkList (row delete)', () => {
+  it('keeps the row until the server has answered and the list has been refetched', async () => {
+    const user = userEvent.setup()
+    let answer: () => void = () => {}
+    vi.mocked(deleteBookmark).mockReset().mockImplementation(() => new Promise<void>((resolve) => (answer = resolve)))
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a', title: 'Doomed' })])).mockResolvedValue(page([]))
+    renderList()
+    await screen.findByText('Doomed')
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Doomed' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
+    await waitFor(() => expect(deleteBookmark).toHaveBeenCalledTimes(1))
+    expect(screen.getByText('Doomed')).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(1)
+
+    answer()
+    expect(await screen.findByText('No bookmarks yet')).toBeInTheDocument()
+    expect(screen.queryByText('Doomed')).not.toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Moved to trash.')).toBeInTheDocument()
   })
 })

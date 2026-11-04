@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router'
-import { useToast } from '../../components/ui/Toast'
+import { useToast } from '../../components/ui/useToast'
 import { goTo } from '../goTo'
 import { loginHref } from '../loginHref'
 import { describeFailure, type BookmarkAction, type FailureDisplay } from './describeFailure'

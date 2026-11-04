@@ -3,9 +3,7 @@ import { NOTE_MAX, TITLE_MAX } from './describeFailure'
 
 /** Length in code points, as the server counts: an emoji is 1 (`.length` would say 2). */
 export function codePointLength(text: string): number {
-  let count = 0
-  for (const _ of text) count++
-  return count
+  return Array.from(text).length
 }
 
 export type EditValues = { title: string; note: string | null }

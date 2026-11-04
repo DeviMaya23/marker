@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ToastProvider, useToast, type ToastOptions } from './Toast'
+import { ToastProvider } from './Toast'
+import { useToast, type ToastOptions } from './useToast'
 
 function Shower({ message, options }: { message: string; options?: ToastOptions }) {
   const toast = useToast()
