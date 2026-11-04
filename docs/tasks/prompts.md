@@ -17,7 +17,7 @@ The branch to continue from is found for you when you leave its placeholder out:
 | 1 | Builder | `builder.txt` | `main` | | `TASK` |
 | 2 | Verifier, first pass | `verify-1.txt` | the builder's branch | has `<TASK>.plan.md`, no `<TASK>.report.md` | `TASK`, optional `BUILDER_BRANCH` |
 | 3 | Fix round (builder) | `fix.txt` | the verifier's branch | has `<TASK>.report.md` | `TASK`, optional `VERIFIER_BRANCH`, optional `ALREADY_FIXED` |
-| 4 | Verifier, second pass | `verify-2.txt` | the fix round's branch | has `<TASK>.report.md`; the PR number comes from `gh` | `TASK`, optional `FIX_BRANCH`, optional `PR_NUMBER` |
+| 4 | Verifier, second pass | `verify-2.txt` | the fix round's branch | has `<TASK>.report.md` | `TASK`, optional `FIX_BRANCH` |
 
 Example run:
 
@@ -27,4 +27,6 @@ bash scripts/stage.sh builder TASK=save-a-url
 bash scripts/stage.sh verify-1 TASK=save-a-url
 ```
 
-Stop rules: two verification rounds at most. Only Blocking findings are fixed in the round; Non-blocking ones go to `docs/tasks/backlog.md`. The second pass posts its results as a comment on the PR, not as a file.
+Stop rules: two verification rounds at most. Only Blocking findings are fixed in the round; Non-blocking ones go to `docs/tasks/backlog.md`. The second pass puts its results in the PR body, not in a file.
+
+Pull requests: one per slice, opened by the last verifier in the chain and only when that verifier finds nothing Blocking. A clean first pass opens it from the verifier's branch; after a fix round, the second pass opens it from its own branch (which carries the fix commits). A verifier that finds Blocking issues opens nothing. The agents open it through the REST API (`gh api`), since cloud sessions cannot use GraphQL, and fill the body from `.github/pull_request_template.md`. Reviewing, testing by hand and merging stay with you. A feature split across a back-end and a front-end slice merges back end first, so `main` works at every step; note the pairing under "Tested together with" in the PR.
