@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react'
-import { Inbox, Trash2, TriangleAlert } from 'lucide-react'
+import { Inbox, Search, Trash2, TriangleAlert } from 'lucide-react'
 import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { useBookmarkList } from '../hooks/useBookmarkList'
+import { useAppliedSearch } from '../hooks/useListSearch'
 import { useVisibleSentinel } from '../hooks/useVisibleSentinel'
 import type { BookmarkSummary } from '../../../lib/api/bookmarks'
 import { BookmarkEditor } from './BookmarkEditor'
@@ -23,9 +24,14 @@ type Props = {
 
 /** The live list, or the read-only trash with `trashed`, paged as the user scrolls. */
 export function BookmarkList({ trashed = false, folderId, empty, notFound }: Props) {
+  // The search comes from the URL; the trash is never searched, so it ignores it.
+  const applied = useAppliedSearch()
+  const search = trashed ? undefined : applied
+  const searching = search !== undefined && search.q !== ''
   const { phase, rows, hasNextPage, isLoadingMore, loadMoreFailed, fetchNext, retry } = useBookmarkList({
     trashed,
     folderId,
+    search,
   })
   const sentinelRef = useVisibleSentinel(fetchNext)
   // The edit dialog lives here, not in a row: a failed save refreshes the list, which may drop the
@@ -52,12 +58,22 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
       <StatePanel
         icon={<TriangleAlert size={28} aria-hidden="true" />}
         title="Something went wrong"
-        description={trashed ? "Couldn't load the trash." : "Couldn't load your bookmarks."}
+        description={
+          trashed ? "Couldn't load the trash." : searching ? "Couldn't search your bookmarks." : "Couldn't load your bookmarks."
+        }
         action={
           <button type="button" className="btn" onClick={retry}>
             Try again
           </button>
         }
+      />
+    )
+  } else if (phase === 'empty' && searching) {
+    body = (
+      <StatePanel
+        icon={<Search size={28} aria-hidden="true" />}
+        title={`No bookmarks match “${search.q}”.`}
+        description={`Search matches whole words. Try another word${search.includeNotes ? '.' : ', or include notes.'}`}
       />
     )
   } else if (phase === 'empty' && empty) {
@@ -114,7 +130,7 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
   }
 
   return (
-    <section aria-label={trashed ? 'Trash' : 'Bookmarks'} aria-busy={phase === 'loading'}>
+    <section aria-label={trashed ? 'Trash' : searching ? 'Search results' : 'Bookmarks'} aria-busy={phase === 'loading'}>
       {body}
       {editing && <BookmarkEditor key={editing.id} bookmark={editing} open={editOpen} onClose={() => setEditOpen(false)} />}
       {moving && <MoveBookmarkDialog key={moving.id} bookmark={moving} open={moveOpen} onClose={() => setMoveOpen(false)} />}
