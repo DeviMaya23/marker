@@ -23,7 +23,7 @@ export function MoveFolderDialog({ open, folder, onClose }: Props) {
         retry: () => void folders.refetch(),
       }}
       working={move.pending}
-      failure={move.failure && { signedOut: move.failure.kind === 'signed-out', message: move.failure.message }}
+      failure={move.failure && { message: move.failure.message }}
       onConfirm={async (target) => (await move.move(target)) !== null}
       onClose={() => {
         move.reset()

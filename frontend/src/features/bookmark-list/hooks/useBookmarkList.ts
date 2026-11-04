@@ -1,16 +1,16 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { ApiError } from '../../../lib/api/ApiError'
+import { ApiError, isUnauthorized } from '../../../lib/api/ApiError'
 import { listBookmarks, type BookmarkSummary } from '../../../lib/api/bookmarks'
 import { bookmarkListKey } from '../../../lib/bookmarks/queryKeys'
 import type { ListSearch } from '../lib/listSearch'
 
 /**
- * What the screen shows: `loading` the first page, `signed-out` after any 401, `not-found` when
+ * What the screen shows: `loading` the first page (also a 401 with no data: the login redirect is on its way), `not-found` when
  * the list itself answered 404 (a folder that does not exist), `error` when the first page
  * failed, `empty` when there is nothing, otherwise `ready` (rows, maybe with a failed later page).
  */
-export type ListPhase = 'loading' | 'signed-out' | 'not-found' | 'error' | 'empty' | 'ready'
+export type ListPhase = 'loading' | 'not-found' | 'error' | 'empty' | 'ready'
 
 export type BookmarkListState = {
   phase: ListPhase
@@ -71,10 +71,13 @@ export function useBookmarkList({
     [listId],
   )
 
+  // A 401 is silent and ends all further requests; the login redirect is on its way.
+  const unauthorized = isUnauthorized(error)
+
   const fetchNext = useCallback(() => {
-    if (!hasNextPage || isFetching) return
+    if (!hasNextPage || isFetching || unauthorized) return
     run(() => fetchNextPage())
-  }, [hasNextPage, isFetching, fetchNextPage, run])
+  }, [hasNextPage, isFetching, unauthorized, fetchNextPage, run])
 
   const retry = useCallback(() => {
     run(() => (data && query.isFetchNextPageError ? fetchNextPage() : refetch()))
@@ -86,13 +89,12 @@ export function useBookmarkList({
     return (data?.pages ?? []).flatMap((p) => p.items).filter((b) => !seen.has(b.id) && seen.add(b.id))
   }, [data])
 
-  const signedOut = error instanceof ApiError && error.status === 401
   let phase: ListPhase
-  if (signedOut) phase = 'signed-out'
+  if (!data && unauthorized) phase = 'loading'
   else if (!data && error instanceof ApiError && error.status === 404) phase = 'not-found'
   else if (query.isPending) phase = 'loading'
   else if (!data) phase = 'error'
-  else if (rows.length === 0 && !hasNextPage && !error) phase = 'empty'
+  else if (rows.length === 0 && !hasNextPage && (!error || unauthorized)) phase = 'empty'
   else phase = 'ready'
 
   return {
@@ -100,7 +102,7 @@ export function useBookmarkList({
     rows,
     hasNextPage,
     isLoadingMore: query.isFetchingNextPage,
-    loadMoreFailed: Boolean(data) && error !== null && !signedOut,
+    loadMoreFailed: Boolean(data) && error !== null && !unauthorized,
     fetchNext,
     retry,
   }

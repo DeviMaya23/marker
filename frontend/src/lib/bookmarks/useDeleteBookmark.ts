@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { ApiError } from '../api/ApiError'
+import { isUnauthorized } from '../api/ApiError'
 import { deleteBookmark, restoreBookmark, updateBookmark } from '../api/bookmarks'
 import { useBookmarkFeedback } from './useBookmarkFeedback'
 
@@ -36,12 +36,9 @@ export function useDeleteBookmark(
       try {
         await updateBookmark(id, { folder_id: folder })
       } catch (error) {
-        if (error instanceof ApiError && error.status === 401) {
-          toastFailure(error, 'move') // refreshes by itself
-        } else {
-          void refresh()
-          toast.show(RESTORED_BUT_NOT_MOVED, { tone: 'neutral' })
-        }
+        if (isUnauthorized(error)) return
+        void refresh()
+        toast.show(RESTORED_BUT_NOT_MOVED, { tone: 'neutral' })
         return
       }
       void refresh()

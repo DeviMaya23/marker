@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { emptyTrash } from '../api/bookmarks'
+import { isUnauthorized } from '../api/ApiError'
 import { describeFailure, type FailureDisplay } from './describeFailure'
 import { useBookmarkFeedback } from './useBookmarkFeedback'
 
@@ -26,6 +27,7 @@ export function useEmptyTrash() {
     try {
       ;({ deleted } = await emptyTrash())
     } catch (error) {
+      if (isUnauthorized(error)) return false
       const display = describeFailure(error, 'empty')
       setFailure(display)
       if (display.refresh) void refresh()

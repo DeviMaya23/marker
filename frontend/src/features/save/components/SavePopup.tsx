@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Bookmark, Check } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import type { CreateBookmarkRequest } from '../../../lib/api/bookmarks'
 import { TITLE_MAX_LENGTH } from '../../../lib/bookmarks/saveFailure'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
@@ -68,7 +67,7 @@ export function SavePopup() {
       if ((event.key === 'Escape' || event.key === 'Enter') && ownedBySelect.current) return
       if (event.key === 'Escape') {
         if (alerting) dismiss()
-        else if (phase === 'form' || phase === 'needs-login') close()
+        else if (phase === 'form') close()
         else return
         event.preventDefault()
       } else if (event.key === 'Enter') {
@@ -138,7 +137,7 @@ export function SavePopup() {
               onOpenChange={(open) => {
                 selectOpen.current = open
               }}
-              folders={{ items: folders.data, pending: folders.isPending, retry: () => void folders.refetch() }}
+              folders={{ items: folders.data, pending: folders.isPending, error: folders.error, retry: () => void folders.refetch() }}
             />
           </div>
           <div className="save-popup__footer">
@@ -157,17 +156,6 @@ export function SavePopup() {
         </div>
       )}
 
-      {phase === 'needs-login' && (
-        <div className="save-popup__body">
-          <SignedOutMessage />
-          <div className="save-popup__footer">
-            <button className="btn btn--ghost" onClick={close}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {phase === 'saved' && (
         <div className="save-popup__body save-popup__saved">
           <Check size={22} aria-hidden="true" />
@@ -175,7 +163,7 @@ export function SavePopup() {
         </div>
       )}
 
-      {alerting && failure && failure.kind !== 'signed-out' && (
+      {alerting && failure && (
         <div className="save-popup__body">
           <Banner tone={failure.kind === 'duplicate' ? 'info' : 'error'} role="alert">
             {failure.message}

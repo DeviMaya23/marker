@@ -3,7 +3,6 @@ import type { BookmarkChanges } from '../../lib/api/bookmarks'
 import { NOTE_MAX, TITLE_MAX, type FailureDisplay } from '../../lib/bookmarks/describeFailure'
 import { codePointLength, computeChanges, overLimits } from '../../lib/bookmarks/editChanges'
 import { Dialog } from './Dialog'
-import { SignedOutMessage } from './SignedOutMessage'
 
 type Props = {
   open: boolean
@@ -71,8 +70,7 @@ function EditForm({
           void submit()
         }}
       >
-        {failure?.signedOut && <SignedOutMessage />}
-        {failure && !failure.signedOut && failure.message && (
+        {failure && failure.message && (
           <div className="banner banner--error" role="alert">
             {failure.message}
           </div>

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { updateBookmark } from '../api/bookmarks'
 import type { Folder } from '../api/folders'
+import { isUnauthorized } from '../api/ApiError'
 import { describeFailure, type FailureDisplay } from './describeFailure'
 import { useBookmarkFeedback } from './useBookmarkFeedback'
 
@@ -30,6 +31,7 @@ export function useMoveBookmark(id: string) {
       try {
         await updateBookmark(id, { folder_id: target ? target.id : null })
       } catch (error) {
+        if (isUnauthorized(error)) return false
         const display = describeFailure(error, 'move')
         setFailure(display)
         if (display.refresh) void refresh()

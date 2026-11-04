@@ -2,7 +2,6 @@ import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
 import { BOOKMARK_LIST_KEY } from '../../../lib/bookmarks/queryKeys'
 import { FOLDERS_KEY } from '../../../lib/folders/queryKeys'
@@ -66,7 +65,6 @@ export function AddUrlForm({ folderId }: { folderId?: string }) {
         )}
       </div>
 
-      {failure?.kind === 'signed-out' && <SignedOutMessage />}
 
       {failure?.kind === 'duplicate' && (
         <Banner tone="info" role="alert">

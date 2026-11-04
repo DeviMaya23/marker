@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { FolderPlus, TriangleAlert } from 'lucide-react'
 import { matchPath, useLocation, useNavigate } from 'react-router'
 import { MoveFolderDialog } from '../../../components/ui/MoveFolderDialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
-import { ApiError } from '../../../lib/api/ApiError'
+import { isUnauthorized } from '../../../lib/api/ApiError'
 import type { Folder } from '../../../lib/api/folders'
 import { buildFolderTree } from '../../../lib/folders/buildFolderTree'
 import { useFolders } from '../../../lib/folders/useFolders'
@@ -37,7 +36,7 @@ function SkeletonRows() {
 
 /**
  * The sidebar's "Folders" section: heading with "New folder", the tree in its loading, empty,
- * failed and signed-out states, and the create, rename, move and delete dialogs.
+ * failed state, and the create, rename, move and delete dialogs.
  */
 export function FolderSection() {
   const folders = useFolders()
@@ -73,9 +72,7 @@ export function FolderSection() {
   }
 
   let body
-  if (folders.error instanceof ApiError && folders.error.status === 401 && !folders.data) {
-    body = <SignedOutMessage />
-  } else if (folders.isPending) {
+  if (folders.isPending || (isUnauthorized(folders.error) && !folders.data)) {
     body = <SkeletonRows />
   } else if (!folders.data) {
     body = (

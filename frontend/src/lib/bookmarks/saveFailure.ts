@@ -4,7 +4,6 @@ export const URL_MAX_LENGTH = 2048
 export const TITLE_MAX_LENGTH = 300
 
 export type SaveFailure =
-  | { kind: 'signed-out' }
   | { kind: 'duplicate'; message: string; existingBookmarkId: string | null; inTrash: boolean }
   /** The input itself is wrong (not an http(s) link, or too long): a message for the field. */
   | { kind: 'invalid-input'; message: string }
@@ -33,8 +32,6 @@ function tooLongMessage(err: ApiError): string | null {
 /** Maps whatever `createBookmark` threw to what a save screen shows. Pure. */
 export function describeSaveFailure(error: unknown): SaveFailure {
   if (!(error instanceof ApiError)) return { kind: 'error', message: GENERIC }
-
-  if (error.status === 401) return { kind: 'signed-out' }
 
   const code = error.problem?.code
   if (error.status === 409 && code === 'duplicate_bookmark') {

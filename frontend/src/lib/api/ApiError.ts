@@ -23,3 +23,8 @@ export class ApiError extends Error {
     this.retryAfter = retryAfter
   }
 }
+
+/** True when `error` is an `ApiError` with status 401 (the login redirect is already on its way). */
+export function isUnauthorized(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
