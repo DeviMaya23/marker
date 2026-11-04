@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"marker/internal/api"
 	"marker/internal/domain"
@@ -213,12 +214,11 @@ func TestListBookmarks_CursorLengthBoundary(t *testing.T) {
 	require.Zero(t, spy.listCalls)
 }
 
-func TestListBookmarks_SearchAndFolderAreNotImplemented(t *testing.T) {
+func TestListBookmarks_SearchIsNotImplemented(t *testing.T) {
 	for _, query := range []string{
 		"?q=go",
-		"?folder_id=" + uuid.NewString(),
-		"?trashed=false&folder_id=" + uuid.NewString(),
 		"?q=go&include_notes=true",
+		"?q=go&folder_id=" + uuid.NewString(),
 	} {
 		t.Run(query, func(t *testing.T) {
 			spy := &bookmarkSpy{}
@@ -237,4 +237,51 @@ func TestListBookmarks_UsecaseValidationErrorIs422(t *testing.T) {
 func TestListBookmarks_UnexpectedErrorIs500(t *testing.T) {
 	spy := &bookmarkSpy{err: http.ErrAbortHandler}
 	requireProblem(t, listBookmarks(spy, ""), http.StatusInternalServerError, "internal_error")
+}
+
+func TestListBookmarks_FolderFilter(t *testing.T) {
+	folder := uuid.New()
+
+	t.Run("folder_id alone reaches the usecase", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		rec := listBookmarks(spy, "?trashed=false&folder_id="+folder.String())
+		require.Equal(t, http.StatusOK, rec.Code)
+		require.Equal(t, 1, spy.listCalls)
+		require.Equal(t, &folder, spy.gotList.FolderID)
+		require.False(t, spy.gotList.Trashed)
+	})
+
+	t.Run("no folder_id reaches the usecase as nil", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		require.Equal(t, http.StatusOK, listBookmarks(spy, "").Code)
+		require.Nil(t, spy.gotList.FolderID)
+	})
+
+	t.Run("an unknown folder is 404", func(t *testing.T) {
+		spy := &bookmarkSpy{err: gorm.ErrRecordNotFound}
+		requireProblem(t, listBookmarks(spy, "?folder_id="+folder.String()), http.StatusNotFound, api.ErrorCodeNotFound)
+	})
+
+	t.Run("with trashed=true is 422", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		requireListProblem(t, listBookmarks(spy, "?trashed=true&folder_id="+folder.String()), fieldErr{"folder_id", "not_allowed_with_trashed"})
+		require.Zero(t, spy.listCalls)
+	})
+
+	t.Run("a bad cursor is 422 before the folder is looked up", func(t *testing.T) {
+		spy := &bookmarkSpy{err: gorm.ErrRecordNotFound}
+		requireListProblem(t, listBookmarks(spy, "?cursor=garbage&folder_id="+folder.String()), fieldErr{"cursor", "invalid"})
+		require.Zero(t, spy.listCalls)
+	})
+
+	t.Run("a bad limit is 422 before everything", func(t *testing.T) {
+		spy := &bookmarkSpy{}
+		requireListProblem(t, listBookmarks(spy, "?limit=0&trashed=true&folder_id="+folder.String()), fieldErr{"limit", "out_of_range"})
+	})
+
+	t.Run("a non-empty q is 501 even with a folder", func(t *testing.T) {
+		spy := &bookmarkSpy{err: gorm.ErrRecordNotFound}
+		requireProblem(t, listBookmarks(spy, "?q=go&folder_id="+folder.String()), http.StatusNotImplemented, "not_implemented")
+		require.Zero(t, spy.listCalls)
+	})
 }
