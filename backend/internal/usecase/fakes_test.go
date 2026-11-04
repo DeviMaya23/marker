@@ -85,6 +85,11 @@ type fakeBookmarkStore struct {
 	log       *[]string
 	// lastList is the query the last List call received.
 	lastList domain.BookmarkListQuery
+	// lastSearch is the query the last Search call received; searchCalls counts the calls.
+	lastSearch  domain.BookmarkSearchQuery
+	searchCalls int
+	// searchRows are the rows Search returns, from the offset, up to the limit.
+	searchRows []domain.Bookmark
 	// createErr, if set, is returned by Create (after nothing is stored).
 	createErr error
 	// updateErr, if set, is returned by Update after nothing is stored (for example a
@@ -276,6 +281,21 @@ func (f *fakeBookmarkStore) List(_ context.Context, q domain.BookmarkListQuery) 
 		}
 		rows = rest
 	}
+	if len(rows) > q.Limit {
+		rows = rows[:q.Limit]
+	}
+	return rows, nil
+}
+
+// Search records the query and serves searchRows from the offset, up to the limit.
+func (f *fakeBookmarkStore) Search(_ context.Context, q domain.BookmarkSearchQuery) ([]domain.Bookmark, error) {
+	f.lastSearch = q
+	f.searchCalls++
+	rows := f.searchRows
+	if q.Offset >= len(rows) {
+		return nil, nil
+	}
+	rows = rows[q.Offset:]
 	if len(rows) > q.Limit {
 		rows = rows[:q.Limit]
 	}

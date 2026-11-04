@@ -24,6 +24,9 @@ type BookmarkStore interface {
 	// List returns up to q.Limit of the user's bookmarks as summaries (no page content),
 	// starting strictly after q.After, in the order of q.Mode.
 	List(ctx context.Context, q domain.BookmarkListQuery) ([]domain.Bookmark, error)
+	// Search returns up to q.Limit of the user's live bookmarks that match q.Query, best
+	// first, starting at q.Offset, as summaries (no page content).
+	Search(ctx context.Context, q domain.BookmarkSearchQuery) ([]domain.Bookmark, error)
 	// Get returns the user's bookmark, live or trashed, without its stored text.
 	Get(ctx context.Context, userID, id uuid.UUID) (domain.Bookmark, error)
 	// Update writes only the fields of u that are set, refreshes the search vector when

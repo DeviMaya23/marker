@@ -1,6 +1,10 @@
 package domain
 
-import "github.com/google/uuid"
+import (
+	"strings"
+
+	"github.com/google/uuid"
+)
 
 // DefaultListLimit is the page size when a list request names none.
 const DefaultListLimit = 50
@@ -33,7 +37,7 @@ type ListBookmarksInput struct {
 }
 
 // IsSearch reports whether the request is a search.
-func (in ListBookmarksInput) IsSearch() bool { return !in.Trashed && in.Query != "" }
+func (in ListBookmarksInput) IsSearch() bool { return !in.Trashed && strings.TrimSpace(in.Query) != "" }
 
 // Mode is the list the request reads.
 func (in ListBookmarksInput) Mode() ListMode {
