@@ -57,7 +57,7 @@ func (s *folderSpy) Delete(_ context.Context, userID, id uuid.UUID) (domain.Fold
 }
 
 func folderRouter(spy *folderSpy) *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(&bookmarkSpy{}, spy, nil, nil), Auth: authFor{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(&bookmarkSpy{}, spy, nil, nil, nil), Auth: authFor{}, AppOrigin: testOrigin})
 }
 
 func sendFolder(e *echo.Echo, method, path, body string) *httptest.ResponseRecorder {
