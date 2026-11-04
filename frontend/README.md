@@ -76,4 +76,4 @@ export default defineConfig([
 
 ## Linting stylesheets
 
-`npm run lint:css` runs stylelint (with `stylelint-config-recommended` only) over `src/**/*.css` and exits non-zero when anything is reported as an error. `make lint-css` runs the same command. It is not yet part of `make check`; the `css-lint-cleanup` task wires it in.
+`npm run lint:css` runs stylelint (with `stylelint-config-recommended` only) over `src/**/*.css` and exits non-zero when anything is reported as an error. `make lint-css` runs the same command. It is part of `make check` (through `make lint`).
