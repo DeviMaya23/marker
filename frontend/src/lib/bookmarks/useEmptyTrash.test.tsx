@@ -44,7 +44,7 @@ describe('useEmptyTrash', () => {
     await act(async () => finish(4))
     expect(result.current.pending).toBe(false)
     expect(await screen.findByText('Permanently deleted 4 bookmarks.')).toBeInTheDocument()
-    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark']])
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark'], ['folders']])
   })
 
   it.each([

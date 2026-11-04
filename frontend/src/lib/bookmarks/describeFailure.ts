@@ -4,7 +4,7 @@ export const TITLE_MAX = 300
 export const NOTE_MAX = 500
 
 /** Which call failed; the same failure reads differently on each. */
-export type BookmarkAction = 'edit' | 'delete' | 'restore' | 'empty'
+export type BookmarkAction = 'edit' | 'delete' | 'restore' | 'empty' | 'move'
 
 export type FailureDisplay = {
   /** A 401: the screen shows the signed-out message (a toast adds a "Log in" action). */
@@ -24,6 +24,7 @@ const GENERIC: Record<BookmarkAction, string> = {
   delete: "Couldn't move it to the trash.",
   restore: "Couldn't restore it.",
   empty: "Couldn't empty the trash.",
+  move: "Couldn't move the bookmark.",
 }
 
 export const LOGGED_OUT_TOAST = "You're logged out."
@@ -39,7 +40,7 @@ function result(message: string, tone: 'neutral' | 'error' = 'error'): FailureDi
   return { signedOut: false, message, tone, fields: {}, refresh: true }
 }
 
-/** Maps whatever one of the four calls threw to what the screen shows. Pure. */
+/** Maps whatever one of the five calls threw to what the screen shows. Pure. */
 export function describeFailure(error: unknown, action: BookmarkAction): FailureDisplay {
   const generic = result(GENERIC[action])
   if (!(error instanceof ApiError)) return generic
@@ -53,11 +54,13 @@ export function describeFailure(error: unknown, action: BookmarkAction): Failure
   if (status === 429) return result(rateLimitMessage(error.retryAfter))
 
   if (status === 404 && action !== 'empty') {
+    if (action === 'move') return result('That bookmark or folder no longer exists.')
     return result(action === 'edit' ? 'This bookmark no longer exists.' : 'That bookmark no longer exists.')
   }
   if (status === 409 && code === 'bookmark_in_trash') {
     if (action === 'edit') return result("This bookmark is in the trash and can't be edited.")
     if (action === 'delete') return result('It was already in the trash.', 'neutral')
+    if (action === 'move') return result("This bookmark is in the trash and can't be moved.")
   }
   if (status === 409 && code === 'bookmark_not_in_trash' && action === 'restore') {
     return result('It was already restored.', 'neutral')

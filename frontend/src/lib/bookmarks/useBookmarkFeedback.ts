@@ -5,6 +5,7 @@ import { useToast } from '../../components/ui/useToast'
 import { goTo } from '../goTo'
 import { loginHref } from '../loginHref'
 import { describeFailure, type BookmarkAction, type FailureDisplay } from './describeFailure'
+import { FOLDERS_KEY } from '../folders/queryKeys'
 import { BOOKMARK_LIST_KEY, bookmarkKey } from './queryKeys'
 
 /**
@@ -16,12 +17,16 @@ export function useBookmarkFeedback(id?: string) {
   const toast = useToast()
   const { pathname, search } = useLocation()
 
-  /** Invalidates both lists and the bookmark page's query. */
+  /**
+   * Invalidates every list, the bookmark page's query and the folder list (the sidebar's counts
+   * change with every bookmark change).
+   */
   const refresh = useCallback(
     () =>
       Promise.all([
         client.invalidateQueries({ queryKey: BOOKMARK_LIST_KEY }),
         client.invalidateQueries({ queryKey: bookmarkKey(id) }),
+        client.invalidateQueries({ queryKey: FOLDERS_KEY }),
       ]),
     [client, id],
   )

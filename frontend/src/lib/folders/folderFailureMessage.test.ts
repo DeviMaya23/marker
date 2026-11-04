@@ -17,6 +17,7 @@ const required = api(422, problem('validation_error', [{ field: 'name', code: 'r
 const tooLong = api(422, problem('validation_error', [{ field: 'name', code: 'too_long' }]))
 const conflict = api(409, problem('folder_name_conflict'))
 const depth = api(422, problem('folder_depth_exceeded'))
+const cycle = api(422, problem('folder_cycle'))
 
 describe('folderFailureMessage', () => {
   it.each<[string, FolderAction, unknown, FolderFailure]>([
@@ -43,6 +44,15 @@ describe('folderFailureMessage', () => {
     ['create: 422 with an unknown code', 'create', api(422, problem('validation_error')), dialog("Couldn't create the folder.")],
     ['create: 409 with another code', 'create', api(409, problem('duplicate_bookmark')), dialog("Couldn't create the folder.")],
     ['delete: a 409 is not a name conflict', 'delete', conflict, dialog("Couldn't delete the folder.")],
+    ['move: 404', 'move', api(404, problem('not_found')), dialog('That folder no longer exists.')],
+    ['move: 409 name conflict is in the banner, not a field', 'move', conflict, dialog('A folder with this name already exists there.', false)],
+    ['move: 422 depth', 'move', depth, dialog('Folders can only be nested 3 levels deep.', false)],
+    ['move: 422 cycle', 'move', cycle, dialog("A folder can't be moved into itself or one of its own subfolders.", false)],
+    ['move: 422 with an unknown code', 'move', api(422, problem('validation_error')), dialog("Couldn't move the folder.", false)],
+    ['move: 409 with another code', 'move', api(409, problem('duplicate_bookmark')), dialog("Couldn't move the folder.")],
+    ['move: 401', 'move', api(401), signedOut],
+    ['move: other 500', 'move', api(500, problem('internal_error')), dialog("Couldn't move the folder.")],
+    ['move: network failure', 'move', new TypeError('Failed to fetch'), dialog("Couldn't move the folder.")],
   ])('%s', (_name, action, error, expected) => {
     expect(folderFailureMessage(action, error)).toEqual(expected)
   })
@@ -52,7 +62,7 @@ describe('folderFailureMessage', () => {
     ['zero', 0, 'Too many requests. Try again in about 0 seconds.'],
     ['null', null, 'Too many requests. Try again in a moment.'],
   ])('429 with Retry-After %s, on every action', (_name, retryAfter, message) => {
-    for (const action of ['create', 'rename', 'delete'] as const) {
+    for (const action of ['create', 'rename', 'delete', 'move'] as const) {
       expect(folderFailureMessage(action, api(429, problem('rate_limited'), retryAfter))).toEqual(dialog(message))
     }
   })
