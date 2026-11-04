@@ -16,6 +16,7 @@ info:
     - PATCH bodies: an omitted field is unchanged; `null` clears `note` or means root for `folder_id` / `parent_id`. Unknown fields are rejected with `422 validation_error`.
     - Errors use RFC 9457 problem details (`application/problem+json`) with a stable `code`. Clients branch on `code`, never on message text.
     - Every endpoint can also return `429 rate_limited` (NFR-16) and, for bodies, `413 payload_too_large` (64 KB, NFR-14). `GET /sync/version` is exempt from rate limiting.
+    - Every endpoint can also return `500 internal_error` for an unexpected failure. A request with a body that is not sent as `application/json` returns `415 unsupported_media_type`.
 servers:
   - url: /api/v1
 security:
@@ -86,6 +87,7 @@ paths:
                     detail: You can hold at most 1,000 bookmarks, including trashed ones.
                     code: bookmark_limit_reached
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '422':
           description: '`invalid_url` (malformed, or scheme is not http or https) or `validation_error` (any other bad input, including `too_long`).'
           content:
@@ -186,6 +188,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/BookmarkInTrash' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '422':
           description: Unknown or read-only field, or a value over its limit (`too_long`).
           content:
@@ -314,6 +317,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/FolderNameConflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '422':
           description: '`folder_depth_exceeded` or `validation_error`.'
           content:
@@ -353,6 +357,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/FolderNameConflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
         '422':
           description: '`folder_cycle`, `folder_depth_exceeded` or `validation_error`.'
           content:
@@ -645,6 +650,18 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    UnsupportedMediaType:
+      description: The request body was not sent as `application/json` (`unsupported_media_type`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: /errors/unsupported-media-type
+            title: Unsupported media type
+            status: 415
+            detail: Send the body as application/json.
+            code: unsupported_media_type
     RateLimited:
       description: Over a rate limit (`rate_limited`).
       headers:
@@ -672,7 +689,9 @@ components:
         - bookmark_not_in_trash
         - validation_error
         - payload_too_large
+        - unsupported_media_type
         - rate_limited
+        - internal_error
     Problem:
       type: object
       description: RFC 9457 problem details with a stable `code`.

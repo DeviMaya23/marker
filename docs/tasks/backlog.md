@@ -19,8 +19,6 @@ State as of `main` at `82b9c17`: 11 of the 17 operations are real (bookmarks: cr
 ## Backend: cross-cutting
 
 - Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all.
-- Error answers outside the contract: `internal_error` is missing from the contract's error codes, and a `POST` or `PATCH` on bookmarks without a JSON `Content-Type` answers `500 internal_error` where it should be `415` (Echo's binder error has no mapping in `handler/problem.go`; `bookmark-edit-trash` report, N1).
-- Update `CONVENTIONS.md` rule 2 with the exception for the fetch job's lookup by bookmark id (no `user_id`).
 - Kinde "Phase B": needs the Kinde domain, client ID and registered URLs. The client secret goes in a gitignored `.env`, never in chat or the repo.
 
 ## Frontend: screens and features not built
@@ -42,7 +40,6 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `bookmark-list`: `.page form` in `styles/app.css` gives every form inside `.page` a bottom margin; scope it to the add field.
 - `list-bookmarks`: `uuid.UUID` accepts `urn:uuid:…`, `{…}` and 32-hex ids in a cursor. Harmless; tighten only if it matters.
 - `list-bookmarks`: the cursor is decoded in the handler and again in the usecase. Documented in the plan; harmless.
-- `folders-api`: folder writes lock the `users` row first and then touch bookmark rows, while bookmark update and trash touch the bookmark row first and bump `users.version` last. A bookmark edit overlapping a folder delete on the same bookmark could deadlock, and Postgres would abort one with a 500. Not reproduced. Fix by taking the same lock first in the bookmark writes.
 - `folders-api`: sibling names compare with `lower()` under the database's default collation; exact for ASCII, collation-dependent for other scripts.
 - `folders-api`: the router test no longer lists the folder write routes in its CSRF rows (CSRF is router-wide, and other rows still cover it).
 - `bookmark-edit-trash`: the branch where the folder is deleted between the `EXISTS` check and the update in `repository.Update` has no test of its own; nearly unreachable.

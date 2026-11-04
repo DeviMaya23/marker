@@ -300,7 +300,7 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        ErrorCode: "unauthenticated" | "csrf_failed" | "not_found" | "invalid_url" | "duplicate_bookmark" | "bookmark_limit_reached" | "folder_depth_exceeded" | "folder_cycle" | "folder_name_conflict" | "bookmark_in_trash" | "bookmark_not_in_trash" | "validation_error" | "payload_too_large" | "rate_limited";
+        ErrorCode: "unauthenticated" | "csrf_failed" | "not_found" | "invalid_url" | "duplicate_bookmark" | "bookmark_limit_reached" | "folder_depth_exceeded" | "folder_cycle" | "folder_name_conflict" | "bookmark_in_trash" | "bookmark_not_in_trash" | "validation_error" | "payload_too_large" | "unsupported_media_type" | "rate_limited" | "internal_error";
         /** @description RFC 9457 problem details with a stable `code`. */
         Problem: {
             /** Format: uri-reference */
@@ -511,6 +511,24 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description The request body was not sent as `application/json` (`unsupported_media_type`). */
+        UnsupportedMediaType: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "type": "/errors/unsupported-media-type",
+                 *       "title": "Unsupported media type",
+                 *       "status": 415,
+                 *       "detail": "Send the body as application/json.",
+                 *       "code": "unsupported_media_type"
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Over a rate limit (`rate_limited`). */
         RateLimited: {
             headers: {
@@ -620,6 +638,7 @@ export interface operations {
                 };
             };
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             /** @description `invalid_url` (malformed, or scheme is not http or https) or `validation_error` (any other bad input, including `too_long`). */
             422: {
                 headers: {
@@ -717,6 +736,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["BookmarkInTrash"];
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             /** @description Unknown or read-only field, or a value over its limit (`too_long`). */
             422: {
                 headers: {
@@ -859,6 +879,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["FolderNameConflict"];
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             /** @description `folder_depth_exceeded` or `validation_error`. */
             422: {
                 headers: {
@@ -935,6 +956,7 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["FolderNameConflict"];
             413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
             /** @description `folder_cycle`, `folder_depth_exceeded` or `validation_error`. */
             422: {
                 headers: {
