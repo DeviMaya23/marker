@@ -72,6 +72,15 @@ describe('moveTargets', () => {
     expect(show(items)).toEqual(['z', '.m', '.b', 'a'])
   })
 
+  it('moving a whole depth-3 chain disables every row, including a depth-1 sibling, at the exact limit', () => {
+    // x(1) > y(2) > z(3) has height 3; a depth-1 target gives 1 + 3 = 4 > 3.
+    const items = [f('x', null, 1), f('y', 'x', 2), f('z', 'y', 3), f('t', null, 1)]
+    expect(show(items, 'x')).toEqual(['x-', '.y-', '..z-', 't-'])
+    // a depth-2 chain (height 2) fits under depth 1 (1 + 2 = 3, the exact limit).
+    const two = [f('x', null, 1), f('y', 'x', 2), f('t', null, 1)]
+    expect(show(two, 'x')).toEqual(['x-', '.y-', 't'])
+  })
+
   it('does not crash when the moved folder is not in the list', () => {
     const tree = buildFolderTree([f('a', null, 1)])
     const rows = moveTargets(tree, f('gone', null, 1))

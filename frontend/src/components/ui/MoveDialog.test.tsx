@@ -269,6 +269,18 @@ describe('MoveDialog', () => {
     })
   })
 
+  it('lists 30 folders and keeps a 100-character name whole in its title', async () => {
+    const long = 'n'.repeat(100)
+    const many = Array.from({ length: 30 }, (_, i) => folder({ id: `f${i}`, depth: 1, name: i === 29 ? long : `Folder ${i}` }))
+    const onConfirm = vi.fn().mockResolvedValue(true)
+    show(props({ folders: { items: many, pending: false, error: null, retry: vi.fn() }, onConfirm }))
+    expect(screen.getAllByRole('radio')).toHaveLength(31)
+    expect(screen.getByText(long)).toHaveAttribute('title', long)
+    await userEvent.click(radio(long))
+    await userEvent.click(moveButton())
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ id: 'f29' }))
+  })
+
   it('renders names as text, not HTML', () => {
     const hostile = folder({ id: 'x', name: '<img src=x onerror=alert(1)>' })
     show(props({ folders: { items: [hostile], pending: false, error: null, retry: vi.fn() } }))
