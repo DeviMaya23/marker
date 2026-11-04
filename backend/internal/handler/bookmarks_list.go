@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"marker/internal/api"
 	"marker/internal/domain"
@@ -11,7 +12,8 @@ import (
 )
 
 // ListBookmarks implements GET /api/v1/bookmarks; it shadows the 501 stub. This slice
-// serves the live list (optionally one folder and its subfolders) and the trash; search answers 501.
+// serves the live list (optionally one folder and its subfolders), the trash, and the
+// search of the live bookmarks.
 func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequestObject) (api.ListBookmarksResponseObject, error) {
 	auth, ok := middleware.AuthFrom(ctx)
 	if !ok {
@@ -29,7 +31,11 @@ func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequest
 	if p.Limit != nil {
 		in.Limit = *p.Limit
 	}
-	hasQ := p.Q != nil && strings.TrimSpace(*p.Q) != ""
+	q := ""
+	if p.Q != nil {
+		q = strings.TrimSpace(*p.Q)
+	}
+	hasQ := q != ""
 	hasFolder := p.FolderId != nil
 	in.FolderID = p.FolderId
 
@@ -47,13 +53,25 @@ func (s *Server) ListBookmarks(ctx context.Context, req api.ListBookmarksRequest
 		}
 		return listProblem(fields...), nil
 	}
-	if in.Cursor != "" {
-		if _, err := domain.DecodeCursor(in.Cursor, in.Mode()); err != nil {
-			return listProblem(domain.FieldError{Field: "cursor", Code: domain.FieldCodeInvalid}), nil
+	if utf8.RuneCountInString(q) > domain.MaxSearchQueryLength {
+		return listProblem(domain.FieldError{Field: "q", Code: domain.FieldCodeTooLong}), nil
+	}
+	if hasQ {
+		in.Query = q
+		if p.IncludeNotes != nil {
+			in.IncludeNotes = *p.IncludeNotes
 		}
 	}
-	if !in.Trashed && hasQ {
-		return nil, ErrNotImplemented
+	if in.Cursor != "" {
+		var err error
+		if in.IsSearch() {
+			_, err = domain.DecodeSearchCursor(in.Cursor, domain.SearchFingerprint(in.Query, in.IncludeNotes, in.FolderID))
+		} else {
+			_, err = domain.DecodeCursor(in.Cursor, in.Mode())
+		}
+		if err != nil {
+			return listProblem(domain.FieldError{Field: "cursor", Code: domain.FieldCodeInvalid}), nil
+		}
 	}
 
 	page, err := s.bookmarks.List(ctx, auth.UserID, in)
