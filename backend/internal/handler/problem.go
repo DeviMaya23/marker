@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -50,6 +51,7 @@ func ErrorHandler(err error, c echo.Context) {
 	}
 
 	problem := problemFor(err)
+	setRetryAfter(c, err)
 	if problem.Status >= http.StatusInternalServerError && !errors.Is(err, ErrNotImplemented) {
 		c.Logger().Error(err)
 	}
@@ -63,11 +65,23 @@ func ErrorHandler(err error, c echo.Context) {
 	_ = c.Blob(problem.Status, problemContentType, body)
 }
 
+// setRetryAfter sets the Retry-After header on the answer to a rate-limited request.
+func setRetryAfter(c echo.Context, err error) {
+	var limited *middleware.RateLimitedError
+	if errors.As(err, &limited) {
+		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(limited.RetryAfterSeconds()))
+	}
+}
+
 func problemFor(err error) api.Problem {
 	for _, m := range domainProblems {
 		if errors.Is(err, m.err) {
 			return newProblem(m.status, m.code, m.title)
 		}
+	}
+	var limited *middleware.RateLimitedError
+	if errors.As(err, &limited) {
+		return newProblem(http.StatusTooManyRequests, api.ErrorCodeRateLimited, "Too many requests")
 	}
 	if errors.Is(err, ErrNotImplemented) {
 		return newProblem(http.StatusNotImplemented, "not_implemented", "Not implemented")

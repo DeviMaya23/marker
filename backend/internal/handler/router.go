@@ -36,6 +36,9 @@ type Deps struct {
 
 	// DevLogin, if set, is served at GET /auth/dev-login. Set it only in development.
 	DevLogin echo.HandlerFunc
+
+	// Limits is the rate limiters (NFR-16). Nil means no limiting.
+	Limits *middleware.RateLimits
 }
 
 // NewRouter builds the Echo instance with every route registered.
@@ -56,6 +59,7 @@ func NewRouter(deps Deps) *echo.Echo {
 		echo:    e,
 		session: middleware.Session(deps.Auth),
 		csrf:    middleware.CSRF(deps.AppOrigin),
+		limits:  deps.Limits,
 	}
 	api.RegisterHandlersWithOptions(router, api.NewStrictHandler(deps.Server, nil), api.RegisterHandlersOptions{
 		OperationMiddlewares: map[string][]echo.MiddlewareFunc{
@@ -80,13 +84,17 @@ func NewRouter(deps Deps) *echo.Echo {
 // the cross-cutting rules from openapi.yaml are applied, once, for every operation:
 //   - the path prefix (/auth/... is served at the root, everything else under /api/v1),
 //   - the Session middleware, except on the public auth routes,
-//   - the CSRF middleware on every state-changing method.
+//   - the CSRF middleware on every state-changing method,
+//   - the rate limiters, after Session and CSRF so a request that fails either takes no
+//     token: the per-user ceiling (not on the sync poll), the saves limit on
+//     createBookmark, and the per-IP login limit on the two public login routes.
 //
 // Handlers therefore never check authentication or CSRF themselves.
 type policyRouter struct {
 	echo    *echo.Echo
 	session echo.MiddlewareFunc
 	csrf    echo.MiddlewareFunc
+	limits  *middleware.RateLimits // nil: no limiting
 }
 
 func (p policyRouter) add(method, path string, h echo.HandlerFunc, extra []echo.MiddlewareFunc) *echo.Route {
@@ -102,6 +110,19 @@ func (p policyRouter) add(method, path string, h echo.HandlerFunc, extra []echo.
 	switch method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		mw = append(mw, p.csrf)
+	}
+	if p.limits != nil {
+		switch {
+		case publicPaths[path]:
+			mw = append(mw, p.limits.Login())
+		case path == "/sync/version":
+			// The poll is exempt from every limit.
+		default:
+			mw = append(mw, p.limits.Ceiling())
+			if method == http.MethodPost && path == "/bookmarks" {
+				mw = append(mw, p.limits.Saves())
+			}
+		}
 	}
 	mw = append(mw, extra...)
 

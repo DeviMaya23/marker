@@ -11,6 +11,7 @@ import (
 
 	"marker/internal/adaptor"
 	"marker/internal/handler"
+	"marker/internal/handler/middleware"
 	"marker/internal/platform/config"
 	"marker/internal/platform/database"
 	"marker/internal/repository"
@@ -88,6 +89,10 @@ func main() {
 		Server:    handler.NewServer(bookmarkService, folderService, syncService, faviconService, usecase.NewAccountService(userRepo), loginFlow, cfg.CookieSecure()),
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
+		Limits:    middleware.NewRateLimits(cfg.ClientIPHeader, nil),
+	}
+	if cfg.Env == "production" && cfg.ClientIPHeader == "" {
+		log.Print("WARNING: CLIENT_IP_HEADER is empty: login limits use the connection address, which behind a proxy is the proxy's address (all users share one bucket)")
 	}
 	if cfg.AuthDevLogin {
 		// Config.Validate already refused this outside APP_ENV=development.

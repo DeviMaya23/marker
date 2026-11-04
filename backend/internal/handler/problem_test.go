@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/require"
 
 	"marker/internal/api"
 	"marker/internal/domain"
+	"marker/internal/handler/middleware"
 )
 
 func TestProblemFor(t *testing.T) {
@@ -40,5 +42,32 @@ func TestProblemFor(t *testing.T) {
 		ErrorHandler(errors.New("secret detail"), e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec))
 		requireProblem(t, rec, http.StatusInternalServerError, api.ErrorCodeInternalError)
 		require.NotContains(t, rec.Body.String(), "secret")
+	})
+}
+
+func TestErrorHandler_RateLimited(t *testing.T) {
+	tests := []struct {
+		delay time.Duration
+		want  string
+	}{
+		{200 * time.Millisecond, "1"},
+		{1500 * time.Millisecond, "2"},
+		{6 * time.Second, "6"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.delay.String(), func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			e := echo.New()
+			ErrorHandler(&middleware.RateLimitedError{Delay: tt.delay}, e.NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec))
+			requireProblem(t, rec, http.StatusTooManyRequests, api.ErrorCodeRateLimited)
+			require.Equal(t, tt.want, rec.Header().Get("Retry-After"))
+			require.Equal(t, "Too many requests", problemFor(&middleware.RateLimitedError{Delay: tt.delay}).Title)
+		})
+	}
+
+	t.Run("other errors carry no Retry-After", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		ErrorHandler(domain.ErrInvalidURL, echo.New().NewContext(httptest.NewRequest(http.MethodGet, "/", nil), rec))
+		require.Empty(t, rec.Header().Get("Retry-After"))
 	})
 }

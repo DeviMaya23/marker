@@ -25,6 +25,8 @@ type Config struct {
 	OIDCLogoutURL           string // the IdP logout endpoint
 	OIDCLogoutRedirectParam string // name of the logout endpoint's return-address parameter
 	AuthStateSecret         string // key that signs the login state; its own bytes, at least minStateSecretLen
+
+	ClientIPHeader string // header that carries the client address behind a proxy, for the login limit; empty uses the connection address
 }
 
 // minStateSecretLen is the least length in bytes of AUTH_STATE_SECRET.
@@ -46,6 +48,8 @@ func Load() Config {
 		OIDCLogoutURL:           getenv("OIDC_LOGOUT_URL", ""),
 		OIDCLogoutRedirectParam: getenv("OIDC_LOGOUT_REDIRECT_PARAM", "redirect"),
 		AuthStateSecret:         getenv("AUTH_STATE_SECRET", ""),
+
+		ClientIPHeader: getenv("CLIENT_IP_HEADER", ""),
 	}
 }
 
@@ -61,6 +65,10 @@ func (c Config) OIDCEnabled() bool {
 func (c Config) Validate() error {
 	if c.AuthDevLogin && c.Env != "development" {
 		return errors.New("AUTH_DEV_LOGIN=true is only allowed when APP_ENV=development")
+	}
+
+	if c.ClientIPHeader != "" && !isHeaderName(c.ClientIPHeader) {
+		return errors.New("CLIENT_IP_HEADER must be a header name: letters, digits and hyphens only")
 	}
 
 	if !c.OIDCEnabled() {
@@ -108,6 +116,21 @@ func (c Config) Validate() error {
 		return errors.New("APP_BASE_URL must be https when APP_ENV=production")
 	}
 	return nil
+}
+
+// isHeaderName reports whether s is one or more letters, digits or hyphens.
+func isHeaderName(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // absoluteHTTPURL reports whether raw is an http or https URL with a host.

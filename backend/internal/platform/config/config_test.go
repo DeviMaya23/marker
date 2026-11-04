@@ -153,3 +153,31 @@ func TestLoad_OIDCDefaults(t *testing.T) {
 	require.False(t, cfg.OIDCEnabled())
 	require.Empty(t, cfg.OIDCIssuerURL)
 }
+
+func TestLoad_ClientIPHeader(t *testing.T) {
+	t.Setenv("CLIENT_IP_HEADER", "")
+	require.Empty(t, Load().ClientIPHeader)
+
+	t.Setenv("CLIENT_IP_HEADER", "CF-Connecting-IP")
+	require.Equal(t, "CF-Connecting-IP", Load().ClientIPHeader)
+}
+
+func TestConfig_Validate_ClientIPHeader(t *testing.T) {
+	configs := map[string]func(header string) Config{
+		"dev login only": func(h string) Config {
+			return Config{Env: "development", AuthDevLogin: true, ClientIPHeader: h}
+		},
+		"OIDC": func(h string) Config { return oidcConfig(func(c *Config) { c.ClientIPHeader = h }) },
+	}
+	for name, build := range configs {
+		t.Run(name, func(t *testing.T) {
+			require.NoError(t, build("").Validate())
+			require.NoError(t, build("CF-Connecting-IP").Validate())
+			for _, bad := range []string{"bad header", "a:b", "x_y", "héader"} {
+				err := build(bad).Validate()
+				require.ErrorContains(t, err, "CLIENT_IP_HEADER", bad)
+				require.NotContains(t, err.Error(), bad)
+			}
+		})
+	}
+}
