@@ -116,8 +116,11 @@ describe('describeSaveFailure', () => {
     })
   })
 
-  it('maps a 401 to signed-out, not to a message', () => {
-    expect(describeSaveFailure(apiError(401, 'unauthenticated'))).toEqual({ kind: 'signed-out' })
+  it('gives the generic error for a 401: callers check isUnauthorized first', () => {
+    expect(describeSaveFailure(apiError(401, 'unauthenticated'))).toEqual({
+      kind: 'error',
+      message: "Couldn't save that link.",
+    })
   })
 
   describe('anything else', () => {

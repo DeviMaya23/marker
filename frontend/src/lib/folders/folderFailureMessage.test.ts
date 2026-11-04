@@ -10,7 +10,6 @@ const api = (status: number, p: ProblemBody | null = null, retryAfter: number | 
 
 const field = (message: string): FolderFailure => ({ kind: 'field', message, refresh: false })
 const dialog = (message: string, refresh = true): FolderFailure => ({ kind: 'dialog', message, refresh })
-const signedOut: FolderFailure = { kind: 'signed-out', message: "You're logged out.", refresh: true }
 
 const GONE = 'This folder no longer exists.'
 const required = api(422, problem('validation_error', [{ field: 'name', code: 'required' }]))
@@ -32,9 +31,9 @@ describe('folderFailureMessage', () => {
     ['create: 404', 'create', api(404, problem('not_found')), dialog(GONE)],
     ['rename: 404', 'rename', api(404, problem('not_found')), dialog(GONE)],
     ['delete: 404', 'delete', api(404, problem('not_found')), dialog(GONE)],
-    ['create: 401', 'create', api(401, problem('unauthenticated')), signedOut],
-    ['rename: 401', 'rename', api(401), signedOut],
-    ['delete: 401', 'delete', api(401), signedOut],
+    ['create: 401 gets the generic result', 'create', api(401, problem('unauthenticated')), dialog("Couldn't create the folder.")],
+    ['rename: 401 gets the generic result', 'rename', api(401), dialog("Couldn't rename the folder.")],
+    ['delete: 401 gets the generic result', 'delete', api(401), dialog("Couldn't delete the folder.")],
     ['create: other 500', 'create', api(500, problem('internal_error')), dialog("Couldn't create the folder.")],
     ['rename: other 500', 'rename', api(500), dialog("Couldn't rename the folder.")],
     ['delete: other 500', 'delete', api(500), dialog("Couldn't delete the folder.")],
@@ -50,7 +49,7 @@ describe('folderFailureMessage', () => {
     ['move: 422 cycle', 'move', cycle, dialog("A folder can't be moved into itself or one of its own subfolders.", false)],
     ['move: 422 with an unknown code', 'move', api(422, problem('validation_error')), dialog("Couldn't move the folder.", false)],
     ['move: 409 with another code', 'move', api(409, problem('duplicate_bookmark')), dialog("Couldn't move the folder.")],
-    ['move: 401', 'move', api(401), signedOut],
+    ['move: 401 gets the generic result', 'move', api(401), dialog("Couldn't move the folder.")],
     ['move: other 500', 'move', api(500, problem('internal_error')), dialog("Couldn't move the folder.")],
     ['move: network failure', 'move', new TypeError('Failed to fetch'), dialog("Couldn't move the folder.")],
   ])('%s', (_name, action, error, expected) => {

@@ -5,8 +5,8 @@ import { describeDeleteAccountFailure } from './deleteAccountFailure'
 const GENERIC = "Couldn't delete your account."
 
 describe('describeDeleteAccountFailure', () => {
-  it('marks a 401 as signed out with no message', () => {
-    expect(describeDeleteAccountFailure(new ApiError(401, null, null))).toEqual({ signedOut: true, message: '' })
+  it('gives the generic message for a 401: callers check isUnauthorized first', () => {
+    expect(describeDeleteAccountFailure(new ApiError(401, null, null))).toEqual({ message: GENERIC })
   })
 
   it.each([
@@ -14,7 +14,7 @@ describe('describeDeleteAccountFailure', () => {
     [0, 'Too many requests. Try again in about 0 seconds.'],
     [null, 'Too many requests. Try again in a moment.'],
   ])('describes a 429 with Retry-After %s', (retryAfter, message) => {
-    expect(describeDeleteAccountFailure(new ApiError(429, null, retryAfter))).toEqual({ signedOut: false, message })
+    expect(describeDeleteAccountFailure(new ApiError(429, null, retryAfter))).toEqual({ message }
   })
 
   it.each([
@@ -23,6 +23,6 @@ describe('describeDeleteAccountFailure', () => {
     ['an error with a problem body', new ApiError(500, { type: 'about:blank', code: 'internal_error', title: 'x', status: 500 }, null)],
     ['a network failure', new TypeError('Failed to fetch')],
   ])('gives the generic message for %s', (_name, error) => {
-    expect(describeDeleteAccountFailure(error)).toEqual({ signedOut: false, message: GENERIC })
+    expect(describeDeleteAccountFailure(error)).toEqual({ message: GENERIC })
   })
 })
