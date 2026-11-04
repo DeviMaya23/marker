@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -90,6 +92,33 @@ func TestDeleteAccount_CSRF(t *testing.T) {
 
 			requireProblem(t, rec, http.StatusForbidden, api.ErrorCodeCsrfFailed)
 			require.Zero(t, spy.calls)
+		})
+	}
+}
+
+// A body on the DELETE is ignored, but the router's 64 KiB cap (NFR-14) still applies.
+func TestDeleteAccount_RequestBody(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		size     int
+		wantCode int
+		wantCall int
+	}{
+		{"small body is ignored", 10, http.StatusNoContent, 1},
+		{"body of exactly 64 KiB is ignored", 64 * 1024, http.StatusNoContent, 1},
+		{"body over 64 KiB is refused before the handler", 64*1024 + 1, http.StatusRequestEntityTooLarge, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spy := &accountSpy{}
+			req := httptest.NewRequest(http.MethodDelete, accountPath, strings.NewReader(strings.Repeat("a", tc.size)))
+			withSession(goodSession)(req)
+			withCSRF()(req)
+			rec := httptest.NewRecorder()
+
+			accountRouter(spy).ServeHTTP(rec, req)
+
+			require.Equal(t, tc.wantCode, rec.Code)
+			require.Equal(t, tc.wantCall, spy.calls)
 		})
 	}
 }
