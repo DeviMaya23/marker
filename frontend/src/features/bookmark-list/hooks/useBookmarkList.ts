@@ -3,6 +3,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { ApiError } from '../../../lib/api/ApiError'
 import { listBookmarks, type BookmarkSummary } from '../../../lib/api/bookmarks'
 import { bookmarkListKey } from '../../../lib/bookmarks/queryKeys'
+import type { ListSearch } from '../lib/listSearch'
 
 /**
  * What the screen shows: `loading` the first page, `signed-out` after any 401, `not-found` when
@@ -25,28 +26,50 @@ export type BookmarkListState = {
 
 /**
  * The live list, or the trash with `{ trashed: true }`, or one folder's bookmarks (and its
- * subfolders') with a `folderId`, as pages fetched on demand.
+ * subfolders') with a `folderId`, as pages fetched on demand. With a non-empty `search.q` it is a
+ * search, in the server's relevance order; the trash is never searched, so `search` is ignored
+ * with `trashed`.
  */
-export function useBookmarkList({ trashed, folderId }: { trashed: boolean; folderId?: string }): BookmarkListState {
+export function useBookmarkList({
+  trashed,
+  folderId,
+  search,
+}: {
+  trashed: boolean
+  folderId?: string
+  search?: ListSearch
+}): BookmarkListState {
+  const term = !trashed && search && search.q !== '' ? search : undefined
+  const queryKey = bookmarkListKey(trashed, folderId, term)
   const query = useInfiniteQuery({
-    queryKey: bookmarkListKey(trashed, folderId),
+    queryKey,
     queryFn: ({ pageParam }) =>
-      listBookmarks({ trashed, cursor: pageParam, ...(folderId !== undefined ? { folderId } : {}) }),
+      listBookmarks({
+        trashed,
+        cursor: pageParam,
+        ...(folderId !== undefined ? { folderId } : {}),
+        ...(term ? { q: term.q, ...(term.includeNotes ? { includeNotes: true } : {}) } : {}),
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.next_cursor ?? undefined,
     retry: false,
   })
   const { data, error, hasNextPage, isFetching, fetchNextPage, refetch } = query
 
-  // Two events in one tick both see the same render, so the guard has to be a ref.
-  const busy = useRef(false)
-  const run = useCallback((request: () => Promise<unknown>) => {
-    if (busy.current) return
-    busy.current = true
-    void request().finally(() => {
-      busy.current = false
-    })
-  }, [])
+  // Two events in one tick both see the same render, so the guard has to be a ref. It is per
+  // list: a request still running for an earlier term must not block the current one.
+  const listId = JSON.stringify(queryKey)
+  const busy = useRef<string | null>(null)
+  const run = useCallback(
+    (request: () => Promise<unknown>) => {
+      if (busy.current === listId) return
+      busy.current = listId
+      void request().finally(() => {
+        if (busy.current === listId) busy.current = null
+      })
+    },
+    [listId],
+  )
 
   const fetchNext = useCallback(() => {
     if (!hasNextPage || isFetching) return

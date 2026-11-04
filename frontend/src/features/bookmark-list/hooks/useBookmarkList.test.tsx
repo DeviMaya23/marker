@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
 import { listBookmarks } from '../../../lib/api/bookmarks'
 import { bookmark, page } from '../../../test/builders'
+import type { ListSearch } from '../lib/listSearch'
 import { useBookmarkList } from './useBookmarkList'
 
 vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn() }))
@@ -232,3 +233,111 @@ describe('useBookmarkList', () => {
     })
   })
 })
+
+describe('useBookmarkList with a search', () => {
+  const foo: ListSearch = { q: 'foo', includeNotes: false }
+
+  function setupSearch(initial: { trashed?: boolean; folderId?: string; search?: ListSearch }) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    return renderHook(
+      (props: { trashed?: boolean; folderId?: string; search?: ListSearch }) =>
+        useBookmarkList({ trashed: props.trashed ?? false, folderId: props.folderId, search: props.search }),
+      { wrapper, initialProps: initial },
+    )
+  }
+
+  beforeEach(() => {
+    list.mockReset()
+  })
+
+  it('sends q, and includeNotes only when on', async () => {
+    list.mockResolvedValue(page([]))
+    setupSearch({ search: foo })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    expect(list).toHaveBeenLastCalledWith({ trashed: false, cursor: undefined, q: 'foo' })
+    expect(Object.keys(list.mock.calls[0][0] ?? {})).not.toContain('includeNotes')
+
+    setupSearch({ search: { q: 'foo', includeNotes: true }, folderId: 'f-1' })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    expect(list).toHaveBeenLastCalledWith({ trashed: false, cursor: undefined, folderId: 'f-1', q: 'foo', includeNotes: true })
+  })
+
+  it('sends no q for an empty term', async () => {
+    list.mockResolvedValue(page([]))
+    setupSearch({ search: { q: '', includeNotes: true } })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    expect(list).toHaveBeenLastCalledWith({ trashed: false, cursor: undefined })
+  })
+
+  it('ignores a search when trashed: the request has no q', async () => {
+    list.mockResolvedValue(page([]))
+    setupSearch({ trashed: true, search: { q: 'foo', includeNotes: true } })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    expect(list).toHaveBeenLastCalledWith({ trashed: true, cursor: undefined })
+  })
+
+  it('carries the cursor and the same q, includeNotes and folderId on the second page', async () => {
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1')).mockResolvedValueOnce(page([bookmark({ id: 'b' })]))
+    const { result } = setupSearch({ search: { q: 'foo', includeNotes: true }, folderId: 'f-1' })
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+    act(() => result.current.fetchNext())
+    await waitFor(() => expect(result.current.rows).toHaveLength(2))
+    expect(list.mock.calls.map(([args]) => args)).toEqual([
+      { trashed: false, cursor: undefined, folderId: 'f-1', q: 'foo', includeNotes: true },
+      { trashed: false, cursor: 'c1', folderId: 'f-1', q: 'foo', includeNotes: true },
+    ])
+  })
+
+  it('starts again from the first page, with no cursor, for another term or notes setting', async () => {
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1')).mockResolvedValueOnce(page([bookmark({ id: 'b' })], 'c2'))
+    const { result, rerender } = setupSearch({ search: foo })
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+    act(() => result.current.fetchNext())
+    await waitFor(() => expect(result.current.rows).toHaveLength(2))
+
+    let release: (p: ReturnType<typeof page>) => void = () => {}
+    list.mockReturnValueOnce(new Promise((r) => (release = r)))
+    rerender({ search: { q: 'bar', includeNotes: false } })
+    expect(result.current.phase).toBe('loading')
+    expect(result.current.rows).toEqual([])
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(3))
+    expect(list.mock.calls[2][0]).toEqual({ trashed: false, cursor: undefined, q: 'bar' })
+    await act(async () => release(page([bookmark({ id: 'z' })])))
+    await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['z']))
+
+    list.mockResolvedValueOnce(page([]))
+    rerender({ search: { q: 'bar', includeNotes: true } })
+    expect(result.current.rows).toEqual([])
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(4))
+    expect(list.mock.calls[3][0]).toEqual({ trashed: false, cursor: undefined, q: 'bar', includeNotes: true })
+  })
+
+  it('does not show a late response for an earlier term under the new one', async () => {
+    let late: (p: ReturnType<typeof page>) => void = () => {}
+    list.mockReturnValueOnce(new Promise((r) => (late = r)))
+    list.mockResolvedValueOnce(page([bookmark({ id: 'new' })]))
+    const { result, rerender } = setupSearch({ search: foo })
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    rerender({ search: { q: 'bar', includeNotes: false } })
+    await waitFor(() => expect(result.current.rows.map((r) => r.id)).toEqual(['new']))
+    await act(async () => late(page([bookmark({ id: 'old' })])))
+    expect(result.current.rows.map((r) => r.id)).toEqual(['new'])
+  })
+
+  it('keeps the rows in the order the server returned them', async () => {
+    list.mockResolvedValue(
+      page([
+        bookmark({ id: 'm', title: 'M', created_at: '2026-01-02T00:00:00Z' }),
+        bookmark({ id: 'z', title: 'Z', created_at: '2026-01-03T00:00:00Z' }),
+        bookmark({ id: 'a', title: 'A', created_at: '2026-01-01T00:00:00Z' }),
+      ]),
+    )
+    const { result } = setupSearch({ search: foo })
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+    expect(result.current.rows.map((r) => r.id)).toEqual(['m', 'z', 'a'])
+  })
+})
+

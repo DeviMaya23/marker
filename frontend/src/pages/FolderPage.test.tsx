@@ -113,3 +113,58 @@ describe('FolderPage', () => {
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
   })
 })
+
+describe('FolderPage search bar', () => {
+  const bar = () => screen.queryByRole('search')
+
+  it('shows the bar with the generic folder label while the folders load', () => {
+    folders.mockReturnValue(new Promise(() => {}))
+    open('/folder/f-1')
+    expect(bar()).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'This folder & subfolders' })).toBeChecked()
+  })
+
+  it('shows the bar with the generic label when loading the folders failed', async () => {
+    folders.mockRejectedValue(new ApiError(500, null, null))
+    open('/folder/f-1')
+    await screen.findByText('A soup')
+    await waitFor(() => expect(folders).toHaveBeenCalled())
+    expect(bar()).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'This folder & subfolders' })).toBeChecked()
+  })
+
+  it('names the folder in the scope control once the folders have loaded', async () => {
+    open('/folder/f-1')
+    expect(await screen.findByRole('radio', { name: '“Recipes” & subfolders' })).toBeChecked()
+  })
+
+  it('keeps the bar above the notFound panel when the list answers 404 but the folder is still listed', async () => {
+    list.mockRejectedValue(new ApiError(404, null, null))
+    open('/folder/f-1')
+    expect(await screen.findByText("This folder doesn't exist.")).toBeInTheDocument()
+    expect(bar()).toBeInTheDocument()
+  })
+
+  it('has no bar when the folders have loaded without this folder', async () => {
+    open('/folder/nope')
+    expect(await screen.findByText("This folder doesn't exist.")).toBeInTheDocument()
+    expect(bar()).not.toBeInTheDocument()
+  })
+
+  it('keeps the add field, and searches this folder from the URL', async () => {
+    list.mockResolvedValue(page([bookmark({ id: 'b-9', title: 'A match' })]))
+    open('/folder/f-1?q=soup')
+    expect(await screen.findByText('A match')).toBeInTheDocument()
+    expect(list).toHaveBeenCalledWith({ trashed: false, cursor: undefined, folderId: 'f-1', q: 'soup' })
+    expect(screen.getByLabelText('Link to save')).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Search bookmarks' })).toHaveValue('soup')
+  })
+
+  it('shows the no-match panel instead of "This folder is empty." during a search', async () => {
+    list.mockResolvedValue(page([]))
+    open('/folder/f-1?q=soup')
+    expect(await screen.findByText('No bookmarks match “soup”.')).toBeInTheDocument()
+    expect(screen.queryByText('This folder is empty.')).not.toBeInTheDocument()
+  })
+})
+

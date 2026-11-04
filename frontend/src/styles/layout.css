@@ -499,3 +499,58 @@
 .detail-page__move {
   align-self: flex-end;
 }
+
+/* Search bar: field, scope control and notes switch above a list */
+.search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.search-field {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 160px;
+}
+.search-field__icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.search-field input {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.search-field input::-webkit-search-cancel-button,
+.search-field input::-webkit-search-decoration {
+  appearance: none;
+  display: none;
+}
+.search-field__clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  padding: 4px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.search-field__clear:hover {
+  color: var(--text);
+}
+@media (max-width: 640px) {
+  .search-field {
+    flex-basis: 100%;
+  }
+}

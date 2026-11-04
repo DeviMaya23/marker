@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 import { AppShell } from '../app-shell/AppShell'
 import { StatePanel } from '../components/ui/StatePanel'
 import { AddUrlForm } from '../features/bookmark-list/components/AddUrlForm'
+import { SearchBar } from '../features/bookmark-list/components/SearchBar'
 import { BookmarkList } from '../features/bookmark-list/components/BookmarkList'
 import { useFolders } from '../lib/folders/useFolders'
 
@@ -36,6 +37,7 @@ export function FolderPage() {
         <FolderMissing />
       ) : (
         <>
+          <SearchBar folder={{ id, name }} />
           <AddUrlForm folderId={id} />
           <BookmarkList
             folderId={id}
