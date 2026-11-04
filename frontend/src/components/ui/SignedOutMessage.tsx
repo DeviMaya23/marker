@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router'
+import { loginHref } from '../../lib/loginHref'
 import { Banner } from './Banner'
 
 /**
@@ -7,10 +8,7 @@ import { Banner } from './Banner'
  */
 export function SignedOutMessage() {
   const { pathname, search } = useLocation()
-  const returnTo = encodeURIComponent(pathname + search)
-  const href = import.meta.env.DEV
-    ? `/auth/dev-login?name=alice&return_to=${returnTo}`
-    : `/auth/login?return_to=${returnTo}`
+  const href = loginHref(pathname, search)
 
   return (
     <Banner tone="info" role="alert">
