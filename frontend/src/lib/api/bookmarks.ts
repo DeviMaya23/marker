@@ -17,12 +17,16 @@ export function getBookmark(id: string): Promise<BookmarkDetail> {
 
 export type BookmarkPage = Schemas['BookmarkPage']
 
-export type ListBookmarksParams = { trashed?: boolean; cursor?: string }
+export type ListBookmarksParams = { trashed?: boolean; cursor?: string; folderId?: string }
 
-/** One page of the live list, or of the trash with `trashed: true`. Sends only what is given. */
-export function listBookmarks({ trashed, cursor }: ListBookmarksParams = {}): Promise<BookmarkPage> {
+/**
+ * One page of the live list, or of the trash with `trashed: true`. With `folderId`, the live
+ * bookmarks of that folder and its subfolders. Sends only what is given.
+ */
+export function listBookmarks({ trashed, cursor, folderId }: ListBookmarksParams = {}): Promise<BookmarkPage> {
   const query = new URLSearchParams()
   if (trashed) query.set('trashed', 'true')
+  if (folderId !== undefined) query.set('folder_id', folderId)
   if (cursor !== undefined) query.set('cursor', cursor)
   const qs = query.toString()
   return apiRequest<BookmarkPage>('GET', qs ? `/bookmarks?${qs}` : '/bookmarks')

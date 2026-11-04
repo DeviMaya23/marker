@@ -179,3 +179,29 @@ describe('AddUrlForm', () => {
     })
   })
 })
+
+describe('AddUrlForm in a folder', () => {
+  beforeEach(() => {
+    vi.mocked(createBookmark).mockReset()
+    vi.mocked(createBookmark).mockResolvedValue(created)
+  })
+
+  it.each([
+    ['with a folder id', 'f-1', { url: 'https://a.test', folder_id: 'f-1' }],
+    ['without one', undefined, { url: 'https://a.test' }],
+  ])('saves %s', async (_label, folderId, request) => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <AddUrlForm folderId={folderId} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await user.type(input(), 'https://a.test')
+    await user.click(button())
+    await waitFor(() => expect(createBookmark).toHaveBeenCalledExactlyOnceWith(request))
+    expect(vi.mocked(createBookmark).mock.calls[0][0]).toEqual(request)
+    if (folderId === undefined) expect(vi.mocked(createBookmark).mock.calls[0][0]).not.toHaveProperty('folder_id')
+  })
+})
