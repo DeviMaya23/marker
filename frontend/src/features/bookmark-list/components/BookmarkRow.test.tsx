@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../../lib/api/ApiError'
 import { deleteBookmark, restoreBookmark, updateBookmark } from '../../../lib/api/bookmarks'
 import { listFolders } from '../../../lib/api/folders'
-import { goTo } from '../../../lib/goTo'
 import { folder } from '../../../test/builders'
 import { bookmark } from '../../../test/builders'
 import { renderApp } from '../../../test/wrap'
@@ -16,7 +15,6 @@ vi.mock('../../../lib/api/bookmarks', () => ({
   updateBookmark: vi.fn(),
 }))
 vi.mock('../../../lib/api/folders', () => ({ listFolders: vi.fn() }))
-vi.mock('../../../lib/goTo', () => ({ goTo: vi.fn() }))
 
 const del = vi.mocked(deleteBookmark)
 const restore = vi.mocked(restoreBookmark)
@@ -44,7 +42,6 @@ beforeEach(() => {
   restore.mockReset()
   update.mockReset()
   vi.mocked(listFolders).mockReset().mockResolvedValue({ items: [folder({ id: 'f-1', name: 'Recipes' })] })
-  vi.mocked(goTo).mockReset()
 })
 
 describe('BookmarkRow actions menu', () => {
@@ -197,14 +194,14 @@ describe('BookmarkRow delete', () => {
     expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
   })
 
-  it('401: a logged-out toast whose Log in goes to the login link', async () => {
+  it('401: no toast and no refresh', async () => {
     del.mockRejectedValue(new ApiError(401, null, null))
-    const { user } = setup()
+    const { user, invalidate } = setup()
     await chooseDelete(user)
-    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(goTo).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(goTo).mock.calls[0][0]).toMatch(/return_to=%2F$/)
+    await waitFor(() => expect(del).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(document.querySelector('.toast')).toBeNull()
+    expect(invalidate).not.toHaveBeenCalled()
   })
 })
 

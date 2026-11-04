@@ -1,14 +1,12 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../../lib/api/ApiError'
 import { restoreBookmark } from '../../../lib/api/bookmarks'
-import { goTo } from '../../../lib/goTo'
 import { bookmark } from '../../../test/builders'
 import { renderApp } from '../../../test/wrap'
 import { TrashRow } from './TrashRow'
 
 vi.mock('../../../lib/api/bookmarks', () => ({ restoreBookmark: vi.fn() }))
-vi.mock('../../../lib/goTo', () => ({ goTo: vi.fn() }))
 
 const restore = vi.mocked(restoreBookmark)
 const problem = (status: number, code: string) =>
@@ -22,7 +20,6 @@ function setup() {
 
 beforeEach(() => {
   restore.mockReset()
-  vi.mocked(goTo).mockReset()
 })
 
 describe('TrashRow', () => {
@@ -63,12 +60,13 @@ describe('TrashRow', () => {
     expect(invalidate).toHaveBeenCalledTimes(3)
   })
 
-  it('401: the logged-out toast with a Log in action', async () => {
+  it('401: no toast and no refresh', async () => {
     restore.mockRejectedValue(new ApiError(401, null, null))
-    setup()
+    const { invalidate } = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
-    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
-    expect(goTo).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(restore).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(document.querySelector('.toast')).toBeNull()
+    expect(invalidate).not.toHaveBeenCalled()
   })
 })
