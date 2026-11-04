@@ -13,7 +13,7 @@
 #   verify-1  [BUILDER_BRANCH=...]                found: the claude/* branch with <TASK>.plan.md and no report
 #   fix       [VERIFIER_BRANCH=...] [ALREADY_FIXED=...]
 #                                                 found: the claude/* branch with <TASK>.report.md
-#   verify-2  [FIX_BRANCH=...] [PR_NUMBER=...]    found the same way; the PR number comes from gh
+#   verify-2  [FIX_BRANCH=...]                    found the same way
 #
 # Finding a branch lists up to 5 unmerged claude/* branches, newest first, and asks you to
 # confirm (Enter takes the first). It only reads remote refs; your working tree is not touched.
@@ -120,12 +120,7 @@ case "$stage" in
     if [ -z "$(value_of ALREADY_FIXED)" ]; then pairs+=("ALREADY_FIXED=nothing"); fi ;;
   verify-2)
     if [ -z "$(value_of FIX_BRANCH)" ]; then pick_branch "$report" ""; pairs+=("FIX_BRANCH=$chosen"); fi
-    if [ -z "$(value_of PR_NUMBER)" ]; then
-      pr="$(gh pr list --head "$(value_of FIX_BRANCH)" --state open --json number --jq '.[0].number' 2>/dev/null || true)"
-      [ -n "$pr" ] || { echo "no open pull request found for $(value_of FIX_BRANCH). Pass PR_NUMBER=<n>." >&2; exit 2; }
-      echo "Pull request for $(value_of FIX_BRANCH): #$pr" >&2
-      pairs+=("PR_NUMBER=$pr")
-    fi ;;
+    ;;
 esac
 
 prompt="$(cat "$file")"
