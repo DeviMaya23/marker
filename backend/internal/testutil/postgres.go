@@ -4,11 +4,16 @@ package testutil
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -27,8 +32,15 @@ var (
 // NewDB returns a GORM connection to a PostgreSQL 17 container with all migrations
 // applied (the app's and River's).
 //
-// One container is started per test process and shared by every test, so tests must
-// not assume empty tables: create your own users and filter by them. The container is
+// If TEST_DATABASE_URL is set, the server it points to is used instead of a container
+// (for environments without Docker; see scripts/test-integration-local.sh). Each test
+// process creates its own fresh database there, because `go test ./...` runs packages
+// as parallel processes and they must not migrate one schema at once. The app's and
+// River's migrations are applied to it in the same way. The databases are not dropped
+// by the tests; the script discards the whole server.
+//
+// One database is used per test process and shared by every test, so tests must
+// not assume empty tables: create your own users and filter by them. A container is
 // removed by testcontainers' reaper when the test process exits.
 func NewDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -64,6 +76,16 @@ func databaseURL(t *testing.T) string {
 }
 
 func startPostgres(ctx context.Context) (string, error) {
+	if serverURL := os.Getenv("TEST_DATABASE_URL"); serverURL != "" {
+		url, err := createProcessDatabase(ctx, serverURL)
+		if err != nil {
+			return "", err
+		}
+		if err := migrate.Up(ctx, url, migrationDir()); err != nil {
+			return "", err
+		}
+		return url, nil
+	}
 	ctr, err := tcpostgres.Run(ctx, "postgres:17",
 		tcpostgres.WithDatabase("marker_test"),
 		tcpostgres.WithUsername("marker"),
@@ -87,4 +109,26 @@ func startPostgres(ctx context.Context) (string, error) {
 func migrationDir() string {
 	_, file, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(file), "..", "..", "migration")
+}
+
+// createProcessDatabase creates a uniquely named database on the server that
+// TEST_DATABASE_URL points to and returns a URL for it.
+func createProcessDatabase(ctx context.Context, serverURL string) (string, error) {
+	conn, err := pgx.Connect(ctx, serverURL)
+	if err != nil {
+		return "", fmt.Errorf("connect to TEST_DATABASE_URL: %w", err)
+	}
+	defer conn.Close(ctx)
+
+	name := fmt.Sprintf("marker_test_%d_%d", os.Getpid(), time.Now().UnixNano())
+	if _, err := conn.Exec(ctx, "CREATE DATABASE "+pgx.Identifier{name}.Sanitize()); err != nil {
+		return "", fmt.Errorf("create test database: %w", err)
+	}
+
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return "", err
+	}
+	u.Path = "/" + name
+	return u.String(), nil
 }
