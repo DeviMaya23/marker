@@ -35,11 +35,17 @@ async function readProblem(res: Response): Promise<ProblemBody | null> {
 }
 
 /**
- * Makes a JSON request to `/api/v1<path>`. A write carries `X-CSRF-Token` from the cookie,
+ * Makes a JSON request to `<base><path>`, where `base` is `/api/v1` unless `options.base` says
+ * otherwise (the auth routes live at the root, outside `/api/v1`). A write carries `X-CSRF-Token` from the cookie,
  * read now. A non-2xx response throws `ApiError`; a network failure rejects with the
  * fetch error itself, which is not an `ApiError`.
  */
-export async function apiRequest<T>(method: Method, path: string, body?: unknown): Promise<T> {
+export async function apiRequest<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  options: { base?: string } = {},
+): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (WRITE_METHODS.has(method)) {
@@ -47,7 +53,7 @@ export async function apiRequest<T>(method: Method, path: string, body?: unknown
     if (token !== null) headers['X-CSRF-Token'] = token
   }
 
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${options.base ?? '/api/v1'}${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
