@@ -10,7 +10,6 @@ State as of `main` at `82b9c17`: 11 of the 17 operations are real (bookmarks: cr
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Search | `q` and `include_notes` on `listBookmarks` (they answer 501 now) | FR-9, 10, 11, NFR-10 |
 | Sync | `getSyncVersion` | NFR-2 |
 | Favicons | `getFavicon` (icons are fetched and stored but never served) | FR-5 |
 | Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works) | FR-1, 2 |
