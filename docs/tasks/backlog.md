@@ -11,15 +11,16 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 ## Backend: cross-cutting
 
-- Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all. Touches `router.go`, `main.go` and `config.go`, which `auth-backend` also changes: run it after that task.
-- Login hardening, follow-up to `auth-backend` (both need contract changes; decide before production): bind a login attempt to the browser with a cookie on the `/auth/login` redirect (today an attacker can sign a victim in as the attacker), and clear the `session` and `csrf_token` cookies on logout (today they stay in the browser, dead). Needs `Set-Cookie` on the login `302` and the logout `200`.
+- Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all. Touches `router.go`, `main.go` and `config.go`. Needs `x/time/rate` adopted in `STACK.md` first.
+- Login hardening (both parts need a contract change, which the user makes first; decide before production): bind a login attempt to the browser with a cookie on the `/auth/login` redirect (today an attacker can sign a victim in as the attacker), and clear the `session` and `csrf_token` cookies on logout (today they stay in the browser, dead). Needs `Set-Cookie` on the login `302` and the logout `200`.
+- Login callback failure page: when the identity provider's callback fails (bad or expired state, denied consent, token or ID-token error), `authCallback` answers `400` with a JSON problem document, so the user sees raw JSON in the browser. Redirect the browser to the login screen (`/login`) instead, with a short error code the screen can show. Needs a contract change first (a `302` on the callback's failure paths), which the user makes, and a small frontend change to show the message on `/login`. Noticed while drafting `login-screen`, which leaves it out.
 
 ## Frontend: screens and features not built
 
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
 - The footer's "Account & help" no longer shows as the current page on `/account`. Split from `logout-menu`: the link became a menu button, which cannot carry `aria-current`. Cosmetic.
-- Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c). Needs `auth-backend` merged, and a who-am-I endpoint (does not exist; a contract change to decide).
+- Remove the per-screen signed-out UI. Split from `login-screen`, which adds the global "401 goes to login and back" rule and runs first: delete `SignedOutMessage` and its uses (list, folder section, move and edit dialogs, add field, delete folder and folder form dialogs, empty trash, delete account, bookmark page, save popup), the `signedOut` and `signed-out` flags in the failure mappers (`describeFailure`, `folderFailureMessage`, `saveFailure`, `deleteAccountFailure`), the "Log in" action on failure toasts, `LOGGED_OUT_TOAST`, the save popup's `needs-login` phase and the `logout-menu` toast for a `401`. A `401` then shows nothing on the screen: the redirect has started. About 25 test files change.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
 
 ## Loose ends from verifier reports
