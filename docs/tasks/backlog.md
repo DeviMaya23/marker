@@ -8,12 +8,10 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works; the login screen and the account area's log out wait for these) | FR-1, 2 |
 
 ## Backend: cross-cutting
 
 - Rate limiting: 30 saves per minute per user, login routes per IP, a generous ceiling elsewhere, sync poll exempt (NFR-16). Not built at all.
-- Kinde "Phase B": needs the Kinde domain, client ID and registered URLs. The client secret goes in a gitignored `.env`, never in chat or the repo.
 
 ## Frontend: screens and features not built
 
