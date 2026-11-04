@@ -4,8 +4,10 @@ package repository_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -208,4 +210,214 @@ func TestUserRepository_Version(t *testing.T) {
 
 		require.Equal(t, first, second)
 	})
+}
+
+// seededAccount is everything one user owns, for the delete tests.
+type seededAccount struct {
+	user        domain.User
+	bookmarkIDs []uuid.UUID
+}
+
+// seedAccount gives a user two sessions, a folder with a child, a live bookmark in the
+// child, a trashed bookmark, and a bookmark with saved content and a favicon.
+func seedAccount(t *testing.T, db *gorm.DB) seededAccount {
+	t.Helper()
+	user := newUser(t, db)
+	now := time.Now()
+	require.NoError(t, db.Create(&[]domain.Session{
+		newSession(user, "a-"+uuid.NewString(), now),
+		newSession(user, "b-"+uuid.NewString(), now),
+	}).Error)
+
+	parent := newFolder(user.ID, nil, "Parent", 1)
+	child := newFolder(user.ID, &parent.ID, "Child", 2)
+	require.NoError(t, db.Create(&parent).Error)
+	require.NoError(t, db.Create(&child).Error)
+
+	live := newBookmark(user.ID, "https://live.example.com/"+uuid.NewString())
+	live.FolderID = &child.ID
+	trashed := newBookmark(user.ID, "https://trash.example.com/"+uuid.NewString())
+	deletedAt := now
+	trashed.DeletedAt = &deletedAt
+	require.NoError(t, db.Create(&live).Error)
+	require.NoError(t, db.Create(&trashed).Error)
+
+	storeIcon(t, db, user.ID, "icon.example.com", "image/png", []byte{1, 2, 3})
+	require.NoError(t, db.Create(&domain.BookmarkContent{BookmarkID: live.ID, Text: "saved text"}).Error)
+
+	var ids []uuid.UUID
+	require.NoError(t, db.Model(&domain.Bookmark{}).Where("user_id = ?", user.ID).Pluck("id", &ids).Error)
+	require.Len(t, ids, 3)
+	return seededAccount{user: user, bookmarkIDs: ids}
+}
+
+func countFor(t *testing.T, db *gorm.DB, table, column string, id any) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, db.Table(table).Where(column+" = ?", id).Count(&n).Error)
+	return n
+}
+
+func countContent(t *testing.T, db *gorm.DB, ids []uuid.UUID) int64 {
+	t.Helper()
+	var n int64
+	require.NoError(t, db.Table("bookmark_content").Where("bookmark_id IN ?", ids).Count(&n).Error)
+	return n
+}
+
+func TestUserRepository_DeleteUser_RemovesEverything(t *testing.T) {
+	db := testutil.NewDB(t)
+	a := seedAccount(t, db)
+	require.EqualValues(t, 3, countFor(t, db, "bookmarks", "user_id", a.user.ID), "seed sanity")
+	require.EqualValues(t, 1, countFor(t, db, "favicons", "user_id", a.user.ID), "seed sanity")
+	require.EqualValues(t, 2, countContent(t, db, a.bookmarkIDs), "seed sanity")
+
+	require.NoError(t, repository.NewUserRepository(db).DeleteUser(context.Background(), a.user.ID))
+
+	require.Zero(t, countFor(t, db, "users", "id", a.user.ID), "users")
+	require.Zero(t, countFor(t, db, "sessions", "user_id", a.user.ID), "sessions")
+	require.Zero(t, countFor(t, db, "folders", "user_id", a.user.ID), "folders")
+	require.Zero(t, countFor(t, db, "bookmarks", "user_id", a.user.ID), "bookmarks")
+	require.Zero(t, countFor(t, db, "favicons", "user_id", a.user.ID), "favicons")
+	require.Zero(t, countContent(t, db, a.bookmarkIDs), "bookmark_content")
+}
+
+func TestUserRepository_DeleteUser_LeavesOtherUsersAlone(t *testing.T) {
+	db := testutil.NewDB(t)
+	gone := seedAccount(t, db)
+	kept := seedAccount(t, db)
+	var before domain.User
+	require.NoError(t, db.First(&before, "id = ?", kept.user.ID).Error)
+
+	require.NoError(t, repository.NewUserRepository(db).DeleteUser(context.Background(), gone.user.ID))
+
+	var after domain.User
+	require.NoError(t, db.First(&after, "id = ?", kept.user.ID).Error)
+	require.Equal(t, before.Version, after.Version, "users.version")
+	require.EqualValues(t, 2, countFor(t, db, "sessions", "user_id", kept.user.ID), "sessions")
+	require.EqualValues(t, 2, countFor(t, db, "folders", "user_id", kept.user.ID), "folders")
+	require.EqualValues(t, 3, countFor(t, db, "bookmarks", "user_id", kept.user.ID), "bookmarks")
+	require.EqualValues(t, 1, countFor(t, db, "favicons", "user_id", kept.user.ID), "favicons")
+	require.EqualValues(t, 2, countContent(t, db, kept.bookmarkIDs), "bookmark_content")
+}
+
+func TestUserRepository_DeleteUser_MissingUser(t *testing.T) {
+	db := testutil.NewDB(t)
+	repo := repository.NewUserRepository(db)
+	ctx := context.Background()
+
+	require.ErrorIs(t, repo.DeleteUser(ctx, uuid.New()), gorm.ErrRecordNotFound)
+
+	u := newUser(t, db)
+	require.NoError(t, repo.DeleteUser(ctx, u.ID))
+	require.ErrorIs(t, repo.DeleteUser(ctx, u.ID), gorm.ErrRecordNotFound, "second delete")
+}
+
+func TestUserRepository_DeleteUser_WaitsForTheUserLock(t *testing.T) {
+	db := testutil.NewDB(t)
+	repo := repository.NewUserRepository(db)
+	u := newUser(t, db)
+
+	holder := db.Begin()
+	require.NoError(t, holder.Error)
+	var held []uuid.UUID
+	require.NoError(t, holder.Raw(`SELECT id FROM users WHERE id = ? FOR UPDATE`, u.ID).Scan(&held).Error)
+	require.Len(t, held, 1)
+
+	done := make(chan error, 1)
+	go func() { done <- repo.DeleteUser(context.Background(), u.ID) }()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var waiting int64
+		require.NoError(t, db.Raw(`SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock'`).Scan(&waiting).Error)
+		if waiting > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = holder.Rollback()
+			t.Fatal("DeleteUser never waited on the user's lock")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("DeleteUser returned while the lock was held: %v", err)
+	default:
+	}
+
+	require.NoError(t, holder.Commit().Error)
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("DeleteUser did not finish after the lock was released")
+	}
+	require.Zero(t, countFor(t, db, "users", "id", u.ID))
+}
+
+func TestUserRepository_DeleteUser_ConcurrentDeletes(t *testing.T) {
+	db := testutil.NewDB(t)
+	repo := repository.NewUserRepository(db)
+	a := seedAccount(t, db)
+
+	errs := make([]error, 2)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			errs[i] = repo.DeleteUser(context.Background(), a.user.ID)
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	var ok, notFound int
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			ok++
+		case errors.Is(err, gorm.ErrRecordNotFound):
+			notFound++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	require.Equal(t, 1, ok)
+	require.Equal(t, 1, notFound)
+}
+
+func TestUserRepository_DeleteUser_RacingSave(t *testing.T) {
+	db := testutil.NewDB(t)
+	users := repository.NewUserRepository(db)
+	bookmarks := repository.NewBookmarkRepository(db)
+
+	for round := 0; round < 25; round++ {
+		u := newUser(t, db)
+		var createErr, deleteErr error
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			createErr = bookmarks.Create(context.Background(), newBookmark(u.ID, "https://race.example.com/"+uuid.NewString()))
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			deleteErr = users.DeleteUser(context.Background(), u.ID)
+		}()
+		close(start)
+		wg.Wait()
+
+		require.NoError(t, deleteErr, "round %d", round)
+		if createErr != nil {
+			require.ErrorIs(t, createErr, gorm.ErrRecordNotFound, "round %d", round)
+		}
+		require.Zero(t, countFor(t, db, "bookmarks", "user_id", u.ID), "round %d", round)
+	}
 }
