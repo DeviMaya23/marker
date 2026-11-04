@@ -100,6 +100,18 @@ describe('BookmarkRow delete', () => {
     expect(invalidate).toHaveBeenCalledTimes(2)
   })
 
+  it('an Undo of a bookmark that was already restored (409 not in trash) says it could not undo and refreshes', async () => {
+    del.mockResolvedValue(undefined)
+    restore.mockRejectedValue(problem(409, 'bookmark_not_in_trash'))
+    const { user, invalidate } = setup()
+    await chooseDelete(user)
+    invalidate.mockClear()
+    fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
+    expect(await screen.findByText("Couldn't undo. It may have been changed elsewhere.")).toBeInTheDocument()
+    expect(screen.queryByText('It was already restored.')).not.toBeInTheDocument()
+    expect(invalidate).toHaveBeenCalledTimes(2)
+  })
+
   it('an Undo that fails says it could not undo', async () => {
     del.mockResolvedValue(undefined)
     restore.mockRejectedValue(problem(404, 'not_found'))

@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
-import { deleteBookmark, listBookmarks } from '../../../lib/api/bookmarks'
+import { deleteBookmark, listBookmarks, updateBookmark } from '../../../lib/api/bookmarks'
 import { ToastProvider } from '../../../components/ui/Toast'
 import { bookmark, page } from '../../../test/builders'
 import { BookmarkList } from './BookmarkList'
 
-vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn(), deleteBookmark: vi.fn() }))
+vi.mock('../../../lib/api/bookmarks', () => ({ listBookmarks: vi.fn(), deleteBookmark: vi.fn(), updateBookmark: vi.fn() }))
 
 const list = vi.mocked(listBookmarks)
 
@@ -364,5 +364,28 @@ describe('BookmarkList (row delete)', () => {
     expect(screen.queryByText('Doomed')).not.toBeInTheDocument()
     expect(list).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Moved to trash.')).toBeInTheDocument()
+  })
+})
+
+describe('BookmarkList (row edit that finds the bookmark gone)', () => {
+  // Known bug (report: bookmark-actions.report.md, Blocking 1). The edit dialog lives inside the
+  // row, so the refresh that follows a 404 or 409 removes the row and the dialog with it, and the
+  // message is never seen. `it.fails` passes while that is so; when it is fixed this test starts
+  // failing: change `it.fails` to `it`.
+  it.fails('keeps the dialog open with its message when Save gets a 404 and the refreshed list no longer has the row', async () => {
+    const user = userEvent.setup()
+    vi.mocked(updateBookmark).mockReset().mockRejectedValue(new ApiError(404, null, null))
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a', title: 'Gone soon' })])).mockResolvedValue(page([]))
+    renderList()
+    await screen.findByText('Gone soon')
+    await user.click(screen.getByRole('button', { name: 'Actions for Gone soon' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit title & note' }))
+    await user.type(await screen.findByLabelText('Title'), '!')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(updateBookmark).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.getByRole('dialog', { name: 'Edit bookmark' })).toBeInTheDocument()
+    expect(screen.getByText('This bookmark no longer exists.')).toBeInTheDocument()
   })
 })
