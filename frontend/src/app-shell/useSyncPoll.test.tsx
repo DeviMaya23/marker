@@ -98,6 +98,19 @@ describe('useSyncPoll', () => {
     expect(keys(invalidate)).toEqual([FOLDERS_KEY, BOOKMARK_LIST_KEY])
   })
 
+  it('refreshes on every change when the number goes up and then back down', async () => {
+    answer(3, 4, 3)
+    poll.mockResolvedValue({ version: 3 })
+    mount(client)
+    await tick(0)
+    await tick(SYNC_POLL_MS)
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    await tick(SYNC_POLL_MS)
+    expect(keys(invalidate)).toEqual([FOLDERS_KEY, BOOKMARK_LIST_KEY, FOLDERS_KEY, BOOKMARK_LIST_KEY])
+    await tick(SYNC_POLL_MS)
+    expect(invalidate).toHaveBeenCalledTimes(4)
+  })
+
   it('treats a first answer of 0 as a baseline', async () => {
     answer(0, 0, 1)
     mount(client)
