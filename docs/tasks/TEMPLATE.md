@@ -70,7 +70,7 @@ Do not improvise around these. Report what blocked you and what you did not do.
 
 ## Handing back
 
-Follow `AGENTS.md`: run `make check`, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, requirement IDs covered (with the test that shows each), dependency versions, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle.
+Follow `AGENTS.md`: run `make check`, and if the task touches `backend/` run `make test-integration-local` too, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, requirement IDs covered (with the test that shows each), which integration tests ran and which did not (and the Postgres version if they ran), dependency versions, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle.
 
 ---
 

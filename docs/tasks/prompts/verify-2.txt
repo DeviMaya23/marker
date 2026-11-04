@@ -2,7 +2,7 @@ You are re-verifying the <TASK> task. Read CLAUDE.md, AGENTS.md (Verifier role),
 
 You may add or fix tests and write a report. You may not change source code. Put any test you add in the existing test file for the code under test; never create `_edge` or `_regress` files.
 
-Check only two things: each Blocking finding from the previous report, and any regression the fixes could have caused. Run `make check`, and read the diff since the previous verification. Do not look for new issues beyond regressions.
+Check only two things: each Blocking finding from the previous report, and any regression the fixes could have caused. Run `make check`, and read the diff since the previous verification. If that diff touches `backend/`, also run `make test-integration-local` and report "run, passed" or "run, failed" with the PostgreSQL version it printed (or "not run" and why); a failing integration test is a regression. Do not look for new issues beyond regressions.
 
 For each earlier Blocking finding, report fixed, not fixed or disputed, with evidence (the test that now covers it, or the reproduction that now passes). Also report whether any existing test was weakened or deleted, and whether the fix round touched anything outside what the findings needed. Write your results to /tmp/second-pass.md, headed "Second pass". Do not edit docs/tasks/<TASK>.report.md and do not create any report file in the repo. Commit your changes only if you added or changed a test, and if you did, state your branch's name at the top of the results.
 

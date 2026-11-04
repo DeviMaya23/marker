@@ -12,7 +12,7 @@ You may add or fix tests and write a report. You may not change source code. If 
    - go.mod's go/toolchain lines are unchanged and no dependency beyond the task file's allowed list was added;
    - every check listed under "Verifier checks" in the task file.
 5. Try to break it with cases the task file doesn't list, starting from the ideas under "Verifier checks" in the task file. Always try the exact boundary of every limit, malformed input and concurrent writes.
-6. Integration tests can't be run by you. Say which ones exist and which criteria depend only on them.
+6. Integration tests: if the task touches `backend/`, run `make test-integration-local` yourself (it needs no Docker) and report "run, passed" or "run, failed" with the PostgreSQL version it printed. A failing integration test is Blocking. If the script cannot start a database, report "not run" and the reason. Either way, say which tests exist and which criteria depend only on them, and do not take the builder's tick in the plan as a result.
 
 Classify every finding as Blocking or Non-blocking. Blocking means it violates a requirement ID, an acceptance criterion or a convention, or it is a correctness bug you can reproduce; give the requirement ID, or the exact input and the wrong result. Anything else, including style, hypothetical races and refactoring ideas, is Non-blocking. Do not pad the report: if there are few real problems, say so.
 
