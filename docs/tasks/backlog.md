@@ -58,3 +58,7 @@ Numbered as in the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 ## Non-blocking findings from fix rounds
 
 <!-- Fix rounds append here: `- [<task slug>] finding` -->
+- [bookmark-actions] `EditBookmarkDialog` puts `.modal-footer` inside `.modal-body` (`max-height: 50vh; overflow-y: auto`), so on a short screen Save scrolls with the fields; `Dialog` has an unused `footer` prop for this. Same for the empty-trash dialog.
+- [bookmark-actions] A stored title with surrounding spaces enables Save on open, because the trimmed value differs from the stored one. Only matters if the server ever stores untrimmed titles.
+- [bookmark-actions] Base UI gives each toast `role="dialog"` inside the `role="status"` region (plan call 12); screen readers may announce toasts unevenly. Check in a real browser.
+- [bookmark-actions] Base UI pauses a toast's timer on hover and focus, so "disappears after 3.5 s" holds only while the pointer and focus are elsewhere.

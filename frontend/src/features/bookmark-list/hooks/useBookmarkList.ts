@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ApiError } from '../../../lib/api/ApiError'
 import { listBookmarks, type BookmarkSummary } from '../../../lib/api/bookmarks'
-import { bookmarkListKey } from '../lib/queryKeys'
+import { bookmarkListKey } from '../../../lib/bookmarks/queryKeys'
 
 /**
  * What the screen shows: `loading` the first page, `signed-out` after any 401, `error` when the

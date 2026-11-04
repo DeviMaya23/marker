@@ -1,16 +1,21 @@
-import { ArrowLeft, CircleAlert, Clock, ExternalLink, TriangleAlert } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, CircleAlert, Clock, ExternalLink, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
+import { EditBookmarkDialog } from '../../../components/ui/EditBookmarkDialog'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { ApiError } from '../../../lib/api/ApiError'
 import type { BookmarkDetail } from '../../../lib/api/bookmarks'
+import { useDeleteBookmark } from '../../../lib/bookmarks/useDeleteBookmark'
+import { useEditBookmark } from '../../../lib/bookmarks/useEditBookmark'
+import { useRestoreBookmark } from '../../../lib/bookmarks/useRestoreBookmark'
 import { useBookmark } from '../hooks/useBookmark'
 import { hostOf } from '../../../lib/hostOf'
 import { Favicon } from '../../../components/ui/Favicon'
 import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 
-/** The read-only bookmark page: fetch state, note and saved page text. */
+/** The bookmark page: fetch state, note and saved page text, with edit, delete and restore. */
 export function BookmarkView({ id }: { id: string }) {
   const { bookmark, error, isLoading, retry } = useBookmark(id)
 
@@ -44,6 +49,10 @@ export function BookmarkView({ id }: { id: string }) {
 function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
   const trashed = bookmark.deleted_at !== null
   const title = bookmark.title.trim() === '' ? hostOf(bookmark.url) : bookmark.title
+  const [editing, setEditing] = useState(false)
+  const edit = useEditBookmark(bookmark.id)
+  const del = useDeleteBookmark(bookmark.id, { undo: false })
+  const restore = useRestoreBookmark(bookmark.id)
 
   return (
     <div className="detail-page">
@@ -53,7 +62,15 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
 
       {trashed && (
         <Banner tone="trashed" role="status">
-          <strong>In trash.</strong> This bookmark is read-only.
+          <strong>In trash.</strong> This bookmark is read-only. Restore it to edit it.
+          <button
+            type="button"
+            className="btn btn--sm banner__action"
+            onClick={() => void restore.restore()}
+            disabled={restore.pending}
+          >
+            Restore
+          </button>
         </Banner>
       )}
 
@@ -77,6 +94,22 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
           </div>
         </div>
       </header>
+
+      {!trashed && (
+        <div className="detail-page__actions">
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
+            <Pencil size={14} aria-hidden="true" /> Edit
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger-outline btn--sm"
+            onClick={() => void del.remove()}
+            disabled={del.pending}
+          >
+            <Trash2 size={14} aria-hidden="true" /> Delete
+          </button>
+        </div>
+      )}
 
       <div className="detail-page__facts">
         <div className="detail-page__fact">
@@ -120,6 +153,18 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
           <div className="detail-page__content-body">{bookmark.content}</div>
         )}
       </div>
+      <EditBookmarkDialog
+        open={editing}
+        title={bookmark.title}
+        note={bookmark.note}
+        saving={edit.pending}
+        failure={edit.failure}
+        onSave={edit.save}
+        onClose={() => {
+          setEditing(false)
+          edit.reset()
+        }}
+      />
     </div>
   )
 }

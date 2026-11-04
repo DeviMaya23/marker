@@ -1,12 +1,24 @@
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
-import { getBookmark, type BookmarkDetail } from '../../../lib/api/bookmarks'
+import {
+  deleteBookmark,
+  getBookmark,
+  restoreBookmark,
+  updateBookmark,
+  type BookmarkDetail,
+} from '../../../lib/api/bookmarks'
+import { ToastProvider } from '../../../components/ui/Toast'
 import { BookmarkView } from './BookmarkView'
 
-vi.mock('../../../lib/api/bookmarks', () => ({ getBookmark: vi.fn() }))
+vi.mock('../../../lib/api/bookmarks', () => ({
+  getBookmark: vi.fn(),
+  updateBookmark: vi.fn(),
+  deleteBookmark: vi.fn(),
+  restoreBookmark: vi.fn(),
+}))
 
 function bookmark(overrides: Partial<BookmarkDetail> = {}): BookmarkDetail {
   return {
@@ -29,7 +41,9 @@ async function open() {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter initialEntries={['/bookmarks/b-1']}>
-        <BookmarkView id="b-1" />
+        <ToastProvider>
+          <BookmarkView id="b-1" />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -77,11 +91,13 @@ describe('BookmarkView', () => {
       expect(screen.getByText('Fetch failed')).toBeInTheDocument()
     })
 
-    it('shows a trashed bookmark read-only, with an In trash banner and no Restore', async () => {
+    it('shows a trashed bookmark read-only, with an In trash banner and a Restore button', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ deleted_at: '2026-03-05T00:00:00Z' }))
       await open()
-      expect(screen.getByRole('status')).toHaveTextContent('In trash. This bookmark is read-only.')
-      expect(screen.queryByRole('button', { name: /restore/i })).not.toBeInTheDocument()
+      expect(document.querySelector('.banner--trashed')).toHaveTextContent(
+        'In trash. This bookmark is read-only. Restore it to edit it.',
+      )
+      expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
       expect(screen.getByText('The page text.')).toBeInTheDocument()
     })
 
@@ -131,12 +147,11 @@ describe('BookmarkView', () => {
       expect(screen.getByText('remember this')).toBeInTheDocument()
     })
 
-    it('has no Note section when the note is null, and no folder or actions', async () => {
+    it('has no Note section when the note is null, and no folder', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: null }))
       await open()
       expect(screen.queryByText('Note')).not.toBeInTheDocument()
       expect(screen.queryByText('Folder')).not.toBeInTheDocument()
-      expect(screen.queryByRole('button')).not.toBeInTheDocument()
     })
 
     it('keeps an empty-string note as a note', async () => {
@@ -244,5 +259,154 @@ describe('BookmarkView', () => {
       await advance(1000)
       expect(screen.getByText('Fetched.')).toBeInTheDocument()
     })
+  })
+})
+
+describe('BookmarkView actions', () => {
+  // The "server": the mocked calls change it, and the page sees it only when it refetches.
+  let server: BookmarkDetail
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    notifyManager.setScheduler((callback) => queueMicrotask(callback))
+    server = bookmark({ note: 'a note' })
+    vi.mocked(getBookmark).mockReset().mockImplementation(async () => server)
+    vi.mocked(updateBookmark).mockReset()
+    vi.mocked(deleteBookmark).mockReset()
+    vi.mocked(restoreBookmark).mockReset()
+  })
+
+  afterEach(() => {
+    notifyManager.setScheduler((callback) => setTimeout(callback, 0))
+    vi.useRealTimers()
+  })
+
+  const click = async (name: string) => {
+    fireEvent.click(screen.getByRole('button', { name }))
+    await advance(0)
+  }
+
+  it('shows Edit and Delete for a live bookmark, and no Restore', async () => {
+    await open()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/move to/i)).not.toBeInTheDocument()
+  })
+
+  it('edits through the dialog prefilled from the bookmark; the page then shows the new title, and a cleared note disappears', async () => {
+    vi.mocked(updateBookmark).mockImplementation(async (_id, changes) => {
+      server = { ...server, title: changes.title ?? server.title, note: changes.note === undefined ? server.note : changes.note }
+      return server
+    })
+    await open()
+    await click('Edit')
+    const title = screen.getByLabelText('Title')
+    expect(title).toHaveValue('An example')
+    expect(screen.getByLabelText('Note')).toHaveValue('a note')
+    fireEvent.change(title, { target: { value: 'New title' } })
+    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } })
+    await click('Save')
+    await advance(0)
+    expect(updateBookmark).toHaveBeenCalledExactlyOnceWith('b-1', { title: 'New title', note: null })
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('New title')
+    expect(screen.queryByText('a note')).not.toBeInTheDocument()
+    expect(screen.queryByText('Note')).not.toBeInTheDocument()
+    expect(screen.getByText('Saved.')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Edit bookmark' })).not.toBeInTheDocument()
+  })
+
+  it('deletes: refreshes into the trashed view and toasts without an Undo', async () => {
+    vi.mocked(deleteBookmark).mockImplementation(async () => {
+      server = { ...server, deleted_at: '2026-03-05T00:00:00Z' }
+    })
+    await open()
+    await click('Delete')
+    await advance(0)
+    expect(deleteBookmark).toHaveBeenCalledExactlyOnceWith('b-1')
+    expect(screen.getByText('Moved to trash.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+  })
+
+  it('restores a trashed bookmark: refreshes into the live view and toasts', async () => {
+    server = bookmark({ deleted_at: '2026-03-05T00:00:00Z' })
+    vi.mocked(restoreBookmark).mockImplementation(async () => {
+      server = { ...server, deleted_at: null }
+      return server
+    })
+    await open()
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    await click('Restore')
+    await advance(0)
+    expect(restoreBookmark).toHaveBeenCalledExactlyOnceWith('b-1')
+    expect(screen.getByText('Restored to the top level.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument()
+  })
+
+  it('disables Delete while its request is in flight, and sends once', async () => {
+    let finish: () => void = () => {}
+    vi.mocked(deleteBookmark).mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await advance(0)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled()
+    expect(deleteBookmark).toHaveBeenCalledTimes(1)
+    finish()
+    await advance(0)
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeEnabled()
+  })
+
+  it('disables Restore while its request is in flight', async () => {
+    server = bookmark({ deleted_at: '2026-03-05T00:00:00Z' })
+    vi.mocked(restoreBookmark).mockImplementation(() => new Promise(() => {}))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    await advance(0)
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeDisabled()
+    expect(restoreBookmark).toHaveBeenCalledTimes(1)
+  })
+
+  it('a 404 from Delete replaces the page as loading it would', async () => {
+    vi.mocked(deleteBookmark).mockImplementation(async () => {
+      throw new ApiError(404, null, null)
+    })
+    await open()
+    // After the failed delete the page is refetched, and the bookmark is gone.
+    vi.mocked(getBookmark).mockRejectedValue(new ApiError(404, null, null))
+    await click('Delete')
+    await advance(0)
+    expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
+    expect(screen.getByText('That bookmark no longer exists.')).toBeInTheDocument()
+  })
+
+  it('a 401 from Restore replaces the page with the signed-out message', async () => {
+    server = bookmark({ deleted_at: '2026-03-05T00:00:00Z' })
+    vi.mocked(restoreBookmark).mockImplementation(async () => {
+      throw new ApiError(401, null, null)
+    })
+    await open()
+    vi.mocked(getBookmark).mockRejectedValue(new ApiError(401, null, null))
+    await click('Restore')
+    await advance(0)
+    expect(screen.getAllByText("You're logged out. Log in to continue.").length).toBeGreaterThan(0)
+    expect(screen.queryByText('An example')).not.toBeInTheDocument()
+  })
+
+  it('shows a failed Delete as a toast and keeps the page', async () => {
+    vi.mocked(deleteBookmark).mockImplementation(async () => {
+      throw new TypeError('offline')
+    })
+    await open()
+    await click('Delete')
+    await advance(0)
+    expect(screen.getByText("Couldn't move it to the trash.")).toBeInTheDocument()
+    expect(screen.getByText('An example')).toBeInTheDocument()
   })
 })

@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useSaveBookmark } from '../../../lib/bookmarks/useSaveBookmark'
-import { BOOKMARK_LIST_KEY } from '../lib/queryKeys'
+import { BOOKMARK_LIST_KEY } from '../../../lib/bookmarks/queryKeys'
 
 /** The paste-a-URL field. A save clears it and refreshes the list; the page stays where it is. */
 export function AddUrlForm() {
