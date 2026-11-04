@@ -350,16 +350,22 @@ describe('SavePopup', () => {
   })
 
   describe('signed out', () => {
-    it('shows the signed-out message on a 401, with a login link that returns to this popup', async () => {
+    it('shows the form again on a 401: Save reads "Save", no alert, no login panel, Esc closes', async () => {
       vi.mocked(createBookmark).mockRejectedValue(problem(401, 'unauthenticated'))
       const query = `?url=${encodeURIComponent('https://a.test/p?x=1&y=2#f')}&title=Hello%20there`
       openPopup(query)
       await pressSave()
 
-      expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+      expect(createBookmark).toHaveBeenCalledTimes(1)
+      expect(saveButton()).toHaveTextContent('Save')
+      expect(saveButton()).toBeEnabled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'OK' })).not.toBeInTheDocument()
-      const href = screen.getByRole('link', { name: 'Log in' }).getAttribute('href') ?? ''
-      expect(new URL(href, 'http://x').searchParams.get('return_to')).toBe(`/save${query}`)
+      expect(screen.queryByText(/logged out|Log in/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Log in' })).not.toBeInTheDocument()
+      expect(closeSpy).not.toHaveBeenCalled()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      expect(closeSpy).toHaveBeenCalled()
     })
   })
 
@@ -439,7 +445,6 @@ describe('SavePopup', () => {
 
     it.each([
       ['a server error', new ApiError(500, null, null)],
-      ['a 401', problem(401, 'unauthenticated')],
       ['a network failure', new TypeError('Failed to fetch')],
     ])('after %s: disabled, reads "Top level", says so, and Try again makes it usable', async (_name, error) => {
       vi.mocked(listFolders).mockRejectedValueOnce(error).mockResolvedValue({ items: FOLDERS })
@@ -455,6 +460,17 @@ describe('SavePopup', () => {
       expect(listFolders).toHaveBeenCalledTimes(2)
       expect(control()).toBeEnabled()
       expect(screen.queryByText(/Couldn't load your folders/)).not.toBeInTheDocument()
+    })
+
+    it('a 401 on the folder list reads like loading: "Loading…", disabled, no text, no Try again', async () => {
+      vi.mocked(listFolders).mockRejectedValue(problem(401, 'unauthenticated'))
+      openPopup()
+      await settle()
+      expect(listFolders).toHaveBeenCalledTimes(1)
+      expect(control()).toBeDisabled()
+      expect(control()).toHaveTextContent('Loading…')
+      expect(screen.queryByText(/Couldn't load your folders/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     })
 
     it('a failed list still saves to the top level', async () => {
