@@ -60,6 +60,8 @@ export function describeSaveFailure(error: unknown): SaveFailure {
     const message = tooLongMessage(error)
     if (message) return { kind: 'invalid-input', message }
   }
+  // The chosen folder was deleted meanwhile.
+  if (error.status === 404) return { kind: 'error', message: 'That folder no longer exists.' }
   if (error.status === 429) return { kind: 'error', message: rateLimitMessage(error.retryAfter) }
 
   return { kind: 'error', message: GENERIC }

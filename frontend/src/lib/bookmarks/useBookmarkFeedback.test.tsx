@@ -24,14 +24,14 @@ describe('useBookmarkFeedback', () => {
   it('refresh invalidates the lists and the one bookmark, and writes nothing to the cache', async () => {
     const { result, invalidate, setData } = setup('b-1')
     await act(() => result.current.refresh())
-    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(setData).not.toHaveBeenCalled()
   })
 
   it('refresh without an id invalidates every bookmark page', async () => {
     const { result, invalidate } = setup()
     await act(() => result.current.refresh())
-    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark']])
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['bookmark-list'], ['bookmark'], ['folders']])
   })
 
   it('a failure toast uses the neutral tone for "already done" and the error tone otherwise', async () => {

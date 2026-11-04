@@ -32,6 +32,13 @@ describe('describeFailure messages', () => {
     ['500, delete', api(500), 'delete', "Couldn't move it to the trash.", 'error'],
     ['500, restore', api(500), 'restore', "Couldn't restore it.", 'error'],
     ['500, empty', api(500), 'empty', "Couldn't empty the trash.", 'error'],
+    ['404, move', notFound, 'move', 'That bookmark or folder no longer exists.', 'error'],
+    ['409 in trash, move', inTrash, 'move', "This bookmark is in the trash and can't be moved.", 'error'],
+    ['409 with another code, move', api(409, 'duplicate_bookmark'), 'move', "Couldn't move the bookmark.", 'error'],
+    ['409 not in trash, move', notInTrash, 'move', "Couldn't move the bookmark.", 'error'],
+    ['401, move', api(401), 'move', "You're logged out.", 'error'],
+    ['500, move', api(500, 'internal_error'), 'move', "Couldn't move the bookmark.", 'error'],
+    ['network, move', new TypeError('Failed to fetch'), 'move', "Couldn't move the bookmark.", 'error'],
   ])('%s', (_name, error, action, message, tone) => {
     const out = describeFailure(error, action)
     expect(out.message).toBe(message)
@@ -46,14 +53,14 @@ describe('describeFailure messages', () => {
     expect(describeFailure(notFound, 'empty').message).toBe("Couldn't empty the trash.")
   })
 
-  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty'])('401 is signed out for %s', (action) => {
+  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty', 'move'])('401 is signed out for %s', (action) => {
     expect(describeFailure(api(401), action).signedOut).toBe(true)
     expect(describeFailure(api(500), action).signedOut).toBe(false)
   })
 })
 
 describe('describeFailure 429', () => {
-  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty'])('says the same for %s', (action) => {
+  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty', 'move'])('says the same for %s', (action) => {
     expect(describeFailure(api(429, 'rate_limited', {}, 7), action).message).toBe(
       'Too many requests. Try again in about 7 seconds.',
     )

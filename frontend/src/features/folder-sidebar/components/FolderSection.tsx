@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FolderPlus, TriangleAlert } from 'lucide-react'
 import { matchPath, useLocation, useNavigate } from 'react-router'
+import { MoveFolderDialog } from '../../../components/ui/MoveFolderDialog'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { ApiError } from '../../../lib/api/ApiError'
 import type { Folder } from '../../../lib/api/folders'
@@ -18,6 +19,7 @@ type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K>
 type Dialog = { key: number } & (
   | { kind: 'create'; parent: Folder | null }
   | { kind: 'rename'; folder: Folder }
+  | { kind: 'move'; folder: Folder }
   | { kind: 'delete'; folder: Folder; subfolders: number; bookmarks: number; gone: ReadonlySet<string> }
 )
 
@@ -35,7 +37,7 @@ function SkeletonRows() {
 
 /**
  * The sidebar's "Folders" section: heading with "New folder", the tree in its loading, empty,
- * failed and signed-out states, and the create, rename and delete dialogs.
+ * failed and signed-out states, and the create, rename, move and delete dialogs.
  */
 export function FolderSection() {
   const folders = useFolders()
@@ -93,6 +95,7 @@ export function FolderSection() {
         nodes={tree.roots}
         onNewSubfolder={(folder) => show({ kind: 'create', parent: folder })}
         onRename={(folder) => show({ kind: 'rename', folder })}
+        onMove={(folder) => show({ kind: 'move', folder })}
         onDelete={askDelete}
       />
     )
@@ -120,6 +123,7 @@ export function FolderSection() {
       {dialog?.kind === 'rename' && (
         <RenameFolderDialog key={dialog.key} open={open} folder={dialog.folder} onClose={close} />
       )}
+      {dialog?.kind === 'move' && <MoveFolderDialog key={dialog.key} open={open} folder={dialog.folder} onClose={close} />}
       {dialog?.kind === 'delete' && (
         <DeleteFolderDialog
           key={dialog.key}

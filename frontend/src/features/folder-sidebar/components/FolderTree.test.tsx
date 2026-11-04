@@ -14,7 +14,7 @@ const items = [
 ]
 
 function setup(path = '/', data = items) {
-  const actions = { onNewSubfolder: vi.fn(), onRename: vi.fn(), onDelete: vi.fn() }
+  const actions = { onNewSubfolder: vi.fn(), onRename: vi.fn(), onMove: vi.fn(), onDelete: vi.fn() }
   renderApp(<FolderTree nodes={buildFolderTree(data).roots} {...actions} />, { path })
   return { user: userEvent.setup(), ...actions }
 }
@@ -85,12 +85,11 @@ describe('FolderTree', () => {
     expect(screen.getAllByRole('link').some((l) => l.hasAttribute('aria-current'))).toBe(false)
   })
 
-  it('the row menu holds New subfolder, Rename, Delete in order, and no Move to…', async () => {
+  it('the row menu holds New subfolder, Rename, Move to…, Delete, in that order', async () => {
     const { user } = setup()
     await user.click(screen.getByRole('button', { name: 'Actions for folder Recipes' }))
     const labels = (await screen.findAllByRole('menuitem')).map((i) => i.textContent)
-    expect(labels).toEqual(['New subfolder', 'Rename', 'Delete'])
-    expect(screen.queryByText(/Move to/)).not.toBeInTheDocument()
+    expect(labels).toEqual(['New subfolder', 'Rename', 'Move to…', 'Delete'])
   })
 
   it.each([
@@ -111,6 +110,14 @@ describe('FolderTree', () => {
       await user.click(item)
       expect(onNewSubfolder).toHaveBeenCalledWith(expect.objectContaining({ name }))
     }
+  })
+
+  it('Move to… calls back with the folder, also at depth 3 where New subfolder is disabled', async () => {
+    const { user, onMove } = setup()
+    await user.click(screen.getByRole('button', { name: 'Actions for folder Winter' }))
+    expect(await screen.findByRole('menuitem', { name: 'New subfolder' })).toHaveAttribute('aria-disabled', 'true')
+    await user.click(screen.getByRole('menuitem', { name: 'Move to…' }))
+    expect(onMove).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'c' }))
   })
 
   it('Rename and Delete call back with the folder', async () => {

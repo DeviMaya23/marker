@@ -50,6 +50,19 @@ describe('write wrappers', () => {
     expect(JSON.stringify(omitted)).toBe('{"title":"T"}')
   })
 
+  it('updateBookmark sends folder_id as a string, as an explicit null, and not at all', async () => {
+    await updateBookmark('b1', { folder_id: 'f-1' })
+    expect(JSON.stringify(vi.mocked(apiRequest).mock.calls.at(-1)?.[2])).toBe('{"folder_id":"f-1"}')
+
+    await updateBookmark('b1', { folder_id: null })
+    expect(JSON.stringify(vi.mocked(apiRequest).mock.calls.at(-1)?.[2])).toBe('{"folder_id":null}')
+
+    await updateBookmark('b1', { title: 'T', note: 'n', folder_id: undefined })
+    const body = vi.mocked(apiRequest).mock.calls.at(-1)?.[2]
+    expect(JSON.stringify(body)).toBe('{"title":"T","note":"n"}')
+    expect(body).not.toHaveProperty('folder_id')
+  })
+
   it('deleteBookmark is a DELETE and restoreBookmark a POST to /restore, both without a body', async () => {
     await deleteBookmark('b1')
     expect(apiRequest).toHaveBeenLastCalledWith('DELETE', '/bookmarks/b1')

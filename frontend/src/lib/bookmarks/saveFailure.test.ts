@@ -98,6 +98,10 @@ describe('describeSaveFailure', () => {
     })
   })
 
+  it('maps a 404 to the deleted folder', () => {
+    expect(describeSaveFailure(apiError(404, 'not_found'))).toEqual({ kind: 'error', message: 'That folder no longer exists.' })
+  })
+
   describe('429', () => {
     it.each([
       [0, 'Too many saves. Try again in about 0 seconds.'],

@@ -32,7 +32,7 @@ describe('useEditBookmark', () => {
     })
     expect(ok).toBe(true)
     expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { note: null })
-    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(await screen.findByText('Saved.')).toBeInTheDocument()
     expect(result.current.failure).toBeNull()
   })
@@ -60,7 +60,7 @@ describe('useEditBookmark', () => {
     })
     expect(ok).toBe(false)
     expect(result.current.failure?.message).toBe("This bookmark is in the trash and can't be edited.")
-    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(screen.queryByText('Saved.')).not.toBeInTheDocument()
 
     invalidate.mockClear()

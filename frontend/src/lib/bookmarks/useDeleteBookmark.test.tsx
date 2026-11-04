@@ -36,7 +36,7 @@ describe('useDeleteBookmark', () => {
     const { result, invalidate } = setup()
     await act(() => result.current.remove())
     expect(del).toHaveBeenCalledExactlyOnceWith('b-1')
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(await screen.findByText('Moved to trash.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument()
   })
@@ -72,7 +72,7 @@ describe('useDeleteBookmark', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
     expect(restore).toHaveBeenCalledExactlyOnceWith('b-1')
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
   })
 
   it('Undo that fails refreshes and says it could not undo', async () => {
@@ -83,7 +83,7 @@ describe('useDeleteBookmark', () => {
     invalidate.mockClear()
     fireEvent.click(await screen.findByRole('button', { name: 'Undo' }))
     expect(await screen.findByText("Couldn't undo. It may have been changed elsewhere.")).toBeInTheDocument()
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
   })
 
   it.each([
@@ -98,7 +98,7 @@ describe('useDeleteBookmark', () => {
     const { result, invalidate } = setup()
     await act(() => result.current.remove())
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(invalidatedKeys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
     expect(result.current.pending).toBe(false)
   })
 

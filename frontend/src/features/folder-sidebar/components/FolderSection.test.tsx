@@ -222,3 +222,70 @@ describe('FolderSection delete', () => {
     expect(screen.getByTestId('where')).toHaveAttribute('data-navigation', 'REPLACE')
   })
 })
+
+describe('FolderSection move', () => {
+  it('opens the move dialog for that folder: its subtree and too-deep rows are disabled, the rest are not', async () => {
+    const { user } = setup()
+    await openMenu(user, 'Soups', 'Move to…')
+    expect(await screen.findByRole('dialog', { name: 'Move folder' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Recipes' })).toBeChecked()
+    // Soups has one level of children: itself and Winter are blocked; Recipes (depth 1) and Other can host it.
+    for (const name of ['Soups', 'Winter']) expect(screen.getByRole('radio', { name })).toHaveAttribute('aria-disabled', 'true')
+    for (const name of ['Top level', 'Recipes', 'Other']) {
+      expect(screen.getByRole('radio', { name })).not.toHaveAttribute('aria-disabled', 'true')
+    }
+  })
+
+  it('disables a depth-3 row for a folder that would go too deep', async () => {
+    const { user } = setup()
+    await openMenu(user, 'Other', 'Move to…')
+    await screen.findByRole('dialog', { name: 'Move folder' })
+    // Other has no children: depth 3 + 1 > 3 disables Winter only (and Other itself).
+    expect(screen.getByRole('radio', { name: 'Winter' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('radio', { name: 'Soups' })).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('moves under the chosen folder, sends only parent_id, refreshes, toasts, and the user stays where they are', async () => {
+    vi.mocked(updateFolder).mockResolvedValue(folder({ id: 'd' }))
+    const { user, invalidate } = setup('/folder/b')
+    await openMenu(user, 'Other', 'Move to…')
+    await user.click(await screen.findByRole('radio', { name: 'Recipes' }))
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(updateFolder).toHaveBeenCalledExactlyOnceWith('d', { parentId: 'a' }))
+    expect(await screen.findByText('Folder moved to “Recipes”.')).toBeInTheDocument()
+    expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toEqual([['folders'], ['bookmark-list']])
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Move folder' })).not.toBeInTheDocument())
+    expect(where()).toBe('/folder/b')
+  })
+
+  it('moves a subfolder to the top level with an explicit null', async () => {
+    vi.mocked(updateFolder).mockResolvedValue(folder({ id: 'b' }))
+    const { user } = setup()
+    await openMenu(user, 'Soups', 'Move to…')
+    await user.click(await screen.findByRole('radio', { name: 'Top level' }))
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    await waitFor(() => expect(updateFolder).toHaveBeenCalledExactlyOnceWith('b', { parentId: null }))
+    expect(await screen.findByText('Folder moved to the top level.')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['409 folder_name_conflict', problem(409, 'folder_name_conflict'), 'A folder with this name already exists there.'],
+    ['422 folder_depth_exceeded', problem(422, 'folder_depth_exceeded'), 'Folders can only be nested 3 levels deep.'],
+    ['404', problem(404, 'not_found'), 'That folder no longer exists.'],
+  ])('shows %s in the dialog and keeps it open', async (_name, error, message) => {
+    vi.mocked(updateFolder).mockRejectedValue(error)
+    const { user } = setup()
+    await openMenu(user, 'Other', 'Move to…')
+    await user.click(await screen.findByRole('radio', { name: 'Recipes' }))
+    await user.click(screen.getByRole('button', { name: 'Move' }))
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Move folder' })).toBeInTheDocument()
+  })
+
+  it('returns focus to the row menu button after Cancel', async () => {
+    const { user } = setup()
+    await openMenu(user, 'Other', 'Move to…')
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Actions for folder Other' })).toHaveFocus())
+  })
+})

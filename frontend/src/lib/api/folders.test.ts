@@ -23,9 +23,21 @@ describe('folder wrappers', () => {
     expect(apiRequest).toHaveBeenLastCalledWith('POST', '/folders', { name: 'Soups', parent_id: 'p-1' })
   })
 
-  it('updateFolder sends only the name, to the encoded path', async () => {
+  it('updateFolder sends only the name for a rename, to the encoded path', async () => {
     await updateFolder('f 1', { name: 'New' })
     expect(apiRequest).toHaveBeenCalledWith('PATCH', '/folders/f%201', { name: 'New' })
+    expect(vi.mocked(apiRequest).mock.calls[0][2]).not.toHaveProperty('parent_id')
+  })
+
+  it('updateFolder sends parent_id as a string, as an explicit null, and not at all', async () => {
+    await updateFolder('f1', { parentId: 'p-1' })
+    expect(JSON.stringify(vi.mocked(apiRequest).mock.calls.at(-1)?.[2])).toBe('{"parent_id":"p-1"}')
+
+    await updateFolder('f1', { parentId: null })
+    expect(JSON.stringify(vi.mocked(apiRequest).mock.calls.at(-1)?.[2])).toBe('{"parent_id":null}')
+
+    await updateFolder('f1', { parentId: undefined })
+    expect(JSON.stringify(vi.mocked(apiRequest).mock.calls.at(-1)?.[2])).toBe('{}')
   })
 
   it('deleteFolder returns both counts', async () => {

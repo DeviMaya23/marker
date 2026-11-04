@@ -41,7 +41,7 @@ describe('useRestoreBookmark', () => {
     await act(async () => finish())
     expect(result.current.pending).toBe(false)
     expect(await screen.findByText('Restored to the top level.')).toBeInTheDocument()
-    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
   })
 
   it.each([
@@ -55,7 +55,7 @@ describe('useRestoreBookmark', () => {
     const { result, invalidate } = setup()
     await act(() => result.current.restore())
     expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1']])
+    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
   })
 
   it('401: the logged-out toast with a Log in action', async () => {
