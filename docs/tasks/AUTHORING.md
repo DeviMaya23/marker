@@ -38,7 +38,7 @@ A session starts here, not with a named backlog item (unless the user names one,
    - **Blockers for the user:** anything that needs their decision or edit first (the contract, requirements, `STACK.md`, a migration, secrets, deployment details).
    - **Size and risk:** whether it should be split (a task a builder cannot finish in one session, or that mixes a back end and a front end) or merged with a neighbour.
 3. **Propose the plan in chat**: the next few tasks to draft, in order, which lane each belongs to (backend, frontend, tooling), which can run at the same time, what each waits for, and what is blocked on the user. Say which items you would leave alone for now and why. Keep it short; the user approves, reorders or overrules it.
-4. **Draft in the approved order.** A session may draft several tasks, one at a time: complete steps 1 to 6 for the first before starting the second, and give each its own fresh checker. A task drafted later in the session reads `main` as it is, plus the drafts already written in this session (they are not merged yet; treat them as running tasks when working out conflicts, and name them in "Shared files" and prerequisites). If an earlier answer changes the plan, say so and re-propose it.
+4. **Draft in the approved order.** A session may draft several tasks, one at a time: complete steps 1 to 6 for the first before starting the second, and give each its own fresh checker, started right after its file is written (step 5). A task drafted later in the session reads `main` as it is, plus the drafts already written in this session (they are not merged yet; treat them as running tasks when working out conflicts, and name them in "Shared files" and prerequisites). If an earlier answer changes the plan, say so and re-propose it.
 
 The plan is not stored in a file. It would become a second home for backlog items; the next session works it out again from the backlog and `status.sh`.
 
@@ -107,7 +107,9 @@ The backlog's rule: one home per item. In the same commit that adds the task fil
 
 ### 5. Check, fix, then show
 
-When the file is written and the scope is settled, spawn a **fresh subagent** to check it (the Agent tool). It gets no summary of your conversation, only the path of the draft and read access to the repository; that independence is the point. Give it the brief below, unchanged except for the file name.
+**Run the checker immediately.** As soon as a task file is written, in the same turn, spawn the checker for that file. Do not wait to finish the backlog change, to draft the next task, or to report to the user. In a session with several tasks, each task's checker starts the moment its own file is written, not after all the files exist. A checker runs in the background, so you may keep working on the backlog line for that task while it runs, but you do not start the next task's file until its findings are handled (steps 5 and 6 are finished for one task before the next one starts).
+
+Spawn a **fresh subagent** to check it (the Agent tool). It gets no summary of your conversation, only the path of the draft and read access to the repository; that independence is the point. Give it the brief below, unchanged except for the file name.
 
 > You are reviewing a task file that a builder agent will implement without access to the person who wrote it. Read `CLAUDE.md`, `AGENTS.md`, then the task file `docs/tasks/<slug>.md`. Do not edit any file. Check it against the repository as it is now (`openapi.yaml`, `docs/requirements.md`, the code, the tests, `STACK.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `TESTING.md`) and report:
 > 1. Contradictions: with the contract, the requirements, the code on `main`, another section of the same file, or `AGENTS.md` ownership rules (a file the task tells the builder to change but forbids it to).
@@ -149,6 +151,6 @@ For each task, and once for the session:
 - [ ] The task files, and the backlog changes, are the only files changed.
 - [ ] Each drafted item is gone from the backlog; any left-out part is named there with its source task.
 - [ ] The closing summary lists the tasks in run order, which lanes they are in, which can run together, what each waits for (merges, contract or `STACK.md` edits, `make generate`), and what the user must do first.
-- [ ] The checker ran on the final text; mechanical fixes are applied and listed; its design questions are answered or shown to the user.
+- [ ] The checker was started right after each file was written, not after the whole session's drafts, and ran on the final text; mechanical fixes are applied and listed; its design questions are answered or shown to the user.
 - [ ] Every defaults-you-chose item is in your final message.
 - [ ] The final message says what the user must do before the task can run.
