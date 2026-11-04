@@ -174,10 +174,13 @@ describe('useBookmarkList', () => {
     list.mockRejectedValueOnce(new ApiError(401, null, null))
     await act(async () => {
       await client.invalidateQueries({ queryKey: ['bookmark-list'] })
+      // Let react-query's batched notification reach the hook; without this the assertion reads a stale render.
+      await new Promise((r) => setTimeout(r, 20))
     })
     expect(list).toHaveBeenCalledTimes(2)
     expect(client.getQueryCache().getAll()[0].state.error).toBeInstanceOf(ApiError)
     expect(result.current.phase).toBe('empty')
+    expect(result.current.loadMoreFailed).toBe(false)
   })
 
   it('survives a refresh (as after a save) while the next page is in flight', async () => {
