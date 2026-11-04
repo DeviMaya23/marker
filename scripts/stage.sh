@@ -14,13 +14,16 @@
 #   fix       [VERIFIER_BRANCH=...] [ALREADY_FIXED=...]
 #                                                 found: the claude/* branch with <TASK>.report.md
 #   verify-2  [FIX_BRANCH=...]                    found the same way
-#   draft     [FOCUS=...]                         no TASK: drafts task files (docs/tasks/AUTHORING.md)
+#   draft     [FOCUS=...]                         no TASK; local only: prints the drafter's prompt (see below)
 #
 # Finding a branch lists up to 5 unmerged claude/* branches, newest first, and asks you to
 # confirm (Enter takes the first). It only reads remote refs; your working tree is not touched.
 #
 # The draft stage works on no existing task, so it takes no TASK. FOCUS names what to
 # draft ("search UI", "everything frontend"); without it the session starts by choosing.
+# It runs in your own checkout, not in the cloud: it only prints the prompt, so paste it
+# into a local session, or run: claude "$(bash scripts/stage.sh draft)". It needs no git
+# state (it skips the "on main" and "main is pushed" checks).
 #
 # --dry-run prints the filled prompt and does not start a session, so you can
 # paste it into claude.ai/code instead.
@@ -62,16 +65,19 @@ fi
 
 cd "$root"
 
-# The session clones main from GitHub, so main must be what is pushed.
-git fetch -q origin main
-have="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$have" != main ]; then
-  echo "run this from main (you are on '$have'): git checkout main" >&2
-  [ "$dry" = 1 ] || exit 1
-fi
-if [ -n "$(git rev-list origin/main..HEAD 2>/dev/null)" ]; then
-  echo "main has commits that are not on GitHub. Push them first: the cloud session cannot see them." >&2
-  [ "$dry" = 1 ] || exit 1
+# The session clones main from GitHub, so main must be what is pushed. (The draft stage
+# runs locally and needs none of this.)
+if [ "$stage" != draft ]; then
+  git fetch -q origin main
+  have="$(git rev-parse --abbrev-ref HEAD)"
+  if [ "$have" != main ]; then
+    echo "run this from main (you are on '$have'): git checkout main" >&2
+    [ "$dry" = 1 ] || exit 1
+  fi
+  if [ -n "$(git rev-list origin/main..HEAD 2>/dev/null)" ]; then
+    echo "main has commits that are not on GitHub. Push them first: the cloud session cannot see them." >&2
+    [ "$dry" = 1 ] || exit 1
+  fi
 fi
 
 # pick_branch MARKER LACKING sets $chosen to a pushed, unmerged claude/* branch that
@@ -149,7 +155,7 @@ if [ -n "$missing" ]; then
   exit 2
 fi
 
-if [ "$dry" = 1 ]; then
+if [ "$dry" = 1 ] || [ "$stage" = draft ]; then
   printf '%s\n' "$prompt"
   exit 0
 fi

@@ -2,8 +2,8 @@ Read CLAUDE.md, then AGENTS.md, then docs/tasks/AUTHORING.md. You are the Drafte
 
 Focus: <FOCUS>
 
-This is an interactive session and the user is here. Say in one sentence what you are about to do, then start. Ask the user about decisions that change what gets built, and settle the rest yourself and list it at the end. Do not edit any .md file while a discussion is open; edit only after the user has made clear that the scope is settled.
+This is an interactive session in the user's own checkout, and the user is here. Say in one sentence what you are about to do, then start. Ask the user about decisions that change what gets built, and settle the rest yourself and list it at the end. Do not edit any .md file while a discussion is open; edit only after the user has made clear that the scope is settled.
 
-Work on the branch this session gives you. Don't create or switch to another branch, and never push to main. Commit in small steps, one commit per task (its task file and its backlog change together), and push your branch. Read main as it is now before you write anything. Change no code, test, contract, requirements, STACK.md, script or other doc. If a task needs one of those changed first, say what and why, and stop; the user makes that change.
+Edit files in the working tree only. Run no git command that writes (no add, commit, branch, checkout, stash, reset, fetch, pull, push); reading git state is fine. The user makes every commit. Change no code, test, contract, requirements, STACK.md, script or other doc. If a task needs one of those changed first, say what and why, and stop; the user makes that change.
 
-Finish with the report AUTHORING.md describes: the tasks in run order and their lanes, what can run together, what each waits for, the checker's result, the defaults you chose, and what the user must do before the tasks can run. State your branch name at the top. Nothing you draft has been run or tested; say so.
+Finish with the report AUTHORING.md describes: the tasks in run order and their lanes, what can run together, what each waits for, the checker's result, the defaults you chose, and what the user must do before the tasks can run. Nothing you draft has been run or tested; say so.
