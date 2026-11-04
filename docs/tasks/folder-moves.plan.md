@@ -34,7 +34,7 @@ Branch: `claude/folder-moves-task-kyi515`. All paths under `frontend/src/`. One 
 ## Where it appears
 - [x] Bookmark row menu order "Open original link", "Edit title & note", "Move to…", "Delete"; opens the dialog; trashed row has none — `features/bookmark-list/components/BookmarkRow.tsx`, tests `BookmarkRow.test.tsx`, `TrashRow.test.tsx`
 - [x] Bookmark page: Folder fact (name, "Top level", placeholder, "Unknown folder" for failed list and unknown id), "Move" button, hidden when trashed; move refreshes and shows the new folder; `404`/`401` replace the page — `features/bookmark-detail/components/BookmarkView.tsx`, test `BookmarkView.test.tsx`
-- [ ] Folder row menu order "New subfolder", "Rename", "Move to…", "Delete"; "New subfolder" disabled at depth 3; "Move to…" opens the dialog with subtree and too-deep rows disabled — `features/folder-sidebar/components/FolderTree.tsx`, `FolderSection.tsx`, tests `FolderTree.test.tsx`, `FolderSection.test.tsx`
+- [x] Folder row menu order "New subfolder", "Rename", "Move to…", "Delete"; "New subfolder" disabled at depth 3; "Move to…" opens the dialog with subtree and too-deep rows disabled — `features/folder-sidebar/components/FolderTree.tsx`, `FolderSection.tsx`, tests `FolderTree.test.tsx`, `FolderSection.test.tsx`
 
 ## Save popup
 - [ ] Select wrapper — `components/ui/Select.tsx`, test `components/ui/Select.test.tsx`

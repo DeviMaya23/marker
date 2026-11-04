@@ -12,6 +12,7 @@ export const DEPTH_TITLE = 'Folders can only be nested 3 levels deep.'
 export type FolderActions = {
   onNewSubfolder: (folder: Folder) => void
   onRename: (folder: Folder) => void
+  onMove: (folder: Folder) => void
   onDelete: (folder: Folder) => void
 }
 
@@ -46,7 +47,7 @@ type RowProps = FolderActions & {
   onToggle: (id: string) => void
 }
 
-function FolderRow({ node, level, collapsed, onToggle, onNewSubfolder, onRename, onDelete }: RowProps) {
+function FolderRow({ node, level, collapsed, onToggle, onNewSubfolder, onRename, onMove, onDelete }: RowProps) {
   const { folder, children, subtreeCount } = node
   const hasChildren = children.length > 0
   const expanded = !collapsed.has(folder.id)
@@ -85,6 +86,7 @@ function FolderRow({ node, level, collapsed, onToggle, onNewSubfolder, onRename,
               title: tooDeep ? DEPTH_TITLE : undefined,
             },
             { key: 'rename', label: 'Rename', onSelect: () => onRename(folder) },
+            { key: 'move', label: 'Move to…', onSelect: () => onMove(folder) },
             { key: 'delete', label: 'Delete', onSelect: () => onDelete(folder), danger: true },
           ]}
         >
@@ -102,6 +104,7 @@ function FolderRow({ node, level, collapsed, onToggle, onNewSubfolder, onRename,
               onToggle={onToggle}
               onNewSubfolder={onNewSubfolder}
               onRename={onRename}
+              onMove={onMove}
               onDelete={onDelete}
             />
           ))}
