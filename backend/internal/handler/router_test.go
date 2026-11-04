@@ -35,7 +35,7 @@ func (stubAuth) Authenticate(_ context.Context, token string) (domain.Session, e
 }
 
 func newTestRouter() *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, nil, nil), Auth: stubAuth{}, AppOrigin: testOrigin})
 }
 
 func withSession(token string) func(*http.Request) {
@@ -94,8 +94,8 @@ func TestRouter_APIRequiresASession(t *testing.T) {
 	})
 
 	t.Run("valid session reaches the handler", func(t *testing.T) {
-		// Favicons are a stub for now, so reaching the handler means a 501.
-		rec := do(e, http.MethodGet, "/api/v1/favicons/"+uuid.NewString(), withSession(goodSession))
+		// Account deletion is a stub for now, so reaching the handler means a 501.
+		rec := do(e, http.MethodDelete, "/api/v1/account", withSession(goodSession), withCSRF())
 		requireProblem(t, rec, http.StatusNotImplemented, notImplCode)
 	})
 }

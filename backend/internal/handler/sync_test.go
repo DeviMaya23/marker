@@ -29,7 +29,7 @@ func (s *syncSpy) Version(_ context.Context, userID uuid.UUID) (int64, error) {
 }
 
 func syncRouter(spy *syncSpy) *echo.Echo {
-	return NewRouter(Deps{Server: NewServer(nil, nil, spy), Auth: authFor{}, AppOrigin: testOrigin})
+	return NewRouter(Deps{Server: NewServer(nil, nil, spy, nil), Auth: authFor{}, AppOrigin: testOrigin})
 }
 
 const syncPath = "/api/v1/sync/version"

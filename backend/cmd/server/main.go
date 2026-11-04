@@ -65,9 +65,10 @@ func main() {
 	folderService := usecase.NewFolderService(folderRepo)
 	userRepo := repository.NewUserRepository(db)
 	syncService := usecase.NewSyncService(userRepo)
+	faviconService := usecase.NewFaviconService(repository.NewFaviconRepository(db))
 	authService := usecase.NewAuthService(userRepo, repository.NewSessionRepository(db))
 	deps := handler.Deps{
-		Server:    handler.NewServer(bookmarkService, folderService, syncService),
+		Server:    handler.NewServer(bookmarkService, folderService, syncService, faviconService),
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
 	}
