@@ -14,9 +14,13 @@
 #   fix       [VERIFIER_BRANCH=...] [ALREADY_FIXED=...]
 #                                                 found: the claude/* branch with <TASK>.report.md
 #   verify-2  [FIX_BRANCH=...]                    found the same way
+#   draft     [FOCUS=...]                         no TASK: drafts task files (docs/tasks/AUTHORING.md)
 #
 # Finding a branch lists up to 5 unmerged claude/* branches, newest first, and asks you to
 # confirm (Enter takes the first). It only reads remote refs; your working tree is not touched.
+#
+# The draft stage works on no existing task, so it takes no TASK. FOCUS names what to
+# draft ("search UI", "everything frontend"); without it the session starts by choosing.
 #
 # --dry-run prints the filled prompt and does not start a session, so you can
 # paste it into claude.ai/code instead.
@@ -26,10 +30,10 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dir="$root/docs/tasks/prompts"
 
 stage="${1:-}"
-[ -n "$stage" ] || { sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ -n "$stage" ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 shift
 file="$dir/$stage.txt"
-[ -f "$file" ] || { echo "unknown stage '$stage' (builder, verify-1, fix, verify-2)" >&2; exit 2; }
+[ -f "$file" ] || { echo "unknown stage '$stage' (builder, verify-1, fix, verify-2, draft)" >&2; exit 2; }
 
 dry=0
 pairs=()
@@ -51,8 +55,10 @@ value_of() {
 }
 
 task="$(value_of TASK)"
-[ -n "$task" ] || { echo "TASK=<slug> is required" >&2; exit 2; }
-[ -f "$root/docs/tasks/$task.md" ] || { echo "no task file docs/tasks/$task.md" >&2; exit 2; }
+if [ "$stage" != draft ]; then
+  [ -n "$task" ] || { echo "TASK=<slug> is required" >&2; exit 2; }
+  [ -f "$root/docs/tasks/$task.md" ] || { echo "no task file docs/tasks/$task.md" >&2; exit 2; }
+fi
 
 cd "$root"
 
@@ -121,12 +127,20 @@ case "$stage" in
   verify-2)
     if [ -z "$(value_of FIX_BRANCH)" ]; then pick_branch "$report" ""; pairs+=("FIX_BRANCH=$chosen"); fi
     ;;
+  draft)
+    if [ -z "$(value_of FOCUS)" ]; then pairs+=("FOCUS=nothing named: start with Phase 0 and propose a plan"); fi ;;
 esac
 
 prompt="$(cat "$file")"
 for pair in ${pairs[@]+"${pairs[@]}"}; do
   key="${pair%%=*}"; val="${pair#*=}"
-  prompt="${prompt//<$key>/$val}"
+  # Not ${prompt//<$key>/$val}: bash 5.2 reads a "&" in $val as the matched text.
+  out=""; rest="$prompt"
+  while [[ "$rest" == *"<$key>"* ]]; do
+    out+="${rest%%"<$key>"*}$val"
+    rest="${rest#*"<$key>"}"
+  done
+  prompt="$out$rest"
 done
 
 missing="$(printf '%s' "$prompt" | grep -o '<[A-Z_]\{3,\}>' | sort -u | tr '\n' ' ' || true)"

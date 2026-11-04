@@ -15,8 +15,9 @@ How the work divides between agent roles. Every agent also follows `CLAUDE.md`, 
 | Frontend | `frontend/**` | `backend/**`, the contract |
 | Integrator | Any file, to merge work and fix the seams between pieces | Add features, or change requirements |
 | Verifier | Tests and a verification report | Source code |
+| Drafter | The task files it drafts (`docs/tasks/<slug>.md`) and `docs/tasks/backlog.md`, in an interactive session with the user (see `docs/tasks/AUTHORING.md`) | Everything else: code, tests, the contract, requirements, other docs |
 
-**Task records.** Each task keeps its records under `docs/tasks/`: the builder's plan (`<task>.plan.md`), the verifier's report (`<task>.report.md`) and the shared `backlog.md`. The agent a prompt names writes that record, and these are the only files under `docs/` an agent may change. No agent edits the task file itself, `requirements.md` or any other doc.
+**Task records.** Each task keeps its records under `docs/tasks/`: the builder's plan (`<task>.plan.md`), the verifier's report (`<task>.report.md`) and the shared `backlog.md`. The agent a prompt names writes that record, and these are the only files under `docs/` a builder or verifier may change. Only the Drafter writes task files and edits the backlog beyond appending findings; no builder or verifier edits the task file itself, `requirements.md` or any other doc.
 
 Each agent runs in its own isolated checkout on its own branch, and stays inside the directories it owns. Directory ownership keeps branches from touching the same files, so merges stay clean.
 

@@ -18,6 +18,7 @@ The branch to continue from is found for you when you leave its placeholder out:
 | 2 | Verifier, first pass | `verify-1.txt` | the builder's branch | has `<TASK>.plan.md`, no `<TASK>.report.md` | `TASK`, optional `BUILDER_BRANCH` |
 | 3 | Fix round (builder) | `fix.txt` | the verifier's branch | has `<TASK>.report.md` | `TASK`, optional `VERIFIER_BRANCH`, optional `ALREADY_FIXED` |
 | 4 | Verifier, second pass | `verify-2.txt` | the fix round's branch | has `<TASK>.report.md` | `TASK`, optional `FIX_BRANCH` |
+| – | Drafter (before any task exists) | `draft.txt` | `main` | | optional `FOCUS` (no `TASK`) |
 
 Example run:
 
@@ -26,6 +27,8 @@ bash scripts/stage.sh builder TASK=save-a-url
 # read the builder's summary, then (still on main):
 bash scripts/stage.sh verify-1 TASK=save-a-url
 ```
+
+The drafter is not part of a task's chain. It writes task files, so it takes no `TASK`: `bash scripts/stage.sh draft` starts it choosing what to draft, and `bash scripts/stage.sh draft FOCUS="search UI"` points it at something. It is interactive: you answer its questions in the session. See `docs/tasks/AUTHORING.md`.
 
 Stop rules: two verification rounds at most. Only Blocking findings are fixed in the round; Non-blocking ones go to `docs/tasks/backlog.md`. The second pass puts its results in the PR body, not in a file.
 
