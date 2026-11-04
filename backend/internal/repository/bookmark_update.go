@@ -70,6 +70,9 @@ func (r *BookmarkRepository) Update(ctx context.Context, userID, id uuid.UUID, u
 
 	var out domain.Bookmark
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := lockUser(tx, userID); err != nil {
+			return err
+		}
 		res := tx.Exec(query, args...)
 		if res.Error != nil {
 			return res.Error

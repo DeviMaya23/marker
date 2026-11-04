@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
@@ -529,4 +530,89 @@ func TestFolderRepository_OtherUser(t *testing.T) {
 	rows, err := bookmarks.List(ctx, domain.BookmarkListQuery{UserID: bob.ID, Mode: domain.ListLive, FolderID: &root.ID, Limit: 10})
 	require.NoError(t, err)
 	require.Empty(t, rows)
+}
+
+// TestFolderDelete_RacesWithBookmarkWrites runs a folder delete against a write on a
+// bookmark in that folder, many times. Before every write took the user lock first,
+// Postgres aborted one of the two with a deadlock (40P01).
+func TestFolderDelete_RacesWithBookmarkWrites(t *testing.T) {
+	const rounds = 60
+	ctx := context.Background()
+	db := testutil.NewDB(t)
+	bookmarks := repository.NewBookmarkRepository(db)
+	folders := repository.NewFolderRepository(db)
+
+	tests := []struct {
+		name    string
+		trashed bool
+		op      func(b domain.Bookmark) error
+		allowed []error
+	}{
+		{"Update", false, func(b domain.Bookmark) error {
+			_, err := bookmarks.Update(ctx, b.UserID, b.ID, domain.BookmarkUpdate{Title: domain.Value("renamed")})
+			return err
+		}, []error{domain.ErrBookmarkInTrash, gorm.ErrRecordNotFound}},
+		{"Trash", false, func(b domain.Bookmark) error { return bookmarks.Trash(ctx, b.UserID, b.ID) },
+			[]error{domain.ErrBookmarkInTrash}},
+		{"Restore", true, func(b domain.Bookmark) error { _, err := bookmarks.Restore(ctx, b.UserID, b.ID); return err },
+			[]error{domain.ErrBookmarkNotInTrash}},
+		{"RecordFetchSuccess", false, func(b domain.Bookmark) error {
+			return bookmarks.RecordFetchSuccess(ctx, b, domain.FetchResult{Title: "T", Text: "x"})
+		}, []error{gorm.ErrRecordNotFound}},
+		{"RecordFetchFailure", false, func(b domain.Bookmark) error { return bookmarks.RecordFetchFailure(ctx, b) },
+			[]error{gorm.ErrRecordNotFound}},
+		{"EmptyTrash", true, func(b domain.Bookmark) error { _, err := bookmarks.EmptyTrash(ctx, b.UserID); return err }, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			user := newUser(t, db)
+			start := userVersion(t, db, user.ID)
+			successes := int64(0)
+
+			for i := 0; i < rounds; i++ {
+				folder := newFolder(user.ID, nil, "R-"+domain.NewID().String(), 1)
+				require.NoError(t, db.Create(&folder).Error)
+				b := newBookmark(user.ID, "https://race.example.com/"+domain.NewID().String())
+				b.FolderID = &folder.ID
+				require.NoError(t, db.Create(&b).Error)
+				if tc.trashed {
+					require.NoError(t, db.Model(&b).Update("deleted_at", time.Now()).Error)
+				}
+
+				var opErr, delErr error
+				var wg sync.WaitGroup
+				gate := make(chan struct{})
+				wg.Add(2)
+				go func() { defer wg.Done(); <-gate; opErr = tc.op(b) }()
+				go func() { defer wg.Done(); <-gate; _, delErr = folders.Delete(ctx, user.ID, folder.ID) }()
+				close(gate)
+				wg.Wait()
+
+				for _, err := range []error{opErr, delErr} {
+					require.NotEqual(t, "40P01", pgErrCode(err), "deadlock: %v", err)
+				}
+				require.NoError(t, delErr, "the folder delete always succeeds")
+				successes++
+				if opErr == nil {
+					successes++
+					continue
+				}
+				legit := false
+				for _, want := range tc.allowed {
+					legit = legit || errors.Is(opErr, want)
+				}
+				require.True(t, legit, "unexpected outcome: %v", opErr)
+			}
+			require.Equal(t, start+successes, userVersion(t, db, user.ID), "one increment per successful write")
+		})
+	}
+}
+
+func pgErrCode(err error) string {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code
+	}
+	return ""
 }

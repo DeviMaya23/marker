@@ -38,19 +38,6 @@ SELECT f.id, f.user_id, f.name, f.parent_id, f.depth, f.created_at, f.updated_at
 FROM folders f
 `
 
-// lockFolders takes the user's folder lock, so the tree the transaction reads cannot
-// change under it. It returns gorm.ErrRecordNotFound if the user does not exist.
-func lockFolders(tx *gorm.DB, userID uuid.UUID) error {
-	var ids []uuid.UUID
-	if err := tx.Raw(`SELECT id FROM users WHERE id = ? FOR UPDATE`, userID).Scan(&ids).Error; err != nil {
-		return err
-	}
-	if len(ids) == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
-}
-
 func getFolderWithCount(tx *gorm.DB, userID, id uuid.UUID) (domain.FolderWithCount, error) {
 	var rows []domain.FolderWithCount
 	if err := tx.Raw(folderWithCountSQL+`WHERE f.id = ? AND f.user_id = ?`, id, userID).Scan(&rows).Error; err != nil {
@@ -121,7 +108,7 @@ func (r *FolderRepository) Subtree(ctx context.Context, userID, id uuid.UUID) ([
 func (r *FolderRepository) Create(ctx context.Context, f domain.Folder) (domain.FolderWithCount, error) {
 	var out domain.FolderWithCount
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockFolders(tx, f.UserID); err != nil {
+		if err := lockUser(tx, f.UserID); err != nil {
 			return err
 		}
 		f.Depth = 1
@@ -158,7 +145,7 @@ func (r *FolderRepository) Create(ctx context.Context, f domain.Folder) (domain.
 func (r *FolderRepository) Update(ctx context.Context, userID, id uuid.UUID, u domain.FolderUpdate) (domain.FolderWithCount, error) {
 	var out domain.FolderWithCount
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockFolders(tx, userID); err != nil {
+		if err := lockUser(tx, userID); err != nil {
 			return err
 		}
 		subtree, err := subtreeOf(tx, userID, id)
@@ -235,7 +222,7 @@ func (r *FolderRepository) Update(ctx context.Context, userID, id uuid.UUID, u d
 func (r *FolderRepository) Delete(ctx context.Context, userID, id uuid.UUID) (domain.FolderDeletion, error) {
 	var out domain.FolderDeletion
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := lockFolders(tx, userID); err != nil {
+		if err := lockUser(tx, userID); err != nil {
 			return err
 		}
 		subtree, err := subtreeOf(tx, userID, id)

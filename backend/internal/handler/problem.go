@@ -81,13 +81,14 @@ func problemFor(err error) api.Problem {
 			return newProblem(http.StatusBadRequest, api.ErrorCodeValidationError, "Invalid request")
 		case http.StatusNotFound, http.StatusMethodNotAllowed:
 			return newProblem(http.StatusNotFound, api.ErrorCodeNotFound, "Not found")
+		case http.StatusUnsupportedMediaType:
+			return newProblem(http.StatusUnsupportedMediaType, api.ErrorCodeUnsupportedMediaType, "Unsupported media type")
 		case http.StatusRequestEntityTooLarge:
 			return newProblem(http.StatusRequestEntityTooLarge, api.ErrorCodePayloadTooLarge, "Request body too large")
 		}
 	}
 
-	// internal_error is not in openapi.yaml yet: the contract has no code for a generic 500.
-	return newProblem(http.StatusInternalServerError, "internal_error", "Internal server error")
+	return newProblem(http.StatusInternalServerError, api.ErrorCodeInternalError, "Internal server error")
 }
 
 func newProblem(status int, code api.ErrorCode, title string) api.Problem {
