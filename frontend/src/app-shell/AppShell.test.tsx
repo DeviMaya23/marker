@@ -321,6 +321,56 @@ describe('AppShell drawer', () => {
     expect([z('.modal-overlay'), z('.dropdown-positioner'), z('.toast-region')]).toEqual([60, 70, 80])
   })
 
+  it.each([
+    [768, true],
+    [767, false],
+  ])('with the drawer open, a viewport of %ipx %s the inline sidebar', async (width, becomesWide) => {
+    const { user } = narrow()
+    await openDrawer(user)
+    setViewport(width)
+    if (becomesWide) {
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(screen.getByRole('complementary')).toBeInTheDocument()
+    } else {
+      expect(drawer()).toBeInTheDocument()
+      expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    }
+    expect(trashLinks()).toHaveLength(1)
+  })
+
+  it('crossing 768px with a folder dialog open leaves one sidebar and no dialog', async () => {
+    const { user } = narrow()
+    await openDrawer(user)
+    await user.click(screen.getByRole('button', { name: 'New folder' }))
+    await waitFor(() => expect(dialogs()).toHaveLength(2))
+    setViewport(900)
+    await waitFor(() => expect(screen.queryByRole('dialog', { hidden: true })).not.toBeInTheDocument())
+    expect(screen.getByRole('complementary')).toBeInTheDocument()
+    expect(trashLinks()).toHaveLength(1)
+  })
+
+  it('locks the page scroll while the drawer is open and releases it on close', async () => {
+    const locked = () => document.documentElement.style.overflowY === 'hidden' || document.body.style.overflowY === 'hidden'
+    const { user } = narrow()
+    await openDrawer(user)
+    expect(locked()).toBe(true)
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(locked()).toBe(false)
+  })
+
+  it('keeps Close menu outside the scrolling body with a long folder list', async () => {
+    const { user } = narrow()
+    // The folders are only requested once the drawer mounts the sidebar.
+    list.mockResolvedValue({
+      items: Array.from({ length: 200 }, (_, i) => folder({ id: `f${i}`, name: `Folder ${i}`, depth: 1 })),
+    })
+    await openDrawer(user)
+    await within(drawer()).findByRole('link', { name: /Folder 199/ })
+    const body = drawer().querySelector('.drawer-panel__body')
+    expect(body).not.toContainElement(screen.getByRole('button', { name: 'Close menu' }))
+  })
+
   it('survives opening and closing ten times', async () => {
     const { user } = narrow()
     for (let i = 0; i < 10; i++) {
