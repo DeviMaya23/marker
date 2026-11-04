@@ -32,14 +32,14 @@ These come from how the user works. They apply to every drafting session.
 A session starts here, not with a named backlog item (unless the user names one, in which case confirm it still fits the plan below and go to step 1). Nothing is edited in this phase, including the backlog.
 
 1. **Read the whole backlog**, then `scripts/status.sh` (what is drafted, ready, built, verified, merged), the open task files, and `STACK.md`. Read all of it, every time; the order depends on all of it, and it changes whenever something merges.
-2. **Reconcile the backlog with the facts before you trust it.** The backlog is a to-do list, not evidence of what exists. When sources disagree, believe them in this order: the code on `main`, then `openapi.yaml`, then the task reports and `scripts/status.sh`, then the backlog. Check at least:
-   - the operations still unbuilt against `backend/internal/handler/stubs.go` and `openapi.yaml`, and the count in the backlog's state line;
-   - every merged task's report: each Non-blocking finding is in the backlog (as a loose end, or as a fix-round line) or was fixed;
-   - items whose task has since merged or been drafted, and any line in `STACK.md`, `docs/api.md` or the backlog that describes work as pending when it is done;
-   - the dependencies between items: a front-end item that needs a back-end operation names it, and a back-end item that a front-end item waits on says so;
-   - decisions the user made in conversation that are written nowhere (for example "after the app is finished", an ordering rule, something deliberately left out).
+2. **Reconcile the backlog with the facts, and triage new findings.** The backlog is a to-do list, not evidence of what exists, and it holds no status. When sources disagree, believe them in this order: the code on `main`, then `openapi.yaml`, then the task reports and `scripts/status.sh`, then the backlog. Check:
+   - **Unbuilt operations:** every operation in the backlog's table is still a stub in `backend/internal/handler/stubs.go` (and not shadowed by a real handler), and every stub is either in the table or in a task file.
+   - **Stale text:** any line in `STACK.md`, `docs/api.md` or the backlog that describes finished work as pending, or that names a commit, a count or a status (those do not belong in the backlog; propose removing them).
+   - **Dependencies:** a front-end item that needs a back-end operation names it, and a back-end item that a front-end item waits on says so.
+   - **Chat decisions:** decisions the user made in conversation that are written nowhere (for example "after the app is finished", an ordering rule, something deliberately left out).
+   - **New findings, to triage.** A report is the record of its own findings; only the ones the user chooses become backlog lines. Find the last triage: the newest commit on `origin/main` whose message starts `backlog: triage findings through ` (the text after it is a commit of `main`). If there is none, ask the user where to start. Take the reports (`docs/tasks/*.report.md`) added or changed on `main` since that commit (`git diff --name-only <that commit>..origin/main -- docs/tasks`), and read their Non-blocking findings. Skip a finding that is already in the backlog, or that the report says a fix round fixed. Show each remaining finding to the user in one line with its task, and ask **track** or **drop**. A tracked finding becomes a line under "Loose ends from verifier reports" (`` - `<task>`: <finding> ``); a dropped one stays in its report and is not asked about again. Do not re-read reports from before the last triage.
 
-   Report every disagreement to the user in the plan (step 4), with what the source says and what the backlog says, and propose the fix. Do not change the backlog or any other doc yet: edits wait for the user's go-ahead (the rules above). Mechanical corrections the user approves are made in the same commit as the task they belong to, or in a commit of their own if no task is drafted.
+   Report every disagreement to the user in the plan (step 4), with what the source says and what the backlog says, and propose the fix. Do not change the backlog or any other doc yet: edits wait for the user's go-ahead (the rules above). When the user has answered the triage, record it in a commit of its own, made before any task commit: the tracked lines (and any approved correction) in `docs/tasks/backlog.md`, with the message `backlog: triage findings through <the short hash of origin/main you read>`. If nothing was tracked, make the commit empty (`git commit --allow-empty`) so the marker still exists. Other approved corrections go in the same commit as the task they belong to, or in a commit of their own if no task is drafted.
 3. **Work out the order with parallel work in mind.** The user runs a backend task and a frontend task at the same time whenever the files allow it, so the plan is a set of lanes, not a single list. For every candidate, find:
    - **Prerequisites:** what must be merged first (a backend slice before its frontend slice; the search API before the search UI; a contract or `STACK.md` change the user must make).
    - **Conflicts:** what it shares with tasks that are running or that you plan alongside it. Backend tasks that change the same `handler/` files or `handler/problem.go`, any two tasks that change `package.json`, `go.mod`, a lockfile, the `Makefile` or migrations, and two frontend tasks that change the same shared files (`app-shell/`, `src/styles/`, `src/test/setup.ts`, `components/ui/`) do not run together. Different directories (`backend/**` against `frontend/**`) usually do.
@@ -59,7 +59,7 @@ Steps 1 to 6 are for one task. Repeat them for each task in the plan.
 Before the first question, ground yourself in what exists. A task written against a guess about the code is the commonest source of builder failures.
 
 1. The backlog line, and the requirement IDs it names, in `docs/requirements.md`.
-2. The contract for every operation involved: `openapi.yaml`, not only `docs/api.md`. Note parameters, response codes, error codes and descriptions that already settle things.
+2. The contract for every operation involved: `openapi.yaml`, not only `docs/api.md`. Write down, for each operation, what the contract allows: every parameter, request field, status code, response header, response field and error code, with its description. That list is the limit of what the task may specify (see step 2).
 3. The code on `main` that the task touches, by reading it: names, signatures, interfaces, what is a stub, what already exists. Use `scripts/status.sh --all` and the `docs/tasks/*.report.md` files of the neighbouring tasks to learn what was built and what was left out on purpose.
 4. Two or three finished task files of the same side (backend or frontend) and one that is close in shape. They are the best model for depth and tone.
 5. The "Known gaps", Non-blocking findings and backlog lines that mention this area. They are either in scope now or must be named as out of scope.
@@ -79,6 +79,8 @@ Use the question tool when it is available (up to four questions at a time, each
 Do not ask about wording of messages, test names, file names, or a default any careful engineer would pick. Decide those, and list them (step 5).
 
 If the user's answers contradict each other or the contract, say so and ask again; do not pick silently.
+
+**The contract is a limit, not a starting point.** Before you offer the user an option, a recommendation or a default, check it against the list you wrote from `openapi.yaml` in step 1. A status code, header, response field, request field, parameter or error code the contract does not list is a **contract change**. It is never a default and never the recommended option. Put it to the user as its own question, quoting what the contract says now ("`getFavicon` lists 200, 401, 404 and 429 and no 304: add one, or leave it out?"), and write the task around the answer: a task that needs a change names it as a **Prerequisite** (see step 3), and a task that does not need it specifies only what the contract lists. Also raise, as questions, places where the contract disagrees with itself (for example a header declared with no response that uses it) or with the requirements; do not resolve them silently either way.
 
 ### 3. Write the file
 
@@ -111,7 +113,7 @@ The backlog's rule: one home per item. In the same commit that adds the task fil
 
 - remove the item's line or table row from `docs/tasks/backlog.md`;
 - if part of the item is left out, add one line for the left-out part that names the task it came from (for example "Split from `folder-moves`");
-- change nothing else in the backlog. If another line is stale, tell the user.
+- change nothing else in the backlog. If another line is stale, tell the user. (Findings from reports are added only by the triage commit in Phase 0, step 2, and only the ones the user chose.)
 
 ### 5. Check, fix, then show
 
@@ -122,7 +124,7 @@ The backlog's rule: one home per item. In the same commit that adds the task fil
 Spawn a **fresh subagent** to check it (the Agent tool). It gets no summary of your conversation, only the path of the draft and read access to the repository; that independence is the point. Give it the brief below, unchanged except for the file name.
 
 > You are reviewing a task file that a builder agent will implement without access to the person who wrote it. Read `CLAUDE.md`, `AGENTS.md`, then the task file `docs/tasks/<slug>.md`. Do not edit any file. Check it against the repository as it is now (`openapi.yaml`, `docs/requirements.md`, the code, the tests, `STACK.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `TESTING.md`) and report:
-> 1. Contradictions: with the contract, the requirements, the code on `main`, another section of the same file, or `AGENTS.md` ownership rules (a file the task tells the builder to change but forbids it to).
+> 1. Contradictions: with the contract, the requirements, the code on `main`, another section of the same file, or `AGENTS.md` ownership rules (a file the task tells the builder to change but forbids it to). Go through `openapi.yaml` for every operation the file names, and list each status code, header, parameter, request or response field and error code that the file specifies but the contract does not list (Blocking, unless the file names the contract change as a prerequisite), and each thing the contract requires that the file leaves out or contradicts.
 > 2. Claims about the code that are wrong or stale: names, signatures, error codes, existing tests, what is a stub.
 > 3. Requirements the file says it covers that no acceptance criterion proves, and acceptance criteria no verifier check or test could confirm.
 > 4. Behavior left open that a builder would have to invent: a status or message, a limit or its boundary, an order of checks, a failure path.

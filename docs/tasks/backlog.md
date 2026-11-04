@@ -1,16 +1,13 @@
 # Backlog
 
-What is not built yet, and loose ends from verifier reports. The user decides the order and turns an item into a task file (`docs/tasks/TEMPLATE.md`).
+What has not been turned into a task yet, and the loose ends from verifier reports that the user chose to track. It holds no status: `bash scripts/status.sh` shows what is drafted, running or merged. The user decides the order and turns an item into a task file (`docs/tasks/TEMPLATE.md`).
 
-**One home per item.** An item leaves this file in the same commit that adds its task file. From then on the task file is the only record, and `bash scripts/status.sh` shows which stage it is at. When a task is split and part of it is left out, this file gets a line for the left-out part that names the task it came from. Fix rounds append non-blocking findings at the bottom, one line each, as `- [<task slug>] finding`.
-
-State as of `main` at `5ff12eb`: 11 of the 17 operations are real (bookmarks: create, get, list with the folder filter and search, update, delete, restore, empty trash; folders: list, create, update, delete). The other 6 are 501 stubs. Search (`q`, `include_notes`) on `listBookmarks` is built (`search-api`); the search field in the UI is not. The sidebar becomes a drawer on narrow screens (`mobile-drawer`).
+**One home per item.** An item leaves this file in the same commit that adds its task file. From then on the task file is the only record, and `bash scripts/status.sh` shows which stage it is at. When a task is split and part of it is left out, this file gets a line for the left-out part that names the task it came from. Fix rounds append non-blocking findings at the bottom, one line each, as `- [<task slug>] finding`. Other findings stay in their task's report; the user decides which to track (`docs/tasks/AUTHORING.md`, Phase 0).
 
 ## Backend: operations not built
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Favicons | `getFavicon` (icons are fetched and stored but never served; showing them in the UI waits for this) | FR-5 |
 | Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works; the login screen and the account area's log out wait for these) | FR-1, 2 |
 | Account | `deleteAccount` (the account area's delete button waits for this) | FR-25, NFR-3 |
 
@@ -29,7 +26,6 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - Account area (screen 6): account menu, log out, bookmarklet install page, delete account.
 - Background sync: poll `getSyncVersion` every 2 to 3 seconds (NFR-2's 5 seconds is the end-to-end target) and refresh the list and folders on a change, without moving the scroll position. The server half is `sync-version`.
 - The "1,000 bookmark limit reached" message on the list.
-
 ## Loose ends from verifier reports
 
 - Check in a real browser: on a tall screen with a short first page, the list may not request page 2, because `IntersectionObserver` fires only when visibility changes (`bookmark-list` report, finding 1). Not reproducible in jsdom.
@@ -53,6 +49,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `backend-hardening`: the unknown-user answer (not found at the lock) is not tested for the six locked methods. `requireJSON` rewrites the request's `Content-Type` to lower case so Echo accepts `Application/JSON`; it works and is tested, but it mutates the request.
 - `folder-moves`: a bookmark move that answers `422` refreshes the list, though the task says a `422` does not. The server has no `422` for a bookmark move, so it cannot happen today.
 - `css-lint-cleanup`: `.folder-error` is defined twice in `layout.css` (once in the `.folder-empty, .folder-error` list, once alone). The properties do not overlap, so nothing changes in the cascade; stylelint does not flag it.
+- `get-favicon`: `RecordFetchSuccess` overwrites the bytes behind an existing favicon id (`ON CONFLICT (user_id, host) DO UPDATE`), but the contract says the content behind an id never changes. The task follows the contract (a one-year `max-age`), so a browser can show an outdated icon for up to a year. Decide: change the upsert to `DO NOTHING`, or reword the contract.
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
 
 ## Later, after the app is finished
