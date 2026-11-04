@@ -40,6 +40,31 @@ describe('stylelint configuration', () => {
     expect(result.results[0].warnings.map((w) => w.rule)).toContain(rule)
   })
 
+  it.each([
+    ['a closing brace too many', '.a { color: red; }\n}\n'],
+    ['an @media block that is never closed', '@media (min-width: 10px) {\n.a { color: red; }\n'],
+  ])('reports %s as a syntax error', async (_name, code) => {
+    const result = await lint(code)
+    expect(result.errored).toBe(true)
+    const syntax = result.results[0].warnings.find((w) => w.rule === 'CssSyntaxError')
+    expect(syntax?.severity).toBe('error')
+  })
+
+  it.each([
+    ['a comment that contains a brace', '/* a { */\n.a { color: red; }\n'],
+    ['CSS nesting', '.a { color: red;\n  &:hover { color: blue; }\n}\n'],
+    ['var() with a fallback', '.a { margin: var(--x, 10px); }\n'],
+  ])('accepts %s', async (_name, code) => {
+    const result = await lint(code)
+    expect(result.errored).toBe(false)
+    expect(result.results[0].warnings).toEqual([])
+  })
+
+  it('reports an @import after a rule', async () => {
+    const result = await lint('.a { color: red; }\n@import "x.css";\n')
+    expect(result.results[0].warnings.map((w) => w.rule)).toContain('no-invalid-position-at-import-rule')
+  })
+
   it('does not report BEM class names with __ and --', async () => {
     const result = await lint('.block__element--modifier { color: red; }\n.a__b { color: red; }\n.a--b { color: red; }')
     expect(result.results[0].warnings).toEqual([])
