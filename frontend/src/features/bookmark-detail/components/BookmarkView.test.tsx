@@ -46,8 +46,9 @@ function bookmark(overrides: Partial<BookmarkDetail> = {}): BookmarkDetail {
 }
 
 async function open() {
+  const client = new QueryClient()
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/bookmarks/b-1']}>
         <ToastProvider>
           <BookmarkView id="b-1" />
@@ -56,6 +57,7 @@ async function open() {
     </QueryClientProvider>,
   )
   await advance(0)
+  return client
 }
 
 async function advance(ms: number) {
@@ -196,10 +198,24 @@ describe('BookmarkView', () => {
       expect(screen.getByRole('link', { name: /Back to your bookmarks/ })).toHaveAttribute('href', '/')
     })
 
-    it('shows the signed-out message on a 401', async () => {
+    it('shows "Loading…", not an error, on a 401 with no bookmark', async () => {
       vi.mocked(getBookmark).mockRejectedValue(new ApiError(401, null, null))
       await open()
-      expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+      expect(screen.getByText('Loading…')).toBeInTheDocument()
+      expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+      expect(screen.queryByText(/logged out|Log in/)).not.toBeInTheDocument()
+    })
+
+    it('replaces the 404 panel with "Loading…" when a retry answers 401', async () => {
+      vi.mocked(getBookmark).mockRejectedValueOnce(new ApiError(404, null, null))
+      const client = await open()
+      expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
+      vi.mocked(getBookmark).mockRejectedValue(new ApiError(401, null, null))
+      await act(async () => {
+        await client.refetchQueries({ queryKey: ['bookmark', 'b-1'] })
+      })
+      expect(screen.getByText('Loading…')).toBeInTheDocument()
+      expect(screen.queryByText('Bookmark not found')).not.toBeInTheDocument()
     })
 
     it('shows the error state with a retry button on any other failure, and retry loads the bookmark', async () => {
@@ -234,14 +250,16 @@ describe('BookmarkView', () => {
       expect(screen.queryByText('An example')).not.toBeInTheDocument()
     })
 
-    it('replaces the shown bookmark with the signed-out message when a later poll gets a 401', async () => {
+    it('keeps the shown bookmark and shows nothing when a later poll gets a 401', async () => {
       vi.mocked(getBookmark)
         .mockResolvedValueOnce(pending())
         .mockRejectedValue(new ApiError(401, null, null))
       await open()
       await advance(1000)
-      expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
-      expect(screen.queryByText('An example')).not.toBeInTheDocument()
+      expect(screen.getByText('An example')).toBeInTheDocument()
+      expect(screen.queryByText(/logged out|Log in|Something went wrong|Loading…/)).not.toBeInTheDocument()
+      await advance(60_000)
+      expect(getBookmark).toHaveBeenCalledTimes(2)
     })
 
     it('keeps the bookmark and keeps polling after another failure on a later poll', async () => {
@@ -393,17 +411,19 @@ describe('BookmarkView actions', () => {
     expect(screen.getByText('That bookmark no longer exists.')).toBeInTheDocument()
   })
 
-  it('a 401 from Restore replaces the page with the signed-out message', async () => {
+  it('a 401 from Restore keeps the page, shows nothing and does not refresh', async () => {
     server = bookmark({ deleted_at: '2026-03-05T00:00:00Z' })
     vi.mocked(restoreBookmark).mockImplementation(async () => {
       throw new ApiError(401, null, null)
     })
     await open()
-    vi.mocked(getBookmark).mockRejectedValue(new ApiError(401, null, null))
+    const loads = vi.mocked(getBookmark).mock.calls.length
     await click('Restore')
     await advance(0)
-    expect(screen.getAllByText("You're logged out. Log in to continue.").length).toBeGreaterThan(0)
-    expect(screen.queryByText('An example')).not.toBeInTheDocument()
+    expect(restoreBookmark).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('An example')).toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't restore/)).not.toBeInTheDocument()
+    expect(vi.mocked(getBookmark).mock.calls.length).toBe(loads)
   })
 
   it('shows a failed Delete as a toast and keeps the page', async () => {
@@ -516,10 +536,11 @@ describe('BookmarkView folder and move', () => {
     expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
   })
 
-  it('replaces the page with the signed-out message when the move gets a 401', async () => {
+  it('keeps the page, shows nothing and does not refresh when the move gets a 401', async () => {
     vi.mocked(updateBookmark).mockRejectedValue(new ApiError(401, null, null))
-    vi.mocked(getBookmark).mockReset().mockResolvedValueOnce(server).mockRejectedValue(new ApiError(401, null, null))
+    vi.mocked(getBookmark).mockReset().mockResolvedValue(server)
     await open()
+    const loads = vi.mocked(getBookmark).mock.calls.length
     fireEvent.click(screen.getByRole('button', { name: 'Move' }))
     await advance(0)
     fireEvent.click(screen.getByRole('radio', { name: 'Work' }))
@@ -527,6 +548,9 @@ describe('BookmarkView folder and move', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Move' }).at(-1) as HTMLElement)
     await advance(0)
     await advance(0)
-    expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    expect(updateBookmark).toHaveBeenCalledTimes(1)
+    expect(screen.getAllByText('An example').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/logged out|Log in|Couldn't move/)).not.toBeInTheDocument()
+    expect(vi.mocked(getBookmark).mock.calls.length).toBe(loads)
   })
 })
