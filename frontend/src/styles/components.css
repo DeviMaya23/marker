@@ -333,3 +333,67 @@
   color: var(--text-faint);
   cursor: not-allowed;
 }
+
+/* Move picker */
+.move-picker {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.move-picker__option {
+  cursor: pointer;
+}
+.move-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--border);
+}
+.move-picker__option:last-child .move-picker__row {
+  border-bottom: none;
+}
+.move-picker__row--selected {
+  background: var(--accent-50);
+  color: var(--accent-700);
+}
+.move-picker__row--disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.move-picker__check {
+  margin-left: auto;
+  color: var(--accent-600);
+}
+.move-picker__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-picker__option:focus-visible .move-picker__row {
+  outline: 2px solid var(--accent-600);
+  outline-offset: -2px;
+}
+
+/* Move dialog */
+.move-dialog__item {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-dialog__note {
+  margin-bottom: var(--space-3);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.move-dialog__state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13.5px;
+  color: var(--text-muted);
+}

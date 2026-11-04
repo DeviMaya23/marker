@@ -12,23 +12,23 @@ Branch: `claude/folder-moves-task-kyi515`. All paths under `frontend/src/`. One 
 - [x] `updateFolder` sends `parent_id` as a string, as an explicit `null`, and not at all; a rename sends only `name` — `lib/api/folders.ts`, test `lib/api/folders.test.ts`
 
 ## Valid targets and messages (pure, table-driven)
-- [ ] Valid targets: bookmark with empty, flat and 3-level tree; folder with no children among depth 1, 2, 3; one-level subtree; two-level subtree; itself and grandchild disabled; orphan; server order kept — `lib/folders/moveTargets.ts`, test `lib/folders/moveTargets.test.ts`
-- [ ] Failure table, bookmark column (`move` in `describeFailure`), incl. `retryAfter` number / 0 / null, other 409, network failure — `lib/bookmarks/describeFailure.ts`, test `lib/bookmarks/describeFailure.test.ts`
-- [ ] Failure table, folder column (`move` in `folderFailureMessage`), same extras — `lib/folders/folderFailureMessage.ts`, test `lib/folders/folderFailureMessage.test.ts`
+- [x] Valid targets: bookmark with empty, flat and 3-level tree; folder with no children among depth 1, 2, 3; one-level subtree; two-level subtree; itself and grandchild disabled; orphan; server order kept — `lib/folders/moveTargets.ts`, test `lib/folders/moveTargets.test.ts`
+- [x] Failure table, bookmark column (`move` in `describeFailure`), incl. `retryAfter` number / 0 / null, other 409, network failure — `lib/bookmarks/describeFailure.ts`, test `lib/bookmarks/describeFailure.test.ts`
+- [x] Failure table, folder column (`move` in `folderFailureMessage`), same extras — `lib/folders/folderFailureMessage.ts`, test `lib/folders/folderFailureMessage.test.ts`
 
 ## Move dialog
-- [ ] Opens with current location selected; Move disabled until another target; "Top level" sends `null`; a folder sends its id — `components/ui/MoveDialog.tsx`, test `components/ui/MoveDialog.test.tsx`
-- [ ] Folder move: disabled rows not selectable, skipped by Up/Down, carry the `title`; bookmark move: none disabled — `MoveDialog.tsx`, `MoveDialog.test.tsx`
-- [ ] Loading text; failed state with working "Try again" and Move disabled; `401` signed-out message — `MoveDialog.tsx`, `MoveDialog.test.tsx`
-- [ ] Esc, Cancel and backdrop close; while working they do nothing, all disabled, "Moving…", second confirm sends nothing — `MoveDialog.tsx`, `MoveDialog.test.tsx`
-- [ ] Each failure of its column shows in a `role="alert"` banner, keeps dialog open and selection; `401` signed-out message — `MoveDialog.tsx`, `MoveDialog.test.tsx`
-- [ ] Reopening starts at the current location; vanished current location or moved folder: no crash, selection "Top level" — `MoveDialog.tsx`, `MoveDialog.test.tsx`
-- [ ] Connected pieces read `useFolders()` and the move hook — `components/ui/MoveBookmarkDialog.tsx`, `MoveFolderDialog.tsx`, tests `MoveBookmarkDialog.test.tsx`, `MoveFolderDialog.test.tsx`
+- [x] Opens with current location selected; Move disabled until another target; "Top level" sends `null`; a folder sends its id — `components/ui/MoveDialog.tsx`, test `components/ui/MoveDialog.test.tsx`
+- [x] Folder move: disabled rows not selectable, skipped by Up/Down, carry the `title`; bookmark move: none disabled — `MoveDialog.tsx`, `MoveDialog.test.tsx`
+- [x] Loading text; failed state with working "Try again" and Move disabled; `401` signed-out message — `MoveDialog.tsx`, `MoveDialog.test.tsx`
+- [x] Esc, Cancel and backdrop close; while working they do nothing, all disabled, "Moving…", second confirm sends nothing — `MoveDialog.tsx`, `MoveDialog.test.tsx`
+- [x] Each failure of its column shows in a `role="alert"` banner, keeps dialog open and selection; `401` signed-out message — `MoveDialog.tsx`, `MoveDialog.test.tsx`
+- [x] Reopening starts at the current location; vanished current location or moved folder: no crash, selection "Top level" — `MoveDialog.tsx`, `MoveDialog.test.tsx`
+- [x] Connected pieces read `useFolders()` and the move hook — `components/ui/MoveBookmarkDialog.tsx`, `MoveFolderDialog.tsx`, tests `MoveBookmarkDialog.test.tsx`, `MoveFolderDialog.test.tsx`
 
 ## Move hooks and refreshing
-- [ ] Bookmark move: sends once; invalidates lists, `['bookmark', id]` and `['folders']`; toasts "Moved to “X”." / "Moved to the top level."; `409 bookmark_in_trash` and `404` refresh — `lib/bookmarks/useMoveBookmark.ts`, test `lib/bookmarks/useMoveBookmark.test.tsx`
-- [ ] Folder move: invalidates folders and lists; toast "Folder moved to …"; `409 folder_name_conflict` and `422` do not refresh, `404` does — `lib/folders/useMoveFolder.ts`, test `lib/folders/useMoveFolder.test.tsx`
-- [ ] `useBookmarkFeedback.refresh` invalidates `['folders']` (asserted for delete and restore; empty-trash and edit tests still pass) — `lib/bookmarks/useBookmarkFeedback.ts`, tests `useBookmarkFeedback.test.tsx`, `useDeleteBookmark.test.tsx`, `useRestoreBookmark.test.tsx`
+- [x] Bookmark move: sends once; invalidates lists, `['bookmark', id]` and `['folders']`; toasts "Moved to “X”." / "Moved to the top level."; `409 bookmark_in_trash` and `404` refresh — `lib/bookmarks/useMoveBookmark.ts`, test `lib/bookmarks/useMoveBookmark.test.tsx`
+- [x] Folder move: invalidates folders and lists; toast "Folder moved to …"; `409 folder_name_conflict` and `422` do not refresh, `404` does — `lib/folders/useMoveFolder.ts`, test `lib/folders/useMoveFolder.test.tsx`
+- [x] `useBookmarkFeedback.refresh` invalidates `['folders']` (asserted for delete and restore; empty-trash and edit tests still pass) — `lib/bookmarks/useBookmarkFeedback.ts`, tests `useBookmarkFeedback.test.tsx`, `useDeleteBookmark.test.tsx`, `useRestoreBookmark.test.tsx`
 - [ ] `AddUrlForm` invalidates `['folders']` after a successful save, not after a failed one — `features/bookmark-list/components/AddUrlForm.tsx`, test `AddUrlForm.test.tsx`
 
 ## Where it appears
