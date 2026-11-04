@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
 import { listBookmarks } from '../../../lib/api/bookmarks'
+import { ToastProvider } from '../../../components/ui/Toast'
 import { bookmark, page } from '../../../test/builders'
 import { BookmarkList } from './BookmarkList'
 
@@ -37,7 +38,9 @@ function renderList(trashed = false) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <BookmarkList trashed={trashed} />
+        <ToastProvider>
+          <BookmarkList trashed={trashed} />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -299,12 +302,12 @@ describe('BookmarkList (trash)', () => {
     expect(link).not.toHaveTextContent('trashed')
   })
 
-  it('has no Restore, Empty trash or other buttons', async () => {
+  it('has only a Restore button per row: no Edit, Delete or Empty trash', async () => {
     list.mockResolvedValue(page([bookmark({ deleted_at: '2026-01-02T00:00:00Z' })]))
     renderList(true)
-    await screen.findByRole('link')
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.queryByText(/restore|empty trash/i)).not.toBeInTheDocument()
+    await screen.findByRole('link', { name: /Title/ })
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Restore'])
+    expect(screen.queryByText(/edit|delete|empty trash/i)).not.toBeInTheDocument()
   })
 
   it('shows its empty state', async () => {

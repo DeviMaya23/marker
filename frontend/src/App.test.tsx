@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { ToastProvider } from './components/ui/Toast'
 import { listBookmarks } from './lib/api/bookmarks'
 import { bookmark, page } from './test/builders'
 
@@ -16,7 +17,9 @@ function openAt(path: string) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <MemoryRouter initialEntries={[path]}>
-        <App />
+        <ToastProvider>
+          <App />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -47,12 +50,13 @@ describe('App routes', () => {
     expect(screen.getByRole('link', { name: 'Trash' })).not.toHaveAttribute('aria-current')
   })
 
-  it('shows the read-only trash at /trash, with no add field', async () => {
+  it('shows the trash at /trash, with Empty trash and a Restore per row but no add field', async () => {
     openAt('/trash')
     expect(screen.getByRole('heading', { level: 1, name: 'Trash' })).toBeInTheDocument()
     expect(await screen.findByText('In the trash')).toBeInTheDocument()
     expect(screen.queryByLabelText('Link to save')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Empty trash' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Trash' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'All bookmarks' })).not.toHaveAttribute('aria-current')
     expect(listBookmarks).toHaveBeenCalledWith({ trashed: true, cursor: undefined })

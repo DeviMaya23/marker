@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
 import { getBookmark, type BookmarkDetail } from '../../../lib/api/bookmarks'
+import { ToastProvider } from '../../../components/ui/Toast'
 import { BookmarkView } from './BookmarkView'
 
 vi.mock('../../../lib/api/bookmarks', () => ({ getBookmark: vi.fn() }))
@@ -29,7 +30,9 @@ async function open() {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter initialEntries={['/bookmarks/b-1']}>
-        <BookmarkView id="b-1" />
+        <ToastProvider>
+          <BookmarkView id="b-1" />
+        </ToastProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -77,11 +80,13 @@ describe('BookmarkView', () => {
       expect(screen.getByText('Fetch failed')).toBeInTheDocument()
     })
 
-    it('shows a trashed bookmark read-only, with an In trash banner and no Restore', async () => {
+    it('shows a trashed bookmark read-only, with an In trash banner and a Restore button', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ deleted_at: '2026-03-05T00:00:00Z' }))
       await open()
-      expect(screen.getByRole('status')).toHaveTextContent('In trash. This bookmark is read-only.')
-      expect(screen.queryByRole('button', { name: /restore/i })).not.toBeInTheDocument()
+      expect(document.querySelector('.banner--trashed')).toHaveTextContent(
+        'In trash. This bookmark is read-only. Restore it to edit it.',
+      )
+      expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
       expect(screen.getByText('The page text.')).toBeInTheDocument()
     })
 
@@ -131,12 +136,11 @@ describe('BookmarkView', () => {
       expect(screen.getByText('remember this')).toBeInTheDocument()
     })
 
-    it('has no Note section when the note is null, and no folder or actions', async () => {
+    it('has no Note section when the note is null, and no folder', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: null }))
       await open()
       expect(screen.queryByText('Note')).not.toBeInTheDocument()
       expect(screen.queryByText('Folder')).not.toBeInTheDocument()
-      expect(screen.queryByRole('button')).not.toBeInTheDocument()
     })
 
     it('keeps an empty-string note as a note', async () => {
