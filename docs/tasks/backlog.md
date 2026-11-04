@@ -4,13 +4,12 @@ What is not built yet, and loose ends from verifier reports. The user decides th
 
 **One home per item.** An item leaves this file in the same commit that adds its task file. From then on the task file is the only record, and `bash scripts/status.sh` shows which stage it is at. When a task is split and part of it is left out, this file gets a line for the left-out part that names the task it came from. Fix rounds append non-blocking findings at the bottom, one line each, as `- [<task slug>] finding`.
 
-State as of `main` at `82b9c17`: 11 of the 17 operations are real (bookmarks: create, get, list with the folder filter, update, delete, restore, empty trash; folders: list, create, update, delete). The other 6 are 501 stubs, and search (`q`) on `listBookmarks` still answers 501.
+State as of `main` at `5ff12eb`: 11 of the 17 operations are real (bookmarks: create, get, list with the folder filter and search, update, delete, restore, empty trash; folders: list, create, update, delete). The other 6 are 501 stubs. Search (`q`, `include_notes`) on `listBookmarks` is built (`search-api`); the search field in the UI is not. The sidebar becomes a drawer on narrow screens (`mobile-drawer`).
 
 ## Backend: operations not built
 
 | Area | Operations | Requirements |
 |---|---|---|
-| Sync | `getSyncVersion` | NFR-2 |
 | Favicons | `getFavicon` (icons are fetched and stored but never served) | FR-5 |
 | Auth | `authLogin`, `authCallback`, `authLogout` (real Kinde login; only dev-login works) | FR-1, 2 |
 | Account | `deleteAccount` | FR-25, NFR-3 |
@@ -26,7 +25,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 
 - Login screen (screen 1), and a way to learn you are signed out without waiting for a 401 (FR-3c, needs a who-am-I endpoint, which does not exist).
 - Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
-- Top bar search (screen 2): search field, scope control (all or this folder), "include notes" toggle. Needs the backend search first.
+- Top bar search (screen 2): search field, scope control (all or this folder), "include notes" toggle. The backend search is built; this is the UI half.
 - Account area (screen 6): account menu, log out, bookmarklet install page, delete account.
 - Background sync: the 5-second poll that refreshes the list and folders without moving the scroll position.
 - The "1,000 bookmark limit reached" message on the list.
@@ -45,6 +44,11 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - `folder-sidebar`: the name counter and the 100 limit use the trimmed name, which is what is sent. If the server counts the raw name, a 100-character name with trailing spaces could pass here and fail there. Check when the two halves meet.
 - `folder-sidebar`: "Too many requests. Try again in about 0 seconds." for `Retry-After: 0`, which is what the task's wording gives.
 - `folder-sidebar`: `FolderSection.test.tsx` (the "deleting the current folder" navigation test, line 204) failed once in a full `make check` on the `css-lint` verifier's branch, after the folder-sidebar verifier had already fixed one flake in the same test (`css-lint` report, N1). Passes on rerun. Fix the wait properly (a task of its own or a small fix round).
+- `mobile-drawer`: a dialog open inside the drawer (for example a half-filled "New folder") is dropped when the viewport crosses 768px, and its text is lost. Follows the task file; decide whether that is acceptable.
+- `mobile-drawer`: the drawer content unmounts on the first closing render, so the 180 ms slide-out may show an empty panel. Check in a real browser.
+- `mobile-drawer`: `border-bottom: none` in the 768px block of `.app-shell__sidebar` is a dead rule; the `matchMedia` test stand-in supports only the three queries in use.
+- `search-api`: a next-page cursor can pass the 100,000 offset cap and answer `422 cursor invalid` on the following request. Unreachable at the scale of NFR-4.
+- `search-api`: `ListBookmarksInput.IsSearch` trims `Query` again after the handler has. Harmless.
 - Redocly reports 7 tag-description warnings in `openapi.yaml`. Deferred.
 
 ## Process and tooling
