@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"net/url"
 	"strings"
@@ -120,6 +121,23 @@ func TestLoginService_BeginMintsFreshStateAndNonce(t *testing.T) {
 	require.NotEqual(t, n1, idp.authorizeNonce)
 }
 
+func TestLoginService_VerifierIsDerivedPerAttemptAndNotInTheState(t *testing.T) {
+	svc, idp, _, _ := newTestLogin()
+
+	s1 := begin(t, svc, idp, "/")
+	v1 := idp.authorizeVerifier
+	_ = begin(t, svc, idp, "/")
+
+	require.Len(t, v1, 43)
+	require.NotEqual(t, v1, idp.authorizeVerifier, "each attempt has its own verifier")
+	require.Equal(t, b64(mac(testSecret, []byte("pkce:"+idp.authorizeNonce))), idp.authorizeVerifier)
+	require.NotContains(t, s1, v1)
+	payload, _, _ := strings.Cut(s1, ".")
+	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), v1, "the verifier is not stored in the state")
+}
+
 func TestLoginService_BeginFallsBackWhenStateWouldBeTooLong(t *testing.T) {
 	svc, idp, _, _ := newTestLogin()
 
@@ -154,13 +172,15 @@ func TestLoginService_CompleteRejectsABadAttempt(t *testing.T) {
 	other.now = svc.now
 	foreign := begin(t, other, idp, "/")
 
+	// Flip the first character: the last base64url character of a 32-byte MAC carries
+	// two padding bits, so flipping it can decode to the same bytes and the test would
+	// pass or fail at random.
 	flip := func(s string) string {
-		last := s[len(s)-1]
 		repl := byte('A')
-		if last == 'A' {
+		if s[0] == 'A' {
 			repl = 'B'
 		}
-		return s[:len(s)-1] + string(repl)
+		return string(repl) + s[1:]
 	}
 
 	tests := []struct {
@@ -227,6 +247,31 @@ func TestLoginService_CompleteSizeLimits(t *testing.T) {
 		_, _, err := svc.Complete(context.Background(), "c", state)
 		require.ErrorIs(t, err, domain.ErrInvalidLogin)
 		require.Zero(t, idp.exchangeCalls)
+	})
+
+	t.Run("a correctly signed state is accepted at 12288 bytes and refused just above", func(t *testing.T) {
+		svc, _, _, _ := newTestLogin()
+		signedOfLen := func(n int) string {
+			for pad := 1; pad < n; pad++ {
+				st, err := signState(testSecret, loginState{Nonce: "n", ReturnTo: "/" + strings.Repeat("a", pad), Expires: t0.Add(time.Minute).Unix()})
+				require.NoError(t, err)
+				if len(st) == n {
+					return st
+				}
+				if len(st) > n {
+					break
+				}
+			}
+			t.Fatalf("cannot build a signed state of %d bytes", n)
+			return ""
+		}
+
+		_, _, err := svc.Complete(context.Background(), "c", signedOfLen(maxStateLen))
+		require.NoError(t, err)
+		// 12289 cannot be built: the payload's base64 length would be 1 mod 4. 12290 is the
+		// nearest signed state above the cap.
+		_, _, err = svc.Complete(context.Background(), "c", signedOfLen(maxStateLen+2))
+		require.ErrorIs(t, err, domain.ErrInvalidLogin)
 	})
 
 	t.Run("a code of 2049 bytes is refused, 2048 reaches the IdP", func(t *testing.T) {

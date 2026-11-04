@@ -244,3 +244,84 @@ func TestAuthFlow_SameSubjectTwice(t *testing.T) {
 
 	require.Equal(t, []string{"sub-bob", "sub-bob"}, e.sessions.startedSubs())
 }
+
+func TestAuthFlow_ConcurrentCallbacksStartOneSession(t *testing.T) {
+	e := newFlowEnv(t)
+	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
+
+	const n = 8
+	codes := make([]int, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes[i] = do(e.router, http.MethodGet, callback).Code
+		}()
+	}
+	wg.Wait()
+
+	ok, bad := 0, 0
+	for _, c := range codes {
+		switch c {
+		case http.StatusFound:
+			ok++
+		case http.StatusBadRequest:
+			bad++
+		}
+	}
+	require.Equal(t, 1, ok, "codes: %v", codes)
+	require.Equal(t, n-1, bad, "codes: %v", codes)
+	require.Equal(t, 1, e.sessions.count())
+}
+
+func TestAuthFlow_ReturnToThroughTheWholeRoundTrip(t *testing.T) {
+	tests := []struct {
+		name, returnTo, want string
+	}{
+		{"backslash", `/\evil.test`, "/"},
+		{"encoded double slash stays a path", "/%2f%2fevil.test", "/%2f%2fevil.test"},
+		{"CRLF", "/a\r\nSet-Cookie: x=1", "/"},
+		{"NUL byte", "/a\x00b", "/"},
+		{"absolute URL", "https://evil.test/", "/"},
+		{"8192 bytes is kept", "/" + strings.Repeat("a", 8191), "/" + strings.Repeat("a", 8191)},
+		{"8193 bytes becomes root", "/" + strings.Repeat("a", 8192), "/"},
+		{"every byte a quote falls back to root", "/" + strings.Repeat(`"`, 8191), "/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newFlowEnv(t)
+			callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, tt.returnTo)))
+			rec := do(e.router, http.MethodGet, callback)
+
+			require.Equal(t, http.StatusFound, rec.Code)
+			require.Equal(t, tt.want, rec.Header().Get("Location"))
+			require.Len(t, rec.Result().Cookies(), 2, "no header was injected")
+		})
+	}
+}
+
+func TestAuthFlow_EmptyCodeIsRefusedWithoutCallingTheIdP(t *testing.T) {
+	e := newFlowEnv(t)
+	u, err := url.Parse(callbackPathFrom(t, noFollow(t, e.startLogin(t, "/"))))
+	require.NoError(t, err)
+	q := u.Query()
+	q.Set("code", "")
+
+	rec := do(e.router, http.MethodGet, "/auth/callback?"+q.Encode())
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Zero(t, e.fake.Requests("token"))
+}
+
+func TestAuthFlow_LogoutDoesNotDependOnTheIdPBeingUp(t *testing.T) {
+	e := newFlowEnv(t)
+	login := do(e.router, http.MethodGet, callbackPathFrom(t, noFollow(t, e.startLogin(t, "/"))))
+	token := cookieByName(t, login.Result().Cookies(), "session").Value
+	e.fake.Server.Close()
+
+	rec := do(e.router, http.MethodPost, "/auth/logout", withSession(token), withCSRF())
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Zero(t, e.sessions.count())
+}
