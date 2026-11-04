@@ -12,7 +12,7 @@ REDOCLY := npx --yes @redocly/cli@2
 OPENAPI_TS := npx --yes openapi-typescript@7.13.0
 
 .PHONY: help db-up db-down migrate generate generate-check lint lint-backend lint-frontend test test-backend \
-	test-frontend test-integration build build-backend build-frontend openapi-lint check
+	test-frontend test-integration test-integration-local build build-backend build-frontend openapi-lint check
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-18s %s\n", $$1, $$2}'
@@ -64,6 +64,9 @@ build-frontend: ## Typecheck and Vite build
 
 openapi-lint: ## Lint openapi.yaml
 	$(REDOCLY) lint openapi.yaml
+
+test-integration-local: ## Go integration tests on a local PostgreSQL, no Docker (cloud sessions)
+	./scripts/test-integration-local.sh
 
 # What an agent runs before pushing. Integration tests are not part of this.
 check: lint test build openapi-lint ## lint + test + build + openapi-lint
