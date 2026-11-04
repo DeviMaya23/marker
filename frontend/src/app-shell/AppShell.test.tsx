@@ -4,20 +4,25 @@ import { resolve } from 'node:path'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useNavigate } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useToast } from '../components/ui/useToast'
 import { ApiError } from '../lib/api/ApiError'
 import { deleteFolder, listFolders } from '../lib/api/folders'
+import { getSyncVersion } from '../lib/api/sync'
 import { folder } from '../test/builders'
 import { setViewport } from '../test/viewport'
 import { renderApp } from '../test/wrap'
 import { AppShell } from './AppShell'
+import { SYNC_POLL_MS } from './useSyncPoll'
 
 vi.mock('../lib/api/folders', () => ({ listFolders: vi.fn(), createFolder: vi.fn(), deleteFolder: vi.fn() }))
+vi.mock('../lib/api/sync', () => ({ getSyncVersion: vi.fn() }))
 const list = vi.mocked(listFolders)
+const sync = vi.mocked(getSyncVersion)
 
 beforeEach(() => {
   list.mockReset()
+  sync.mockReset().mockResolvedValue({ version: 0 })
 })
 
 describe('AppShell', () => {
@@ -381,5 +386,89 @@ describe('AppShell drawer', () => {
     }
     expect(menuButton()).toHaveAttribute('aria-expanded', 'false')
     act(() => {})
+  })
+})
+
+describe('AppShell sync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    list.mockResolvedValue({ items: folders })
+  })
+  afterEach(() => vi.useRealTimers())
+
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+  // 1 ms more lets the query's batched notification reach the component.
+  const tick = async (ms: number) => {
+    await advance(ms)
+    await advance(1)
+  }
+  const versions = (...numbers: number[]) => {
+    sync.mockReset()
+    for (const version of numbers) sync.mockResolvedValueOnce({ version })
+    sync.mockResolvedValue({ version: numbers[numbers.length - 1] })
+  }
+  const shell = () => (
+    <AppShell>
+      <p>content</p>
+    </AppShell>
+  )
+
+  it('wide: a version change refetches the folders and keeps the same DOM nodes', async () => {
+    versions(1, 2)
+    renderApp(shell())
+    await tick(0)
+    const content = screen.getByText('content')
+    const trash = screen.getByRole('link', { name: 'Trash' })
+    expect(list).toHaveBeenCalledTimes(1)
+    await tick(SYNC_POLL_MS)
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('content')).toBe(content)
+    expect(screen.getByRole('link', { name: 'Trash' })).toBe(trash)
+  })
+
+  it('narrow: a change keeps the children and does not fetch the folders while the drawer is closed', async () => {
+    versions(1, 2)
+    setViewport(NARROW)
+    renderApp(shell())
+    await tick(0)
+    const content = screen.getByText('content')
+    await tick(SYNC_POLL_MS)
+    expect(list).not.toHaveBeenCalled()
+    expect(screen.getByText('content')).toBe(content)
+  })
+
+  it('narrow: with the drawer open, a change refetches the folders', async () => {
+    versions(1, 2)
+    setViewport(NARROW)
+    renderApp(shell())
+    await tick(0)
+    fireEvent.click(menuButton())
+    await tick(0)
+    expect(list).toHaveBeenCalledTimes(1)
+    await tick(SYNC_POLL_MS)
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['wide', 1024],
+    ['narrow', NARROW],
+  ])('%s: makes exactly one poll request per interval', async (_name, width) => {
+    setViewport(width)
+    renderApp(shell())
+    await advance(0)
+    expect(sync).toHaveBeenCalledTimes(1)
+    await advance(SYNC_POLL_MS)
+    expect(sync).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps one poll stream when the viewport changes, and that is not a change', async () => {
+    renderApp(shell())
+    await tick(0)
+    setViewport(NARROW)
+    await tick(SYNC_POLL_MS)
+    expect(sync).toHaveBeenCalledTimes(2)
+    await tick(SYNC_POLL_MS)
+    expect(sync).toHaveBeenCalledTimes(3)
+    expect(list).toHaveBeenCalledTimes(1)
   })
 })

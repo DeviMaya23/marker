@@ -1,19 +1,23 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api/ApiError'
 import { createBookmark, listBookmarks } from '../lib/api/bookmarks'
 import { listFolders } from '../lib/api/folders'
+import { getSyncVersion } from '../lib/api/sync'
+import { SYNC_POLL_MS } from '../app-shell/useSyncPoll'
 import { bookmark, folder, page } from '../test/builders'
 import { renderApp } from '../test/wrap'
 import { FolderPage } from './FolderPage'
 
 vi.mock('../lib/api/bookmarks', () => ({ createBookmark: vi.fn(), listBookmarks: vi.fn(), getBookmark: vi.fn() }))
 vi.mock('../lib/api/folders', () => ({ listFolders: vi.fn() }))
+vi.mock('../lib/api/sync', () => ({ getSyncVersion: vi.fn() }))
 
 const folders = vi.mocked(listFolders)
 const list = vi.mocked(listBookmarks)
+const sync = vi.mocked(getSyncVersion)
 
 function open(path: string) {
   return renderApp(
@@ -30,6 +34,7 @@ const heading = () => screen.getByRole('heading', { level: 1 })
 beforeEach(() => {
   folders.mockReset()
   list.mockReset()
+  sync.mockReset().mockResolvedValue({ version: 0 })
   vi.mocked(createBookmark).mockReset()
   folders.mockResolvedValue({
     items: [folder({ id: 'f-1', name: 'Recipes' }), folder({ id: 'f-2', name: 'Travel' })],
@@ -168,3 +173,31 @@ describe('FolderPage search bar', () => {
   })
 })
 
+
+describe('FolderPage sync', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+  // 1 ms more lets the query's batched notification reach the component.
+  const tick = async (ms: number) => {
+    await advance(ms)
+    await advance(1)
+  }
+
+  it('refetches the folders and the list on a version change, and shows the missing panel when the folder is gone', async () => {
+    sync.mockReset().mockResolvedValueOnce({ version: 1 }).mockResolvedValue({ version: 2 })
+    open('/folder/f-1')
+    await tick(0)
+    expect(screen.getByText('A soup')).toBeInTheDocument()
+    expect(folders).toHaveBeenCalledTimes(1)
+    expect(list).toHaveBeenCalledTimes(1)
+    folders.mockResolvedValue({ items: [folder({ id: 'f-2', name: 'Travel' })] })
+    await tick(SYNC_POLL_MS)
+    expect(folders).toHaveBeenCalledTimes(2)
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list.mock.calls[1]).toEqual(list.mock.calls[0])
+    expect(list).toHaveBeenLastCalledWith({ trashed: false, cursor: undefined, folderId: 'f-1' })
+    expect(screen.getByText("This folder doesn't exist.")).toBeInTheDocument()
+  })
+})

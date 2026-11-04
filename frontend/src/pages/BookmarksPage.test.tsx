@@ -1,18 +1,24 @@
-import { screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { listBookmarks } from '../lib/api/bookmarks'
+import { ApiError } from '../lib/api/ApiError'
 import { listFolders } from '../lib/api/folders'
+import { getSyncVersion } from '../lib/api/sync'
+import { SYNC_POLL_MS } from '../app-shell/useSyncPoll'
 import { bookmark, page } from '../test/builders'
 import { renderApp } from '../test/wrap'
 import { BookmarksPage } from './BookmarksPage'
 
 vi.mock('../lib/api/bookmarks', () => ({ createBookmark: vi.fn(), listBookmarks: vi.fn(), getBookmark: vi.fn() }))
 vi.mock('../lib/api/folders', () => ({ listFolders: vi.fn() }))
+vi.mock('../lib/api/sync', () => ({ getSyncVersion: vi.fn() }))
 
 const list = vi.mocked(listBookmarks)
+const sync = vi.mocked(getSyncVersion)
 
 beforeEach(() => {
   list.mockReset().mockResolvedValue(page([bookmark({ id: 'b-1', title: 'A soup' })]))
+  sync.mockReset().mockResolvedValue({ version: 0 })
   vi.mocked(listFolders).mockReset().mockResolvedValue({ items: [] })
 })
 
@@ -34,5 +40,47 @@ describe('BookmarksPage', () => {
     expect(screen.getByLabelText('Link to save')).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Search bookmarks' })).toHaveValue('soup')
     expect(screen.getByRole('region', { name: 'Search results' })).toBeInTheDocument()
+  })
+})
+
+describe('BookmarksPage sync', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  const advance = (ms: number) => act(() => vi.advanceTimersByTimeAsync(ms))
+  // 1 ms more lets the query's batched notification reach the component.
+  const tick = async (ms: number) => {
+    await advance(ms)
+    await advance(1)
+  }
+
+  it('refetches the list with the same arguments on a version change, keeping the rows meanwhile', async () => {
+    sync.mockReset().mockResolvedValueOnce({ version: 1 }).mockResolvedValue({ version: 2 })
+    renderApp(<BookmarksPage />)
+    await tick(0)
+    expect(screen.getByText('A soup')).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(1)
+    let resolve: (p: ReturnType<typeof page>) => void = () => {}
+    list.mockReturnValueOnce(new Promise((r) => (resolve = r)))
+    await tick(SYNC_POLL_MS)
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(list.mock.calls[1]).toEqual(list.mock.calls[0])
+    expect(screen.getByText('A soup')).toBeInTheDocument()
+    expect(screen.queryByTestId('skeleton-row')).not.toBeInTheDocument()
+    resolve(page([bookmark({ id: 'b-2', title: 'A stew' })]))
+    await tick(0)
+    expect(screen.getByText('A stew')).toBeInTheDocument()
+    expect(screen.queryByText('A soup')).not.toBeInTheDocument()
+  })
+
+  it('refetches on a 401 from the poll, and shows the signed-out message when the list answers 401 too', async () => {
+    sync.mockReset().mockRejectedValue(new ApiError(401, null, null))
+    list.mockResolvedValueOnce(page([bookmark({ id: 'b-1', title: 'A soup' })]))
+    list.mockRejectedValue(new ApiError(401, null, null))
+    renderApp(<BookmarksPage />)
+    await tick(0)
+    await tick(0)
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getAllByText("You're logged out. Log in to continue.").length).toBeGreaterThan(0)
   })
 })
