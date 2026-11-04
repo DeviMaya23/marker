@@ -1,11 +1,15 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, type ProblemBody } from '../../../lib/api/ApiError'
 import { createBookmark } from '../../../lib/api/bookmarks'
+import { listFolders } from '../../../lib/api/folders'
+import { folder } from '../../../test/builders'
 import { SavePopup } from './SavePopup'
 
 vi.mock('../../../lib/api/bookmarks', () => ({ createBookmark: vi.fn() }))
+vi.mock('../../../lib/api/folders', () => ({ listFolders: vi.fn() }))
 
 const created = { id: 'new-1' } as Awaited<ReturnType<typeof createBookmark>>
 
@@ -20,10 +24,19 @@ function problem(
 
 function openPopup(search = '?url=https%3A%2F%2Fexample.com%2Fa&title=Example') {
   render(
-    <MemoryRouter initialEntries={[`/save${search}`]}>
-      <SavePopup />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[`/save${search}`]}>
+        <SavePopup />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
+}
+
+/** Lets the (mocked) folder list answer. */
+async function settle() {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0)
+  })
 }
 
 const saveButton = () => screen.getByRole('button', { name: /^Sav(e|ing)/ })
@@ -42,6 +55,8 @@ describe('SavePopup', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(createBookmark).mockReset()
+    // By default the folder list never answers: the control stays in its loading state.
+    vi.mocked(listFolders).mockReset().mockReturnValue(new Promise(() => {}))
     closeSpy = vi.fn()
     vi.stubGlobal('close', closeSpy)
   })
@@ -58,13 +73,13 @@ describe('SavePopup', () => {
       expect(createBookmark).not.toHaveBeenCalled()
     })
 
-    it('shows the URL read-only, the prefilled title, and a disabled folder picker with only "Top level"', () => {
+    it('shows the URL read-only, the prefilled title, and a disabled folder control reading Loading…', () => {
       openPopup()
       expect(screen.getByText('https://example.com/a')).toBeInTheDocument()
       expect(titleInput()).toHaveValue('Example')
-      const folder = screen.getByLabelText('Folder')
-      expect(folder).toBeDisabled()
-      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Top level'])
+      const control = screen.getByLabelText('Folder')
+      expect(control).toBeDisabled()
+      expect(control).toHaveTextContent('Loading…')
     })
 
     it('saves on Enter', async () => {
@@ -345,6 +360,195 @@ describe('SavePopup', () => {
       expect(screen.queryByRole('button', { name: 'OK' })).not.toBeInTheDocument()
       const href = screen.getByRole('link', { name: 'Log in' }).getAttribute('href') ?? ''
       expect(new URL(href, 'http://x').searchParams.get('return_to')).toBe(`/save${query}`)
+    })
+  })
+
+  describe('the folder choice', () => {
+    const FOLDERS = [
+      folder({ id: 'f-1', name: 'Recipes', depth: 1 }),
+      folder({ id: 'f-2', name: 'Soups', parent_id: 'f-1', depth: 2 }),
+      folder({ id: 'f-3', name: 'Work', depth: 1 }),
+    ]
+    const control = () => screen.getByRole('combobox', { name: 'Folder' })
+    const openList = () => fireEvent.click(control())
+    /** Opens the list and presses an option the way a mouse does (down, up, click). */
+    async function choose(name: string) {
+      await act(async () => openList())
+      const option = screen.getByRole('option', { name })
+      await act(async () => {
+        fireEvent.pointerDown(option)
+        fireEvent.mouseDown(option)
+        fireEvent.pointerUp(option)
+        fireEvent.mouseUp(option)
+        fireEvent.click(option)
+      })
+      await settle()
+    }
+
+    it('defaults to "Top level" once the folders are loaded, and lists them in order with the top level first', async () => {
+      vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+      openPopup()
+      await settle()
+      expect(control()).toBeEnabled()
+      expect(control()).toHaveTextContent('Top level')
+      await act(async () => openList())
+      expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Top level', 'Recipes', 'Soups', 'Work'])
+    })
+
+    it('saves with the chosen folder_id, and the closed control shows just the name', async () => {
+      vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup()
+      await settle()
+      await choose('Soups')
+      expect(control()).toHaveTextContent('Soups')
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledExactlyOnceWith({ url: 'https://example.com/a', title: 'Example', folder_id: 'f-2' })
+    })
+
+    it('saves without the folder_id key at "Top level", even after choosing a folder and going back', async () => {
+      vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup()
+      await settle()
+      for (const name of ['Work', 'Top level']) await choose(name)
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledExactlyOnceWith({ url: 'https://example.com/a', title: 'Example' })
+      expect(vi.mocked(createBookmark).mock.calls[0][0]).not.toHaveProperty('folder_id')
+    })
+
+    it('sends the folder with no title when the title is empty after trimming', async () => {
+      vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup()
+      await settle()
+      fireEvent.change(titleInput(), { target: { value: '   ' } })
+      await choose('Work')
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledExactlyOnceWith({ url: 'https://example.com/a', folder_id: 'f-3' })
+    })
+
+    it('while the folders load the control is disabled, and Save works and saves to the top level', async () => {
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup()
+      expect(control()).toBeDisabled()
+      expect(control()).toHaveTextContent('Loading…')
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledExactlyOnceWith({ url: 'https://example.com/a', title: 'Example' })
+    })
+
+    it.each([
+      ['a server error', new ApiError(500, null, null)],
+      ['a 401', problem(401, 'unauthenticated')],
+      ['a network failure', new TypeError('Failed to fetch')],
+    ])('after %s: disabled, reads "Top level", says so, and Try again makes it usable', async (_name, error) => {
+      vi.mocked(listFolders).mockRejectedValueOnce(error).mockResolvedValue({ items: FOLDERS })
+      openPopup()
+      await settle()
+      expect(control()).toBeDisabled()
+      expect(control()).toHaveTextContent('Top level')
+      expect(screen.getByText(/Couldn't load your folders\. It will be saved to the top level\./)).toBeInTheDocument()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+      })
+      await settle()
+      expect(listFolders).toHaveBeenCalledTimes(2)
+      expect(control()).toBeEnabled()
+      expect(screen.queryByText(/Couldn't load your folders/)).not.toBeInTheDocument()
+    })
+
+    it('a failed list still saves to the top level', async () => {
+      vi.mocked(listFolders).mockRejectedValue(new ApiError(500, null, null))
+      vi.mocked(createBookmark).mockResolvedValue(created)
+      openPopup()
+      await settle()
+      await pressSave()
+      expect(createBookmark).toHaveBeenCalledExactlyOnceWith({ url: 'https://example.com/a', title: 'Example' })
+    })
+
+    it('a 404 on save says the folder is gone; OK returns to the form at "Top level" with the list refetched', async () => {
+      vi.mocked(listFolders)
+        .mockResolvedValueOnce({ items: FOLDERS })
+        .mockResolvedValue({ items: FOLDERS.filter((f) => f.id !== 'f-3') })
+      vi.mocked(createBookmark).mockRejectedValue(problem(404, 'not_found'))
+      openPopup()
+      await settle()
+      await choose('Work')
+      await pressSave()
+      await settle()
+      expect(screen.getByRole('alert')).toHaveTextContent('That folder no longer exists.')
+      expect(listFolders).toHaveBeenCalledTimes(2)
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'OK' }))
+      })
+      expect(control()).toHaveTextContent('Top level')
+      await act(async () => openList())
+      expect(screen.queryByRole('option', { name: 'Work' })).not.toBeInTheDocument()
+    })
+
+    it('shows folder names as text, not HTML', async () => {
+      vi.mocked(listFolders).mockResolvedValue({ items: [folder({ id: 'h', name: '<img src=x onerror=alert(1)>' })] })
+      openPopup()
+      await settle()
+      await act(async () => openList())
+      expect(screen.getByRole('option', { name: '<img src=x onerror=alert(1)>' })).toBeInTheDocument()
+      expect(document.querySelector('img')).toBeNull()
+    })
+
+    describe('keys that belong to the select', () => {
+      async function openedPopup() {
+        vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+        vi.mocked(createBookmark).mockResolvedValue(created)
+        openPopup()
+        await settle()
+        await act(async () => openList())
+        expect(screen.getAllByRole('option').length).toBeGreaterThan(0)
+      }
+
+      it('Esc with the list open closes only the list, not the window', async () => {
+        await openedPopup()
+        await act(async () => {
+          fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+        })
+        await settle()
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+        expect(closeSpy).not.toHaveBeenCalled()
+        // With the list closed, Esc cancels as before.
+        act(() => void fireEvent.keyDown(document, { key: 'Escape' }))
+        expect(closeSpy).toHaveBeenCalledTimes(1)
+      })
+
+      it('Enter with the list open chooses an option and does not save', async () => {
+        await openedPopup()
+        await act(async () => {
+          fireEvent.keyDown(screen.getByRole('option', { name: 'Work' }), { key: 'Enter' })
+        })
+        await settle()
+        expect(createBookmark).not.toHaveBeenCalled()
+      })
+
+      it('Enter on the closed control does not save', async () => {
+        vi.mocked(listFolders).mockResolvedValue({ items: FOLDERS })
+        openPopup()
+        await settle()
+        await act(async () => {
+          fireEvent.keyDown(control(), { key: 'Enter' })
+        })
+        await settle()
+        expect(createBookmark).not.toHaveBeenCalled()
+      })
+
+      it('Enter elsewhere saves again once the list is closed', async () => {
+        await openedPopup()
+        await act(async () => {
+          fireEvent.keyDown(screen.getByRole('listbox'), { key: 'Escape' })
+        })
+        await settle()
+        await act(async () => {
+          fireEvent.keyDown(saveButton(), { key: 'Enter' })
+        })
+        expect(createBookmark).toHaveBeenCalledTimes(1)
+      })
     })
   })
 })

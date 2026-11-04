@@ -37,16 +37,30 @@ Branch: `claude/folder-moves-task-kyi515`. All paths under `frontend/src/`. One 
 - [x] Folder row menu order "New subfolder", "Rename", "Move to…", "Delete"; "New subfolder" disabled at depth 3; "Move to…" opens the dialog with subtree and too-deep rows disabled — `features/folder-sidebar/components/FolderTree.tsx`, `FolderSection.tsx`, tests `FolderTree.test.tsx`, `FolderSection.test.tsx`
 
 ## Save popup
-- [ ] Select wrapper — `components/ui/Select.tsx`, test `components/ui/Select.test.tsx`
-- [ ] Default "Top level"; a folder saves with `folder_id`; "Top level" saves without the key; title rule unchanged — `features/save/components/SavePopup.tsx`, `FolderChoice.tsx`, tests `SavePopup.test.tsx`, `FolderChoice.test.tsx`
-- [ ] Loading: control disabled, Save works to top level; failed (incl. `401`): message and working "Try again", control usable afterwards — `FolderChoice.tsx`, `FolderChoice.test.tsx`, `SavePopup.test.tsx`
-- [ ] `404` on save: "That folder no longer exists."; dismiss returns to form with "Top level" and folders refetched; same text on the add field — `lib/bookmarks/saveFailure.ts`, tests `saveFailure.test.ts`, `SavePopup.test.tsx`, `AddUrlForm.test.tsx`
-- [ ] Enter/Esc with the list open do not save or close; Enter on the closed control does not save; existing key handling unchanged — `SavePopup.tsx`, `SavePopup.test.tsx`
-- [ ] Folder names rendered as text — `FolderChoice.tsx`, `MoveDialog.tsx`, `BookmarkView.tsx`; tests with HTML in a name in `FolderChoice.test.tsx`, `MoveDialog.test.tsx`, `BookmarkView.test.tsx`
+- [x] Select wrapper — `components/ui/Select.tsx`, test `components/ui/Select.test.tsx`
+- [x] Default "Top level"; a folder saves with `folder_id`; "Top level" saves without the key; title rule unchanged — `features/save/components/SavePopup.tsx`, `FolderChoice.tsx`, tests `SavePopup.test.tsx` (FolderChoice has no file of its own: it is only used by the popup and every branch is driven through it)
+- [x] Loading: control disabled, Save works to top level; failed (incl. `401`): message and working "Try again", control usable afterwards — `FolderChoice.tsx`, test `SavePopup.test.tsx`
+- [x] `404` on save: "That folder no longer exists."; dismiss returns to form with "Top level" and folders refetched; same text on the add field — `lib/bookmarks/saveFailure.ts`, tests `saveFailure.test.ts`, `SavePopup.test.tsx`, `AddUrlForm.test.tsx`
+- [x] Enter/Esc with the list open do not save or close; Enter on the closed control does not save; existing key handling unchanged — `SavePopup.tsx`, `SavePopup.test.tsx`
+- [x] Folder names rendered as text — `FolderChoice.tsx`, `MoveDialog.tsx`, `BookmarkView.tsx`; tests with HTML in a name in `SavePopup.test.tsx`, `MoveDialog.test.tsx`, `BookmarkView.test.tsx`, `Select.test.tsx`
 
 ## Repo-wide
-- [ ] `make check` passes; no `any`, `@ts-ignore`, `@ts-expect-error`, `eslint-disable`; `package.json`, lockfile, README, Makefile, stylelint config unchanged; nothing under `backend/`, `docs/` (except this file), `openapi.yaml`; no reference `.ts`/`.tsx` copied (CSS only)
-- [ ] Each test file that uses timers or navigation run several times
+- [x] `make check` passes; no `any`, `@ts-ignore`, `@ts-expect-error`, `eslint-disable`; `package.json`, lockfile, README, Makefile, stylelint config unchanged; nothing under `backend/`, `docs/` (except this file), `openapi.yaml`; no reference `.ts`/`.tsx` copied (CSS only)
+- [x] Each test file that uses timers or navigation run several times
 
 ## Judgment calls
-(filled in at the end)
+
+Things `docs/tasks/folder-moves.md` did not settle, and what I did.
+
+1. **Row depth for the depth rule** uses the server's `depth` field of each row, as the server's own check does, while the indentation uses the level as drawn (an orphan is drawn at level 0 but keeps its stored depth). `moveTargets` takes the moved `Folder` object, not an id, so a folder that has just vanished from the list still works.
+2. **Any `422` on a folder move does not refresh**, even one with a code the table does not list (it shows "Couldn't move the folder."). The task says "except `409 folder_name_conflict` and `422`"; the existing create/rename mapping refreshes on an unknown 422, so this differs on purpose for `move` only.
+3. **The edit and empty-trash hook tests** also had exact lists of invalidated keys; I added `['folders']` to those lists (the task asked for the extra assertion on delete and restore only). The row tests that count invalidations went from 2 to 3 for the same reason.
+4. **`BookmarkRow` takes an optional `onMove`** like its `onEdit`: the list owns the move dialog so a 404/409 refresh that drops the row does not take the dialog and its message with it (a test shows it). Without `onMove` the row shows its own dialog (used by the row's own tests).
+5. **Selection fall-back in the move dialog:** besides the moved folder or the current location vanishing, a chosen target that is no longer selectable (gone or now disabled) also falls back to "Top level". The dialog hands `onConfirm` the folder row it knows (or `null`), so the toast uses the target's name at the moment of confirming.
+6. **The saved-popup refetch after a failed save** runs on any failed save made with a folder chosen (not only a 404), because `describeSaveFailure` must keep `{ kind: 'error', message }` and the message text is not a thing to branch on. The selection itself is derived: a chosen id missing from the list reads as "Top level", so no reset effect is needed.
+7. **Popup keys:** a capture-phase listener notes, before the select sees a key, whether Enter or Esc belongs to the select (its list is open, or Enter on its closed button). The existing window-level handler is unchanged apart from ignoring those keys.
+8. **Select wrapper:** the closed control's text comes from `items` (just the name); `valueText` overrides it for "Loading…" and for the failed state. The list items reuse the `dropdown` CSS and add `select__*` rules.
+9. **CSS:** the `move-picker*` rules are copied from the reference with the same class names; `move-dialog__*`, `select__*`, `move-picker__name` and `detail-page__fact-quiet`/`__move` are new, written for this repo.
+10. **Bookmark page:** the "Move" button sits in the facts row after the Folder fact (small, secondary, with a folder icon). While the folders load a bookmark that is at the top level already reads "Top level" (no placeholder needed); only a bookmark in a folder shows the quiet "Loading…".
+11. **Reference vs this file:** the reference used Headless UI for the picker and a static save field; this file's choices (Base UI radio group and select, the dialog footer through `footer`) win, as it says. The reference's picker shows the check mark with the row; I kept that.
+12. **Tests for `FolderChoice`** live in `SavePopup.test.tsx` (it is used only by the popup). Radio and select tests that press options use a down/up/click sequence because Base UI ignores a bare `click` in jsdom, and click the selected radio first to put focus in the group (the dialog's focus guards take the first Tab stops).
