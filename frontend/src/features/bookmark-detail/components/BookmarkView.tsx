@@ -1,21 +1,23 @@
 import { useState } from 'react'
-import { ArrowLeft, CircleAlert, Clock, ExternalLink, Pencil, Trash2, TriangleAlert } from 'lucide-react'
+import { ArrowLeft, CircleAlert, Clock, ExternalLink, FolderInput, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
 import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { EditBookmarkDialog } from '../../../components/ui/EditBookmarkDialog'
+import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { ApiError } from '../../../lib/api/ApiError'
 import type { BookmarkDetail } from '../../../lib/api/bookmarks'
 import { useDeleteBookmark } from '../../../lib/bookmarks/useDeleteBookmark'
 import { useEditBookmark } from '../../../lib/bookmarks/useEditBookmark'
 import { useRestoreBookmark } from '../../../lib/bookmarks/useRestoreBookmark'
+import { useFolders } from '../../../lib/folders/useFolders'
 import { useBookmark } from '../hooks/useBookmark'
 import { hostOf } from '../../../lib/hostOf'
 import { Favicon } from '../../../components/ui/Favicon'
 import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 
-/** The bookmark page: fetch state, note and saved page text, with edit, delete and restore. */
+/** The bookmark page: fetch state, folder, note and saved page text, with edit, move, delete and restore. */
 export function BookmarkView({ id }: { id: string }) {
   const { bookmark, error, isLoading, retry } = useBookmark(id)
 
@@ -50,6 +52,8 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
   const trashed = bookmark.deleted_at !== null
   const title = bookmark.title.trim() === '' ? hostOf(bookmark.url) : bookmark.title
   const [editing, setEditing] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const folders = useFolders()
   const edit = useEditBookmark(bookmark.id)
   const del = useDeleteBookmark(bookmark.id, { undo: false })
   const restore = useRestoreBookmark(bookmark.id)
@@ -125,6 +129,19 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
           <span className="detail-page__fact-label">Fetch status</span>
           <FetchStatusChip status={bookmark.fetch_status} />
         </div>
+        {!trashed && (
+          <>
+            <div className="detail-page__fact">
+              <span className="detail-page__fact-label">Folder</span>
+              <span className={folders.isPending && bookmark.folder_id !== null ? 'detail-page__fact-quiet' : undefined}>
+                {folderText(bookmark.folder_id, folders)}
+              </span>
+            </div>
+            <button type="button" className="btn btn--secondary btn--sm detail-page__move" onClick={() => setMoving(true)}>
+              <FolderInput size={14} aria-hidden="true" /> Move
+            </button>
+          </>
+        )}
       </div>
 
       {bookmark.note !== null && (
@@ -153,6 +170,7 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
           <div className="detail-page__content-body">{bookmark.content}</div>
         )}
       </div>
+      {!trashed && <MoveBookmarkDialog open={moving} bookmark={bookmark} onClose={() => setMoving(false)} />}
       <EditBookmarkDialog
         open={editing}
         title={bookmark.title}
@@ -167,4 +185,11 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
       />
     </div>
   )
+}
+
+/** Where the bookmark is: a name (as text), "Top level", a placeholder while loading, or unknown. */
+function folderText(folderId: string | null, folders: ReturnType<typeof useFolders>): string {
+  if (folderId === null) return 'Top level'
+  if (folders.isPending) return 'Loading…'
+  return folders.data?.find((f) => f.id === folderId)?.name ?? 'Unknown folder'
 }

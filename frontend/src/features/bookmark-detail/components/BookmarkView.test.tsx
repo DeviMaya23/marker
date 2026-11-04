@@ -10,6 +10,8 @@ import {
   updateBookmark,
   type BookmarkDetail,
 } from '../../../lib/api/bookmarks'
+import { listFolders } from '../../../lib/api/folders'
+import { folder } from '../../../test/builders'
 import { ToastProvider } from '../../../components/ui/Toast'
 import { BookmarkView } from './BookmarkView'
 
@@ -19,6 +21,12 @@ vi.mock('../../../lib/api/bookmarks', () => ({
   deleteBookmark: vi.fn(),
   restoreBookmark: vi.fn(),
 }))
+
+vi.mock('../../../lib/api/folders', () => ({ listFolders: vi.fn() }))
+
+beforeEach(() => {
+  vi.mocked(listFolders).mockReset().mockResolvedValue({ items: [] })
+})
 
 function bookmark(overrides: Partial<BookmarkDetail> = {}): BookmarkDetail {
   return {
@@ -147,11 +155,10 @@ describe('BookmarkView', () => {
       expect(screen.getByText('remember this')).toBeInTheDocument()
     })
 
-    it('has no Note section when the note is null, and no folder', async () => {
+    it('has no Note section when the note is null', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: null }))
       await open()
       expect(screen.queryByText('Note')).not.toBeInTheDocument()
-      expect(screen.queryByText('Folder')).not.toBeInTheDocument()
     })
 
     it('keeps an empty-string note as a note', async () => {
@@ -286,7 +293,7 @@ describe('BookmarkView actions', () => {
     await advance(0)
   }
 
-  it('shows Edit and Delete for a live bookmark, and no Restore', async () => {
+  it('shows Edit, Move and Delete for a live bookmark, and no Restore', async () => {
     await open()
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
@@ -408,5 +415,118 @@ describe('BookmarkView actions', () => {
     await advance(0)
     expect(screen.getByText("Couldn't move it to the trash.")).toBeInTheDocument()
     expect(screen.getByText('An example')).toBeInTheDocument()
+  })
+})
+
+describe('BookmarkView folder and move', () => {
+  let server: BookmarkDetail
+  const FOLDERS = [folder({ id: 'f-1', name: 'Recipes' }), folder({ id: 'f-2', name: 'Work' })]
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    notifyManager.setScheduler((callback) => queueMicrotask(callback))
+    server = bookmark({ folder_id: 'f-1' })
+    vi.mocked(getBookmark).mockReset().mockImplementation(async () => server)
+    vi.mocked(updateBookmark).mockReset()
+    vi.mocked(listFolders).mockReset().mockResolvedValue({ items: FOLDERS })
+  })
+
+  afterEach(() => {
+    notifyManager.setScheduler((callback) => setTimeout(callback, 0))
+    vi.useRealTimers()
+  })
+
+  const factValue = () => screen.getByText('Folder').parentElement as HTMLElement
+
+  it('shows the folder name next to a Move button', async () => {
+    await open()
+    expect(factValue()).toHaveTextContent('Recipes')
+    expect(screen.getByRole('button', { name: 'Move' })).toBeInTheDocument()
+  })
+
+  it('shows "Top level" for a bookmark at the top, even when the folder list failed', async () => {
+    server = bookmark({ folder_id: null })
+    vi.mocked(listFolders).mockRejectedValue(new TypeError('Failed to fetch'))
+    await open()
+    expect(factValue()).toHaveTextContent('Top level')
+  })
+
+  it('shows a quiet placeholder while the folders load', async () => {
+    vi.mocked(listFolders).mockReturnValue(new Promise(() => {}))
+    await open()
+    expect(factValue()).toHaveTextContent('Loading…')
+    expect(factValue().querySelector('.detail-page__fact-quiet')).not.toBeNull()
+  })
+
+  it.each([
+    ['the folder list failed', () => vi.mocked(listFolders).mockRejectedValue(new ApiError(500, null, null)), 'f-1'],
+    ['the id is not in the list', () => {}, 'f-gone'],
+  ])('shows "Unknown folder" when %s', async (_name, arrange, folderId) => {
+    arrange()
+    server = bookmark({ folder_id: folderId })
+    await open()
+    expect(factValue()).toHaveTextContent('Unknown folder')
+  })
+
+  it('shows a folder name as text, never HTML', async () => {
+    vi.mocked(listFolders).mockResolvedValue({ items: [folder({ id: 'f-1', name: '<img src=x onerror=alert(1)>' })] })
+    await open()
+    expect(factValue()).toHaveTextContent('<img src=x onerror=alert(1)>')
+    expect(factValue().querySelector('img')).toBeNull()
+  })
+
+  it('shows neither the Folder fact nor Move for a trashed bookmark', async () => {
+    server = bookmark({ folder_id: 'f-1', deleted_at: '2026-03-05T00:00:00Z' })
+    await open()
+    expect(screen.queryByText('Folder')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Move' })).not.toBeInTheDocument()
+  })
+
+  it('moves through the dialog; the page then shows the new folder', async () => {
+    vi.mocked(updateBookmark).mockImplementation(async (_id, changes) => {
+      server = { ...server, folder_id: changes.folder_id ?? null }
+      return server
+    })
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    await advance(0)
+    expect(screen.getByRole('dialog', { name: 'Move bookmark' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Recipes' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Work' }))
+    await advance(0)
+    fireEvent.click(screen.getByRole('button', { name: /^Move$/ }))
+    await advance(0)
+    await advance(0)
+    expect(updateBookmark).toHaveBeenCalledExactlyOnceWith('b-1', { folder_id: 'f-2' })
+    expect(screen.getByText('Moved to “Work”.')).toBeInTheDocument()
+    expect(factValue()).toHaveTextContent('Work')
+  })
+
+  it('replaces the page with "Bookmark not found" when the move gets a 404', async () => {
+    vi.mocked(updateBookmark).mockRejectedValue(new ApiError(404, null, null))
+    vi.mocked(getBookmark).mockReset().mockResolvedValueOnce(server).mockRejectedValue(new ApiError(404, null, null))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    await advance(0)
+    fireEvent.click(screen.getByRole('radio', { name: 'Work' }))
+    await advance(0)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move' }).at(-1) as HTMLElement)
+    await advance(0)
+    await advance(0)
+    expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
+  })
+
+  it('replaces the page with the signed-out message when the move gets a 401', async () => {
+    vi.mocked(updateBookmark).mockRejectedValue(new ApiError(401, null, null))
+    vi.mocked(getBookmark).mockReset().mockResolvedValueOnce(server).mockRejectedValue(new ApiError(401, null, null))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+    await advance(0)
+    fireEvent.click(screen.getByRole('radio', { name: 'Work' }))
+    await advance(0)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Move' }).at(-1) as HTMLElement)
+    await advance(0)
+    await advance(0)
+    expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
   })
 })
