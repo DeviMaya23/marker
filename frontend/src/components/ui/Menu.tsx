@@ -23,20 +23,32 @@ type Props = {
   items: MenuItemSpec[]
   disabled?: boolean
   className?: string
+  /** Which side of the button the popup prefers. Default: Base UI's (below). */
+  side?: 'top' | 'bottom'
+  /** How the popup lines up with the button. Default `end`. */
+  align?: 'start' | 'end'
 }
 
 /**
  * A button that opens a short list of actions. An item is a button, or a link to `href`
  * that opens in a new tab with `noopener noreferrer`. Choosing an item closes the menu.
  */
-export function Menu({ label, children, items, disabled = false, className = 'icon-btn' }: Props) {
+export function Menu({
+  label,
+  children,
+  items,
+  disabled = false,
+  className = 'icon-btn',
+  side,
+  align = 'end',
+}: Props) {
   return (
     <BaseMenu.Root>
       <BaseMenu.Trigger className={className} aria-label={label} disabled={disabled}>
         {children}
       </BaseMenu.Trigger>
       <BaseMenu.Portal>
-        <BaseMenu.Positioner sideOffset={4} align="end" className="dropdown-positioner">
+        <BaseMenu.Positioner sideOffset={4} side={side} align={align} className="dropdown-positioner">
           <BaseMenu.Popup className="dropdown">
             {items.map((item) => {
               const className = `dropdown__item${item.danger ? ' dropdown__item--danger' : ''}`
