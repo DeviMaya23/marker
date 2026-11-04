@@ -119,6 +119,84 @@ describe('FolderPage', () => {
   })
 })
 
+describe('FolderPage moving between folders', () => {
+  const addField = () => screen.getByLabelText('Link to save')
+  const goToTravel = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole('link', { name: /Travel/ }))
+    await waitFor(() => expect(heading()).toHaveTextContent('Travel'))
+  }
+  const openWithSidebar = () =>
+    renderApp(
+      <Routes>
+        <Route path="/folder/:id" element={<FolderPage />} />
+      </Routes>,
+      { path: '/folder/f-1' },
+    )
+
+  it('clears the add field when moving to another folder', async () => {
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://a.test')
+    await goToTravel(user)
+    expect(addField()).toHaveValue('')
+  })
+
+  it('drops a shown save failure when moving to another folder', async () => {
+    vi.mocked(createBookmark).mockRejectedValue(new ApiError(500, null, null))
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://a.test')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('alert')
+    await goToTravel(user)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('saves into the new folder after moving, never into the old one', async () => {
+    vi.mocked(createBookmark).mockResolvedValue(bookmark({ id: 'new' }))
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://old.test')
+    await goToTravel(user)
+    await user.type(addField(), 'https://new.test')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(createBookmark).toHaveBeenCalledTimes(1))
+    expect(createBookmark).toHaveBeenCalledWith({ url: 'https://new.test', folder_id: 'f-2' })
+    expect(vi.mocked(createBookmark).mock.calls.some(([r]) => r.folder_id === 'f-1')).toBe(false)
+  })
+
+  it('keeps the typed text when only the search changes', async () => {
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://a.test')
+    await user.type(screen.getByRole('searchbox', { name: 'Search bookmarks' }), 'soup{Enter}')
+    await waitFor(() => expect(list).toHaveBeenCalledWith(expect.objectContaining({ q: 'soup', folderId: 'f-1' })))
+    expect(addField()).toHaveValue('https://a.test')
+  })
+
+  it('shows a fresh form on the new folder while a save for the old one is in flight', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let finish: () => void = () => {}
+    vi.mocked(createBookmark).mockImplementation(
+      () => new Promise((resolve) => (finish = () => resolve(bookmark({ id: 'late' })))),
+    )
+    const user = userEvent.setup()
+    openWithSidebar()
+    await user.type(addField(), 'https://a.test')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await screen.findByRole('button', { name: 'Saving…' })
+    await goToTravel(user)
+    expect(addField()).not.toHaveAttribute('readonly')
+    expect(addField()).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    const calls = list.mock.calls.length
+    await act(async () => finish())
+    await waitFor(() => expect(list.mock.calls.length).toBeGreaterThan(calls))
+    expect(errors).not.toHaveBeenCalled()
+    errors.mockRestore()
+  })
+})
+
 describe('FolderPage search bar', () => {
   const bar = () => screen.queryByRole('search')
 

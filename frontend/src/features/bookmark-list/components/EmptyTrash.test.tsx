@@ -117,6 +117,40 @@ describe('Empty trash confirmation', () => {
     expect(empty).not.toHaveBeenCalled()
   })
 
+  it('puts Cancel and confirm in the footer, outside the body that holds the field and the text', async () => {
+    await openDialog()
+    const footer = confirm().closest('.modal-footer')
+    expect(footer).not.toBeNull()
+    expect(footer).toContainElement(screen.getByRole('button', { name: 'Cancel' }))
+    expect(confirm().closest('.modal-body')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Cancel' }).closest('.modal-body')).toBeNull()
+    const body = (dialog() as HTMLElement).querySelector('.modal-body') as HTMLElement
+    expect(body).toContainElement(field())
+    expect(body).toContainElement(screen.getByText(/This permanently deletes/))
+  })
+
+  it('submits on Enter only when the phrase matches', async () => {
+    empty.mockResolvedValue({ deleted: 3 })
+    const { user } = await openDialog()
+    await user.type(field(), 'wrong{Enter}')
+    expect(empty).not.toHaveBeenCalled()
+    await user.clear(field())
+    await user.type(field(), 'empty trash{Enter}')
+    await waitFor(() => expect(empty).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows an empty field when reopened after a successful empty', async () => {
+    empty.mockResolvedValue({ deleted: 3 })
+    const { user } = await openDialog()
+    await user.type(field(), 'empty trash')
+    await user.click(confirm())
+    await waitFor(() => expect(dialog()).not.toBeInTheDocument())
+    await waitFor(() => expect(button()).toBeEnabled())
+    await user.click(button())
+    await screen.findByRole('dialog', { name: 'Empty trash?' })
+    expect(field()).toHaveValue('')
+  })
+
   it('does nothing on the confirm button until the phrase is typed', async () => {
     await openDialog()
     fireEvent.click(confirm())
@@ -150,6 +184,7 @@ describe('Empty trash confirmation', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     await user.keyboard('{Escape}')
     expect(dialog()).toBeInTheDocument()
+    expect(field()).toHaveValue('empty trash')
     expect(empty).toHaveBeenCalledTimes(1)
     finish()
     await waitFor(() => expect(dialog()).not.toBeInTheDocument())
