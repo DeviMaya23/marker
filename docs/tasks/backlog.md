@@ -23,7 +23,6 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - Undo of a bookmark delete restores to the top level, so a bookmark deleted from a folder loses its folder (known gap in `bookmark-actions`; the server's restore does this). Decide whether the server or the UI should handle it.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
 - Account area (screen 6): account menu, log out, bookmarklet install page, delete account.
-- Background sync: poll `getSyncVersion` every 2 to 3 seconds (NFR-2's 5 seconds is the end-to-end target) and refresh the list and folders on a change, without moving the scroll position. The server half is `sync-version`.
 - The "1,000 bookmark limit reached" message on the list.
 ## Loose ends from verifier reports
 
