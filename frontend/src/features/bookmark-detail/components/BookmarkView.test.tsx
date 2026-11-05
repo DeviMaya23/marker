@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, notifyManager } from '@tanstack/react-query'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
@@ -59,6 +59,9 @@ async function open() {
   await advance(0)
   return client
 }
+
+const titleInput = () => screen.getByRole('textbox', { name: 'Title' })
+const noteInput = () => screen.getByRole('textbox', { name: 'Note' })
 
 async function advance(ms: number) {
   await act(async () => {
@@ -131,8 +134,10 @@ describe('BookmarkView', () => {
     it('shows markup in the title and the note literally', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ title: '<i>t</i>', note: '<u>n</u>' }))
       await open()
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('<i>t</i>')
-      expect(screen.getByText('<u>n</u>')).toBeInTheDocument()
+      expect(titleInput()).toHaveValue('<i>t</i>')
+      expect(noteInput()).toHaveValue('<u>n</u>')
+      expect(screen.getByRole('heading', { level: 1 }).querySelector('i')).toBeNull()
+      expect(document.querySelector('.detail-page u')).toBeNull()
     })
   })
 
@@ -151,22 +156,47 @@ describe('BookmarkView', () => {
       expect(screen.getByRole('link', { name: /Back/ })).toHaveAttribute('href', '/')
     })
 
-    it('shows the note only when it is not null', async () => {
+    it('shows the stored note in the note field', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: 'remember this' }))
       await open()
-      expect(screen.getByText('remember this')).toBeInTheDocument()
+      expect(noteInput()).toHaveValue('remember this')
     })
 
-    it('has no Note section when the note is null', async () => {
-      vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: null }))
+    it.each([null, ''])('shows an empty note field with a placeholder when the note is %j', async (note) => {
+      vi.mocked(getBookmark).mockResolvedValue(bookmark({ note }))
       await open()
-      expect(screen.queryByText('Note')).not.toBeInTheDocument()
+      expect(noteInput()).toHaveValue('')
+      expect(noteInput()).toHaveAttribute('placeholder', 'Add a note…')
+      expect(screen.getByLabelText('Note')).toBe(noteInput())
     })
 
-    it('keeps an empty-string note as a note', async () => {
-      vi.mocked(getBookmark).mockResolvedValue(bookmark({ note: '' }))
-      await open()
-      expect(screen.getByText('Note')).toBeInTheDocument()
+    describe('a trashed bookmark', () => {
+      const trashed = (overrides: Partial<BookmarkDetail>) =>
+        vi.mocked(getBookmark).mockResolvedValue(bookmark({ deleted_at: '2026-03-05T00:00:00Z', ...overrides }))
+
+      it('has no field, shows the title as the heading, and the note as text', async () => {
+        trashed({ note: 'remember this' })
+        await open()
+        expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('An example')
+        expect(screen.getByText('remember this')).toBeInTheDocument()
+      })
+
+      it('shows no note section for a null note and the section for an empty-string note', async () => {
+        trashed({ note: null })
+        await open()
+        expect(screen.queryByText('Note')).not.toBeInTheDocument()
+        cleanup()
+        trashed({ note: '' })
+        await open()
+        expect(screen.getByText('Note')).toBeInTheDocument()
+      })
+
+      it('shows the host name as the heading when the title is empty', async () => {
+        trashed({ title: '' })
+        await open()
+        expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('www.example.com')
+      })
     })
   })
 
@@ -174,19 +204,21 @@ describe('BookmarkView', () => {
     it('shows the title when there is one', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ title: 'Hello' }))
       await open()
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hello')
+      expect(titleInput()).toHaveValue('Hello')
+      expect(screen.getByRole('heading', { level: 1 })).toContainElement(titleInput())
     })
 
-    it('shows the host name of the URL while the title is empty', async () => {
-      vi.mocked(getBookmark).mockResolvedValue(bookmark({ title: '' }))
+    it.each(['', '   '])('shows an empty field with the host name as placeholder when the title is %j', async (title) => {
+      vi.mocked(getBookmark).mockResolvedValue(bookmark({ title }))
       await open()
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('www.example.com')
+      expect(titleInput()).toHaveValue('')
+      expect(titleInput()).toHaveAttribute('placeholder', 'www.example.com')
     })
 
     it('shows the whole URL when the title is empty and the URL cannot be parsed', async () => {
       vi.mocked(getBookmark).mockResolvedValue(bookmark({ title: '', url: 'not a url at all' }))
       await open()
-      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('not a url at all')
+      expect(titleInput()).toHaveAttribute('placeholder', 'not a url at all')
     })
   })
 
@@ -244,10 +276,10 @@ describe('BookmarkView', () => {
         .mockResolvedValueOnce(pending())
         .mockRejectedValue(new ApiError(404, null, null))
       await open()
-      expect(screen.getByText('An example')).toBeInTheDocument()
+      expect(titleInput()).toHaveValue('An example')
       await advance(1000)
       expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
-      expect(screen.queryByText('An example')).not.toBeInTheDocument()
+      expect(screen.queryByRole('textbox', { name: 'Title' })).not.toBeInTheDocument()
     })
 
     it('keeps the shown bookmark and shows nothing when a later poll gets a 401', async () => {
@@ -256,7 +288,7 @@ describe('BookmarkView', () => {
         .mockRejectedValue(new ApiError(401, null, null))
       await open()
       await advance(1000)
-      expect(screen.getByText('An example')).toBeInTheDocument()
+      expect(titleInput()).toHaveValue('An example')
       expect(screen.queryByText(/logged out|Log in|Something went wrong|Loading…/)).not.toBeInTheDocument()
       await advance(60_000)
       expect(getBookmark).toHaveBeenCalledTimes(2)
@@ -269,7 +301,7 @@ describe('BookmarkView', () => {
         .mockResolvedValue(bookmark({ content: 'Now it is done.' }))
       await open()
       await advance(1000)
-      expect(screen.getByText('An example')).toBeInTheDocument()
+      expect(titleInput()).toHaveValue('An example')
       expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
       await advance(1000)
       expect(screen.getByText('Now it is done.')).toBeInTheDocument()
@@ -326,17 +358,17 @@ describe('BookmarkView actions', () => {
     })
     await open()
     await click('Edit')
-    const title = screen.getByLabelText('Title')
+    const dialog = within(screen.getByRole('dialog', { name: 'Edit bookmark' }))
+    const title = dialog.getByLabelText('Title')
     expect(title).toHaveValue('An example')
-    expect(screen.getByLabelText('Note')).toHaveValue('a note')
+    expect(dialog.getByLabelText('Note')).toHaveValue('a note')
     fireEvent.change(title, { target: { value: 'New title' } })
-    fireEvent.change(screen.getByLabelText('Note'), { target: { value: '' } })
+    fireEvent.change(dialog.getByLabelText('Note'), { target: { value: '' } })
     await click('Save')
     await advance(0)
     expect(updateBookmark).toHaveBeenCalledExactlyOnceWith('b-1', { title: 'New title', note: null })
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('New title')
-    expect(screen.queryByText('a note')).not.toBeInTheDocument()
-    expect(screen.queryByText('Note')).not.toBeInTheDocument()
+    expect(titleInput()).toHaveValue('New title')
+    expect(noteInput()).toHaveValue('')
     expect(screen.getByText('Saved.')).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Edit bookmark' })).not.toBeInTheDocument()
   })
@@ -421,7 +453,7 @@ describe('BookmarkView actions', () => {
     await click('Restore')
     await advance(0)
     expect(restoreBookmark).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('An example')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('An example')
     expect(screen.queryByText(/logged out|Log in|Couldn't restore/)).not.toBeInTheDocument()
     expect(vi.mocked(getBookmark).mock.calls.length).toBe(loads)
   })
@@ -434,7 +466,7 @@ describe('BookmarkView actions', () => {
     await click('Delete')
     await advance(0)
     expect(screen.getByText("Couldn't move it to the trash.")).toBeInTheDocument()
-    expect(screen.getByText('An example')).toBeInTheDocument()
+    expect(titleInput()).toHaveValue('An example')
   })
 })
 
@@ -549,8 +581,525 @@ describe('BookmarkView folder and move', () => {
     await advance(0)
     await advance(0)
     expect(updateBookmark).toHaveBeenCalledTimes(1)
-    expect(screen.getAllByText('An example').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox', { name: 'Title', hidden: true })).toHaveValue('An example')
     expect(screen.queryByText(/logged out|Log in|Couldn't move/)).not.toBeInTheDocument()
     expect(vi.mocked(getBookmark).mock.calls.length).toBe(loads)
+  })
+})
+
+describe('BookmarkView inline edit', () => {
+  // The "server": the mocked calls change it, and the page sees it only when it refetches.
+  let server: BookmarkDetail
+  const update = vi.mocked(updateBookmark)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    notifyManager.setScheduler((callback) => queueMicrotask(callback))
+    server = bookmark({ note: 'a note' })
+    vi.mocked(getBookmark).mockReset().mockImplementation(async () => server)
+    update.mockReset().mockImplementation(async (_id, changes) => {
+      server = {
+        ...server,
+        title: changes.title ?? server.title,
+        note: changes.note === undefined ? server.note : changes.note,
+      }
+      return server
+    })
+  })
+
+  afterEach(() => {
+    notifyManager.setScheduler((callback) => setTimeout(callback, 0))
+    vi.useRealTimers()
+  })
+
+  const type = (el: HTMLElement, value: string) => fireEvent.change(el, { target: { value } })
+  const leave = async (el: HTMLElement) => {
+    fireEvent.blur(el)
+    await advance(0)
+  }
+  const problem = (status: number, code: string, errors?: { field: string; code: string }[]) =>
+    new ApiError(status, { type: 'x', title: 't', status, code, errors } as never, null)
+  /** The status line next to a field: the live region inside the field's own wrapper. */
+  const statusOf = (el: HTMLElement) => (el.closest('.detail-page__note') ?? el.closest('.detail-page__title-block'))!.querySelector('[role="status"]')!
+  const pendingUpdate = () => {
+    const calls: { resolve: () => void; reject: (e: unknown) => void }[] = []
+    update.mockImplementation(
+      (_id, changes) =>
+        new Promise((resolve, reject) => {
+          calls.push({
+            resolve: () => {
+              server = { ...server, title: changes.title ?? server.title, note: changes.note === undefined ? server.note : changes.note }
+              resolve(server)
+            },
+            reject,
+          })
+        }),
+    )
+    return calls
+  }
+
+  describe('counters', () => {
+    it('shows the note counter always, as the user types', async () => {
+      server = bookmark({ note: null })
+      await open()
+      expect(screen.getByText('0/500')).toBeInTheDocument()
+      type(noteInput(), 'abc')
+      expect(screen.getByText('3/500')).toBeInTheDocument()
+    })
+
+    it('shows the title counter only while focused or over the limit', async () => {
+      await open()
+      expect(screen.queryByText(/\/300$/)).not.toBeInTheDocument()
+      act(() => titleInput().focus())
+      expect(screen.getByText('10/300')).toBeInTheDocument()
+      expect(screen.getByText('10/300')).not.toHaveClass('field__meta--over')
+      type(titleInput(), 'a'.repeat(301))
+      fireEvent.blur(titleInput())
+      expect(screen.getByText('301/300')).toHaveClass('field__meta--over')
+    })
+
+    it('counts a spaces-only note raw and never calls it over', async () => {
+      await open()
+      type(noteInput(), ' '.repeat(600))
+      expect(screen.getByText('600/500')).not.toHaveClass('field__meta--over')
+      await leave(noteInput())
+      expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { note: null })
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('committing', () => {
+    it.each([
+      ['blur', async () => leave(titleInput())],
+      ['Enter', async () => { fireEvent.keyDown(titleInput(), { key: 'Enter' }); await advance(0) }],
+    ])('sends only the title on %s, shows the new title and no Saved. toast', async (_name, commit) => {
+      await open()
+      type(titleInput(), 'New title')
+      await commit()
+      expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { title: 'New title' })
+      expect(titleInput()).toHaveValue('New title')
+      expect(screen.queryByText('Saved.')).not.toBeInTheDocument()
+    })
+
+    it('sends nothing for a title that only differs by spaces, and shows the stored one', async () => {
+      server = bookmark({ title: 'Hello' })
+      await open()
+      type(titleInput(), '  Hello ')
+      await leave(titleInput())
+      expect(update).not.toHaveBeenCalled()
+      expect(titleInput()).toHaveValue('Hello')
+    })
+
+    it('Shift+Enter in the title commits too, and Enter while composing does not', async () => {
+      await open()
+      type(titleInput(), 'New')
+      fireEvent.keyDown(titleInput(), { key: 'Enter', isComposing: true })
+      await advance(0)
+      expect(update).not.toHaveBeenCalled()
+      fireEvent.keyDown(titleInput(), { key: 'Enter', shiftKey: true })
+      await advance(0)
+      expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { title: 'New' })
+    })
+
+    it('sends only the note on blur; Enter in the note sends nothing', async () => {
+      await open()
+      type(noteInput(), 'line one\nline two')
+      fireEvent.keyDown(noteInput(), { key: 'Enter' })
+      await advance(0)
+      expect(update).not.toHaveBeenCalled()
+      await leave(noteInput())
+      expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { note: 'line one\nline two' })
+    })
+
+    it.each([
+      ['clearing a stored note', 'a note', '', { note: null }],
+      ['a spaces-only note over a stored note', 'a note', '   ', { note: null }],
+      ['an empty note over a null note', null, '', undefined],
+      ['a spaces-only note over a null note', null, '  ', undefined],
+      ['the same note', 'a note', 'a note', undefined],
+    ])('%s', async (_name, stored, typed, body) => {
+      server = bookmark({ note: stored })
+      await open()
+      type(noteInput(), typed)
+      await leave(noteInput())
+      if (body) expect(update).toHaveBeenCalledExactlyOnceWith('b-1', body)
+      else expect(update).not.toHaveBeenCalled()
+    })
+
+    it('leaving the title then the note sends two calls with one field each', async () => {
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      type(noteInput(), 'N2')
+      await leave(noteInput())
+      expect(update.mock.calls).toEqual([
+        ['b-1', { title: 'T2' }],
+        ['b-1', { note: 'N2' }],
+      ])
+    })
+
+    it('an edited note alone sends no title', async () => {
+      await open()
+      type(noteInput(), 'N2')
+      await leave(noteInput())
+      expect(update).toHaveBeenCalledExactlyOnceWith('b-1', { note: 'N2' })
+    })
+
+    it.each([
+      ['title', 300, true, 'a'],
+      ['title', 301, false, 'a'],
+      ['title', 300, true, '😀'],
+      ['note', 500, true, 'a'],
+      ['note', 501, false, 'a'],
+      ['note', 500, true, '😀'],
+    ])('%s of %i characters (%s): sent is %s', async (field, n, sent, ch) => {
+      await open()
+      const el = field === 'title' ? titleInput() : noteInput()
+      type(el, ch.repeat(n))
+      await leave(el)
+      expect(update).toHaveBeenCalledTimes(sent ? 1 : 0)
+      if (!sent) {
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          field === 'title' ? 'Title is too long (300 characters at most).' : 'Note is too long (500 characters at most).',
+        )
+        expect(el).toHaveValue(ch.repeat(n))
+        type(el, ch.repeat(field === 'title' ? 300 : 500))
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      }
+    })
+
+    it('a second blur while the first save is in flight sends nothing, and the other field still sends', async () => {
+      const calls = pendingUpdate()
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      await leave(titleInput())
+      expect(update).toHaveBeenCalledTimes(1)
+      type(noteInput(), 'N2')
+      await leave(noteInput())
+      expect(update.mock.calls).toEqual([
+        ['b-1', { title: 'T2' }],
+        ['b-1', { note: 'N2' }],
+      ])
+      calls.forEach((c) => c.resolve())
+      await advance(0)
+    })
+
+    it('unmounting while a save is in flight throws nothing and leaves no unhandled rejection', async () => {
+      const calls = pendingUpdate()
+      const rejections: unknown[] = []
+      const onRejection = (e: unknown) => rejections.push(e)
+      process.on('unhandledRejection', onRejection)
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      cleanup()
+      calls[0].resolve()
+      await advance(0)
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(rejections).toEqual([])
+      process.off('unhandledRejection', onRejection)
+    })
+
+    it('a note of exactly 500 emoji is sent, 501 is not, and a title of 300 emoji is sent', async () => {
+      await open()
+      type(noteInput(), '😀'.repeat(501))
+      await leave(noteInput())
+      expect(update).not.toHaveBeenCalled()
+      type(noteInput(), '😀'.repeat(500))
+      await leave(noteInput())
+      expect(update).toHaveBeenLastCalledWith('b-1', { note: '😀'.repeat(500) })
+      type(titleInput(), '😀'.repeat(300))
+      await leave(titleInput())
+      expect(update).toHaveBeenLastCalledWith('b-1', { title: '😀'.repeat(300) })
+    })
+
+    it('Enter then blur right after, with the first save pending, sends one request', async () => {
+      pendingUpdate()
+      await open()
+      type(titleInput(), 'T2')
+      fireEvent.keyDown(titleInput(), { key: 'Enter' })
+      fireEvent.blur(titleInput())
+      await advance(0)
+      expect(update).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('status and the old value', () => {
+    it('says Saving… while pending, Saved for 2 seconds after, each field on its own', async () => {
+      const calls = pendingUpdate()
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      expect(statusOf(titleInput())).toHaveTextContent('Saving…')
+      expect(statusOf(noteInput())).toHaveTextContent('')
+      calls[0].resolve()
+      await advance(0)
+      expect(statusOf(titleInput())).toHaveTextContent('Saved')
+      expect(statusOf(noteInput())).toHaveTextContent('')
+      await advance(1999)
+      expect(statusOf(titleInput())).toHaveTextContent('Saved')
+      await advance(1)
+      expect(statusOf(titleInput())).toHaveTextContent('')
+    })
+
+    it('clears the Saved timer when the page unmounts', async () => {
+      const client = await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      expect(statusOf(titleInput())).toHaveTextContent('Saved')
+      const spy = vi.spyOn(globalThis, 'clearTimeout')
+      cleanup()
+      expect(spy).toHaveBeenCalled()
+      client.clear()
+    })
+
+    it('shows the saved text, never the old stored one, until the refetch answers', async () => {
+      await open()
+      let answer: (b: BookmarkDetail) => void = () => {}
+      vi.mocked(getBookmark).mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+      type(titleInput(), 'Saved title')
+      await leave(titleInput())
+      expect(titleInput()).toHaveValue('Saved title')
+      await advance(0)
+      expect(titleInput()).toHaveValue('Saved title')
+      await act(async () => answer({ ...server, title: 'Server says' }))
+      await advance(0)
+      expect(titleInput()).toHaveValue('Server says')
+    })
+
+    it('releases the saved text when the refetch fails', async () => {
+      await open()
+      vi.mocked(getBookmark).mockRejectedValue(new ApiError(500, null, null))
+      type(noteInput(), 'N2')
+      await leave(noteInput())
+      await advance(0)
+      expect(noteInput()).toHaveValue('a note')
+    })
+
+    it('keeps later text typed after the commit and commits only it next time', async () => {
+      const calls = pendingUpdate()
+      await open()
+      type(titleInput(), 'First')
+      await leave(titleInput())
+      type(titleInput(), 'Second')
+      calls[0].resolve()
+      await advance(0)
+      expect(titleInput()).toHaveValue('Second')
+      await leave(titleInput())
+      expect(update.mock.calls).toEqual([
+        ['b-1', { title: 'First' }],
+        ['b-1', { title: 'Second' }],
+      ])
+      calls[1].resolve()
+      await advance(0)
+    })
+
+    it('sends the previous stored value typed back while the refetch is held back', async () => {
+      await open()
+      vi.mocked(getBookmark).mockImplementation(() => new Promise(() => {}))
+      type(titleInput(), 'Changed')
+      await leave(titleInput())
+      type(titleInput(), 'An example')
+      await leave(titleInput())
+      expect(update.mock.calls).toEqual([
+        ['b-1', { title: 'Changed' }],
+        ['b-1', { title: 'An example' }],
+      ])
+    })
+  })
+
+  describe('refetch while editing', () => {
+    const pending = (title: string, note: string | null = null) =>
+      bookmark({ fetch_status: 'pending', content: null, title, note })
+
+    it('an untouched title follows the poll; a touched one keeps the typed text', async () => {
+      server = pending('')
+      await open()
+      server = pending('Fetched title')
+      await advance(1000)
+      expect(titleInput()).toHaveValue('Fetched title')
+      type(titleInput(), 'Mine')
+      server = pending('Fetched again')
+      await advance(1000)
+      expect(titleInput()).toHaveValue('Mine')
+    })
+
+    it('a touched note keeps its text and its error across a poll', async () => {
+      server = pending('t', null)
+      await open()
+      type(noteInput(), 'x'.repeat(501))
+      await leave(noteInput())
+      server = pending('t', 'from server')
+      await advance(1000)
+      expect(noteInput()).toHaveValue('x'.repeat(501))
+      expect(screen.getByRole('alert')).toHaveTextContent('Note is too long')
+    })
+
+    it('an untouched note follows the poll', async () => {
+      server = pending('t', null)
+      await open()
+      server = pending('t', 'from server')
+      await advance(1000)
+      expect(noteInput()).toHaveValue('from server')
+    })
+
+    it("the title's save refetch does not replace text typed into the note meanwhile", async () => {
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      type(noteInput(), 'typing')
+      await advance(0)
+      expect(noteInput()).toHaveValue('typing')
+    })
+
+    it('keeps the focus in the field across a refetch', async () => {
+      server = pending('t', null)
+      await open()
+      act(() => noteInput().focus())
+      type(noteInput(), 'typing')
+      server = pending('t2', null)
+      await advance(1000)
+      expect(noteInput()).toHaveFocus()
+    })
+  })
+
+  describe('Esc', () => {
+    it('restores the baseline and removes the error, sending nothing, also on the blur after', async () => {
+      await open()
+      type(noteInput(), 'x'.repeat(501))
+      await leave(noteInput())
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      fireEvent.keyDown(noteInput(), { key: 'Escape' })
+      expect(noteInput()).toHaveValue('a note')
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      await leave(noteInput())
+      expect(update).not.toHaveBeenCalled()
+    })
+
+    it('while a save is in flight, leaves it alone: the field then shows the saved text', async () => {
+      const calls = pendingUpdate()
+      await open()
+      type(titleInput(), 'Saved one')
+      await leave(titleInput())
+      fireEvent.keyDown(titleInput(), { key: 'Escape' })
+      expect(titleInput()).toHaveValue('An example')
+      calls[0].resolve()
+      await advance(0)
+      expect(titleInput()).toHaveValue('Saved one')
+      await leave(titleInput())
+      expect(update).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('failures', () => {
+    const network = () => new TypeError('offline')
+    it.each([
+      ['a 422 too_long on title', problem(422, 'validation_error', [{ field: 'title', code: 'too_long' }]), 'title', 'Title is too long (300 characters at most).'],
+      ['a 422 too_long on note', problem(422, 'validation_error', [{ field: 'note', code: 'too_long' }]), 'note', 'Note is too long (500 characters at most).'],
+      ['a 500', new ApiError(500, null, null), 'title', "Couldn't save your changes."],
+      ['a network failure', network(), 'note', "Couldn't save your changes."],
+      ['a 429 with Retry-After', new ApiError(429, null, 5), 'title', 'Too many requests. Try again in about 5 seconds.'],
+      ['a 429 without it', new ApiError(429, null, null), 'note', 'Too many requests. Try again in a moment.'],
+    ])('%s shows under the right field, keeps the text and retries on the next blur, with no toast', async (_name, error, field, message) => {
+      await open()
+      const el = field === 'title' ? titleInput() : noteInput()
+      const other = field === 'title' ? noteInput() : titleInput()
+      update.mockRejectedValue(error)
+      type(el, 'typed')
+      await leave(el)
+      const alert = screen.getByRole('alert')
+      expect(alert).toHaveTextContent(message)
+      expect(el.closest(field === 'title' ? '.detail-page__title-block' : '.detail-page__note')).toContainElement(alert)
+      expect(other.closest(field === 'title' ? '.detail-page__note' : '.detail-page__title-block')).not.toContainElement(alert)
+      expect(el).toHaveValue('typed')
+      expect(document.querySelector('.toast')).toBeNull()
+      await leave(el)
+      expect(update).toHaveBeenCalledTimes(2)
+    })
+
+    it('a 401 shows nothing under the field and no toast', async () => {
+      await open()
+      update.mockRejectedValue(new ApiError(401, null, null))
+      type(titleInput(), 'typed')
+      await leave(titleInput())
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(document.querySelector('.toast')).toBeNull()
+      expect(titleInput()).toHaveValue('typed')
+    })
+
+    it('a 404 also toasts, and the page becomes "Bookmark not found" with the toast on screen', async () => {
+      await open()
+      update.mockRejectedValue(new ApiError(404, null, null))
+      type(titleInput(), 'typed')
+      vi.mocked(getBookmark).mockRejectedValue(new ApiError(404, null, null))
+      await leave(titleInput())
+      await advance(0)
+      expect(screen.getByText('Bookmark not found')).toBeInTheDocument()
+      expect(screen.getByText('This bookmark no longer exists.')).toBeInTheDocument()
+    })
+
+    it('a 409 also toasts, and the page becomes the read-only trashed view; a retried failure toasts again', async () => {
+      await open()
+      update.mockRejectedValue(problem(409, 'bookmark_in_trash'))
+      type(titleInput(), 'typed')
+      await leave(titleInput())
+      expect(screen.getByText("This bookmark is in the trash and can't be edited.", { selector: '.field__error' })).toBeInTheDocument()
+      await leave(titleInput())
+      expect(screen.getAllByText("This bookmark is in the trash and can't be edited.", { selector: '.toast__message' })).toHaveLength(2)
+    })
+
+    it('a 409 leads to the read-only trashed view', async () => {
+      await open()
+      update.mockImplementation(async () => {
+        server = { ...server, deleted_at: '2026-03-05T00:00:00Z' }
+        throw problem(409, 'bookmark_in_trash')
+      })
+      type(noteInput(), 'typed')
+      await leave(noteInput())
+      await advance(0)
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument()
+      expect(screen.getByText("This bookmark is in the trash and can't be edited.")).toBeInTheDocument()
+    })
+
+    it('a bookmark that becomes trashed in a refetch drops the typed text', async () => {
+      server = bookmark({ fetch_status: 'pending', content: null })
+      await open()
+      type(noteInput(), 'typed note')
+      type(titleInput(), 'typed title')
+      server = { ...server, deleted_at: '2026-03-05T00:00:00Z' }
+      await advance(1000)
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+      expect(screen.queryByText('typed note')).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('An example')
+    })
+  })
+
+  describe('Edit button', () => {
+    it('opens the dialog with the stored note and drops an over-limit draft', async () => {
+      await open()
+      type(noteInput(), 'x'.repeat(501))
+      await leave(noteInput())
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      await advance(0)
+      expect(update).not.toHaveBeenCalled()
+      expect(within(screen.getByRole('dialog', { name: 'Edit bookmark' })).getByLabelText('Note')).toHaveValue('a note')
+      const inline = document.querySelector('.detail-page__note textarea') as HTMLTextAreaElement
+      expect(inline.value).toBe('a note')
+    })
+
+    it('sends a failed draft again (the blur is a commit) and still opens the dialog', async () => {
+      await open()
+      update.mockRejectedValue(new ApiError(500, null, null))
+      type(noteInput(), 'draft')
+      await leave(noteInput())
+      expect(update).toHaveBeenCalledTimes(1)
+      await leave(noteInput())
+      fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+      await advance(0)
+      expect(update).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('dialog', { name: 'Edit bookmark' })).toBeInTheDocument()
+    })
   })
 })

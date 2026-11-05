@@ -60,6 +60,17 @@ describe('useBookmark polling', () => {
     expect(calls()).toBe(1)
   })
 
+  it('reports isFetching while a fetch is in flight and not after', async () => {
+    let finish: (b: BookmarkDetail) => void = () => {}
+    vi.mocked(getBookmark).mockImplementation(() => new Promise((resolve) => (finish = resolve)))
+    const { result } = render()
+    await advance(0)
+    expect(result.current.isFetching).toBe(true)
+    await act(async () => finish(bookmark('ok')))
+    await advance(0)
+    expect(result.current.isFetching).toBe(false)
+  })
+
   it('refetches every second while pending', async () => {
     vi.mocked(getBookmark).mockResolvedValue(bookmark('pending'))
     render()
