@@ -32,6 +32,7 @@ export function useBookmark(id: string) {
     bookmark: query.data,
     error: query.error,
     isLoading: query.isPending,
+    isFetching: query.isFetching,
     retry: () => void query.refetch(),
   }
 }

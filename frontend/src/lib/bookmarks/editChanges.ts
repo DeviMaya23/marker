@@ -35,3 +35,13 @@ export function computeChanges(stored: EditValues, typed: { title: string; note:
   }
   return changes
 }
+
+/**
+ * What committing one field sends: only that field, compared with its baseline (the other field
+ * is treated as unchanged). An empty note baseline is the same as a stored null.
+ */
+export function changeForField(field: 'title' | 'note', baseline: string, typed: string): BookmarkChanges {
+  const stored: EditValues = { title: field === 'title' ? baseline : '', note: field === 'note' && baseline !== '' ? baseline : null }
+  const changes = computeChanges(stored, { title: field === 'title' ? typed : '', note: field === 'note' ? typed : '' })
+  return field === 'title' ? (changes.title !== undefined ? { title: changes.title } : {}) : changes.note !== undefined ? { note: changes.note } : {}
+}

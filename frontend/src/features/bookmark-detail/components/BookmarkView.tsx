@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowLeft, CircleAlert, Clock, ExternalLink, FolderInput, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
@@ -15,10 +15,12 @@ import { useBookmark } from '../hooks/useBookmark'
 import { hostOf } from '../../../lib/hostOf'
 import { Favicon } from '../../../components/ui/Favicon'
 import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
+import { EditableNote } from './EditableNote'
+import { EditableTitle } from './EditableTitle'
 
 /** The bookmark page: fetch state, folder, note and saved page text, with edit, move, delete and restore. */
 export function BookmarkView({ id }: { id: string }) {
-  const { bookmark, error, isLoading, retry } = useBookmark(id)
+  const { bookmark, error, isLoading, isFetching, retry } = useBookmark(id)
 
   // A 404 wins even when a bookmark is already on screen (a later poll found it gone).
   if (error instanceof ApiError && error.status === 404) {
@@ -30,7 +32,7 @@ export function BookmarkView({ id }: { id: string }) {
       />
     )
   }
-  if (bookmark) return <BookmarkDetailBody bookmark={bookmark} />
+  if (bookmark) return <BookmarkDetailBody bookmark={bookmark} isFetching={isFetching} />
   // A 401 is silent: the login redirect is on its way.
   if (isUnauthorized(error)) return <p className="state-panel">Loading…</p>
   if (isLoading) return <p className="state-panel">Loading…</p>
@@ -48,7 +50,7 @@ export function BookmarkView({ id }: { id: string }) {
   )
 }
 
-function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
+function BookmarkDetailBody({ bookmark, isFetching }: { bookmark: BookmarkDetail; isFetching: boolean }) {
   const trashed = bookmark.deleted_at !== null
   const title = bookmark.title.trim() === '' ? hostOf(bookmark.url) : bookmark.title
   const [editing, setEditing] = useState(false)
@@ -57,6 +59,8 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
   const edit = useEditBookmark(bookmark.id)
   const del = useDeleteBookmark(bookmark.id, { undo: false })
   const restore = useRestoreBookmark(bookmark.id)
+  const dropTitle = useRef<(() => void) | null>(null)
+  const dropNote = useRef<(() => void) | null>(null)
 
   return (
     <div className="detail-page">
@@ -81,7 +85,17 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
       <header className="detail-page__header">
         <Favicon url={bookmark.url} faviconUrl={bookmark.favicon_url} size={28} />
         <div className="detail-page__title-block">
-          <h1 className="detail-page__title-readonly">{title}</h1>
+          {trashed ? (
+            <h1 className="detail-page__title-readonly">{title}</h1>
+          ) : (
+            <EditableTitle
+              id={bookmark.id}
+              url={bookmark.url}
+              title={bookmark.title}
+              isFetching={isFetching}
+              dropRef={dropTitle}
+            />
+          )}
           <div className="detail-page__url-row">
             <a href={bookmark.url} target="_blank" rel="noopener noreferrer" className="detail-page__url">
               {bookmark.url}
@@ -101,7 +115,12 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
 
       {!trashed && (
         <div className="detail-page__actions">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => setEditing(true)}>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => {
+              // The dialog starts from the stored values: drop drafts that are not being saved.
+              dropTitle.current?.()
+              dropNote.current?.()
+              setEditing(true)
+            }}>
             <Pencil size={14} aria-hidden="true" /> Edit
           </button>
           <button
@@ -144,7 +163,8 @@ function BookmarkDetailBody({ bookmark }: { bookmark: BookmarkDetail }) {
         )}
       </div>
 
-      {bookmark.note !== null && (
+      {!trashed && <EditableNote id={bookmark.id} note={bookmark.note} isFetching={isFetching} dropRef={dropNote} />}
+      {trashed && bookmark.note !== null && (
         <div className="detail-page__note">
           <h2 className="field__label">Note</h2>
           <p className="detail-page__note-text">{bookmark.note}</p>
