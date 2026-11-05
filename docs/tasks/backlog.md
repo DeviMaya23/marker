@@ -11,13 +11,11 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 ## Backend: cross-cutting
 
-- Dockerfile for the backend: a multi-stage build producing both binaries (`cmd/server` and `cmd/migrate`) in a small non-root image. The container listens on `HTTP_ADDR`, takes all settings from the environment, and has no secrets baked in; add a `.dockerignore`. Migrations run as a separate step before each release against Neon's direct (non-pooled) connection, so say how `cmd/migrate` is invoked from the image. The builder may not be able to run Docker in a cloud session; the user builds and runs the image locally.
 
 ## Frontend: screens and features not built
 
 Screen numbers are those of the design brief (`docs/design/ui-reference/ui-design-brief.md`).
 
-- Show the login failure on the `/login` screen. Split from `login-binding`: the backend now redirects every failed login to `/login?error=login_failed` or `/login?error=access_denied` (with `return_to` when known). `LoginPage` and `LoginCard` should show "Login didn't complete. Please try again." and "Login was cancelled." and keep the Log in link pointing at `return_to`. Needs `login-screen` merged (it is) and runs after `login-binding` only for testing against the real flow; the screen can be built from the contract alone.
 - The footer's "Account & help" no longer shows as the current page on `/account`. Split from `logout-menu`: the link became a menu button, which cannot carry `aria-current`. Cosmetic.
 - The paste-a-URL field in the top bar next to the search (screen 2). Split from `top-bar-search`: the field stays on the page above the list for now.
 

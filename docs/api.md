@@ -195,10 +195,11 @@ The save page (`/save?url=...&title=...`, FR-3a to 3d) is a frontend route. Its 
 ## Rate limits (NFR-16)
 
 - `POST /bookmarks`: 30 per minute per user.
-- `/auth/*`: limited per IP address.
-- Everything else: a generous per-user ceiling. `GET /sync/version` is exempt, since it is polled every 2 to 3 seconds.
+- `GET /auth/login` and `GET /auth/callback`: 10 per minute per IP address, in one shared allowance. Behind a proxy the address comes from the header named by the server's `CLIENT_IP_HEADER` setting; otherwise from the connection.
+- Everything else (including `POST /auth/logout` and favicons): a per-user ceiling of 300 per minute. `GET /sync/version` is exempt, since it is polled every 2 to 3 seconds.
+- The proxy in front of the app limits overall volume per IP address; that is a deployment concern, not part of this contract.
 - Over a limit: `429 rate_limited` with a `Retry-After` header.
 
-## Deferred
+## Proxy secret
 
-- The exact rate limit numbers for `/auth/*` and the general ceiling. (Where limiting runs is decided: per IP at the proxy, per user in the app.)
+In production the server runs behind a proxy that adds the header `X-Proxy-Secret` to every request. When the server's `PROXY_SHARED_SECRET` setting is set, a request without the exact value answers `404 not_found` (the same answer as an unknown route), before sessions, CSRF, the body limit and rate limiting. Only `GET /healthz` is exempt. This is a gateway check outside the per-operation statuses above, and it is not described in `openapi.yaml`.

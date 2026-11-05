@@ -130,14 +130,15 @@ Decided in the stack discussion. Bracketed references are the requirements each 
 - **Identity provider:** Kinde, through the standard OIDC authorization code flow, with the Go backend as a confidential client. The app then issues its own session cookie. `users.idp_id` stores the OIDC `sub` claim (confirm it is stable during setup).
 - **Sessions:** a server-side `sessions` table in PostgreSQL, so logout, expiry and account deletion take effect immediately (FR-2, FR-25, NFR-15).
 - **Logout:** ends the app session and the Kinde session (FR-2).
-- **Rate limiting:** two layers. A reverse proxy or edge limits per IP address (login routes, overall volume). The app limits per user (saves, general ceiling), since only the app knows who the user is (NFR-16).
+- **Rate limiting:** two layers. A reverse proxy or edge limits per IP address (overall volume). The app limits per user (saves 30 a minute, general ceiling 300 a minute; the sync poll is exempt), since only the app knows who the user is, and it also limits the two login routes per IP address (10 a minute, in process), as a second guard behind the proxy. Behind a proxy the app reads the client address from a configured header (NFR-16).
+- **Login binding:** `/auth/login` sets a short-lived cookie that only the browser that started the login holds, and `/auth/callback` accepts an attempt only with that cookie, so a victim's browser cannot be signed in to an attacker's account (login CSRF). A failed login redirects to `/login?error=…` and never answers with JSON.
+- **Proxy trust:** in production the server runs behind a reverse proxy that adds a shared secret header to every request. The server answers `404 not_found` to any request without it (except the health check), so the client address the proxy reports can be trusted.
 - **API contract:** `openapi.yaml` (OpenAPI 3.1) is the source of truth. `api.md` is the readable companion.
 - **Suggested libraries (not binding):** `go-oidc` and `x/oauth2` for login, `go-readability` for text extraction, `x/time/rate` for in-process limiting, and TanStack Query for polling and infinite scroll in the frontend.
 
 ## Decisions deferred to later stages
 
 - Deployment: hosting, containers, TLS, the reverse proxy, and how the fetcher is isolated (for example separate egress rules) for NFR-8.
-- Exact numbers for login-route rate limits and the general per-user ceiling.
 - Columns of the `sessions` table.
 - Indexes in detail: list pagination by keyset on `(user_id, deleted_at, created_at DESC, id DESC)`, folder views on `(user_id, folder_id)`.
 - Low priority: an `issuer` column on `users` if a second IdP is ever added.

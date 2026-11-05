@@ -60,7 +60,7 @@ New in `config.Config`: `ProxySharedSecret`, read by `config.Load` from `PROXY_S
 2. The secret is non-empty and shorter than 32 bytes (a named constant, `minProxySecretLen`, beside `minStateSecretLen`): `PROXY_SHARED_SECRET must be at least 32 bytes`. This applies in every environment, so a weak value cannot be tested into place.
 3. The secret is non-empty and contains any byte outside `0x21` to `0x7E` (visible ASCII: no space, no control character, no non-ASCII): `PROXY_SHARED_SECRET must be visible ASCII with no spaces or line breaks`. Such a value could never be sent in a header, and a trailing newline from a secret store is the likeliest cause. Check the length first, then the characters, so one value gets one error.
 
-The existing tests in `config_test.go` build a production configuration through the `oidcConfig` helper and expect it valid; check 1 would reject them. Give the helper a valid 32-byte secret by default, so those cases keep testing what they test (a case that expects an error must still fail for its own reason, not for the missing secret; the cases that expect `PROXY_SHARED_SECRET` errors set it themselves), and do not weaken or delete any case.
+The existing tests in `config_test.go` build a production configuration through the `oidcConfig` helper and expect it valid; check 1 would reject them. Give the helper, and the literal `Config{Env: "production"}` case ("production with neither OIDC nor dev login"), a valid secret by default, one that is not `strings.Repeat("s", 32)` (the existing no-value-leak test uses that string for `AUTH_STATE_SECRET`) and not a substring of any other fixture value, and make the new no-value-leak assertions use values that are not substrings of other fixtures, so those cases keep testing what they test (a case that expects an error must still fail for its own reason, not for the missing secret; the cases that expect `PROXY_SHARED_SECRET` errors set it themselves), and do not weaken or delete any case.
 
 With the setting empty in development (the default) the check is off and local development, the Vite proxy and every existing test run unchanged. A non-empty value is enforced in any environment, so it can be tried locally.
 
@@ -74,7 +74,7 @@ With the setting empty in development (the default) the check is off and local d
 - One secret: rotating it gives a window in which the Worker and the server disagree and every request is `404` (except `/healthz`).
 - The secret is a bearer value: it protects against callers who do not have it, not against anyone who can read the Worker's configuration or the traffic between the Worker and Cloud Run (that traffic is TLS).
 - The check proves a request came through something that holds the secret, not through Cloudflare's own network; `CLIENT_IP_HEADER` is still trusted as the Worker sends it.
-- A Cloud Run address that is called directly still reaches the process (the body limit and TLS handling happen before and after it); only the app's answer is a `404`.
+- A Cloud Run address that is called directly still reaches the process (Cloud Run's front end and TLS come first); the app's answer is a `404`, and this check runs before the body limit.
 - Limits are per process; the deployment runs one instance (`STACK.md`, Deployment).
 - `docs/requirements.md` and `docs/api.md` do not mention the check; the user updates them.
 
@@ -82,7 +82,7 @@ With the setting empty in development (the default) the check is off and local d
 
 By `ARCHITECTURE.md`:
 
-- `handler/middleware/proxysecret.go`: `ProxySecret(secret string) echo.MiddlewareFunc` (new, exported) and an exported or unexported constant for the header name `X-Proxy-Secret` and for the exempt path `/healthz`. It hashes the configured secret once, when the middleware is built, not per request. A doc comment says what it protects and that it must run first.
+- `handler/middleware/proxysecret.go`: `ProxySecret(secret string) echo.MiddlewareFunc` (new, exported) and an exported or unexported constant for the header name `X-Proxy-Secret` and for the exempt path `/healthz`. It hashes the configured secret once, when the middleware is built, not per request. Called with an empty secret it refuses every request except `GET /healthz` (never passes everything); `NewRouter` does not call it with an empty secret. A doc comment says what it protects and that it must run first.
 - `handler/router.go`: `Deps.ProxySecret`; in `NewRouter`, `if deps.ProxySecret != "" { e.Use(middleware.ProxySecret(deps.ProxySecret)) }` as the first `e.Use`, with a comment that the order matters.
 - `internal/platform/config/config.go`: the field, its `Load` line, `minProxySecretLen` and the three `Validate` checks.
 - `cmd/server/main.go`: one line in the `Deps` literal.
@@ -102,7 +102,7 @@ All unit and router-level tests; none needs a database and none is an integratio
 - Refused, and the next handler does not run, for: no header, an empty header, a value one byte shorter, a value one byte longer, the correct value with another byte appended, the correct value in lower case when it has upper case letters (use a mixed-case test secret), and two headers where the first is wrong and the second is correct.
 - `GET /healthz` passes with no header, with a wrong header and with the correct header; `/healthz/`, `/healthz2` and `/%68ealthz` (set `RawPath`) are refused without the header.
 - Any method needs the header: a `POST` and an `OPTIONS` to `/api/v1/bookmarks`, and a `POST` and a `HEAD` to `/healthz`, are refused without it.
-- A header name in lower case (`x-proxy-secret`) is accepted (Go canonicalises header names): a test sets it through `Header` map keys the way a client would send it, via `httptest` and a real server request if needed.
+- A header name in lower case (`x-proxy-secret`) is accepted: Go canonicalises names when it reads a request, so this test must make a real HTTP round trip (`httptest.NewServer` and a client that sends the lower-case name on the wire, for example through a raw `net` connection); a key written directly into `req.Header` is not canonicalised and proves nothing.
 - A refusal's error is `echo.ErrNotFound` and its response body contains neither the secret nor the supplied value (middleware level, with the error handler from `handler`'s tests, or checked at router level below).
 
 **Router (a new test file next to `router_test.go`, with `Deps.ProxySecret` set)**
@@ -112,6 +112,7 @@ All unit and router-level tests; none needs a database and none is an integratio
 - Rate limiting: with `Deps.Limits` set, 20 requests to `GET /auth/login` without the header answer `404` and take no token: the next request with the header still passes (10 a minute per IP is the limit).
 - A forged client IP is never used: build `Limits` with `middleware.NewRateLimits("CF-Connecting-IP", clock)`; 20 requests to `GET /auth/login` without the secret header, each with a different `CF-Connecting-IP` value, answer `404`; then 10 requests with the secret header and one fixed `CF-Connecting-IP` value pass and the 11th answers `429` (the earlier requests spent nothing).
 - `GET /healthz` answers `200` with no header, and a `GET /auth/callback` without the header answers `404`.
+- The non-`GET` and not-exact `/healthz` cases (`POST /healthz`, `/healthz/`, `/healthz2`) answer through `NewRouter` with the same `404` problem body as an unknown path (compare bytes; a `HEAD` answer has no body, so check its status only).
 - The refused body does not contain the secret or the supplied header value.
 - `Deps.ProxySecret` empty: nothing is refused (every existing router test relies on this and must pass unchanged).
 - A router built with `Server` nil and a secret set still refuses an unknown path without the header and answers `/healthz`.
@@ -133,9 +134,9 @@ All unit and router-level tests; none needs a database and none is an integratio
 - Read `NewRouter`: the secret middleware is the first `e.Use`, before `BodyLimit`, and before the `Server == nil` return.
 - The secret appears in no log call, error, test failure message or response body: `git grep` the field and the header-reading code.
 - Compare digests with `subtle.ConstantTimeCompare`; no `==` or `strings.EqualFold` on the secret.
-- Break each behavior and see its test fail, then revert: register the middleware after `BodyLimit` (the `413` test), after the session check (the `401` test), drop the `/healthz` exemption, make the exemption a prefix match, use `EqualFold`, return `403` instead of `404`, skip the `Validate` checks in the OIDC branch.
+- Break each behavior and see its test fail, then revert: register the middleware after `BodyLimit` (the `413` test), or move the check into `policyRouter.add` after the session middleware (the `401` test), drop the `/healthz` exemption, make the exemption a prefix match, use `EqualFold`, return `403` instead of `404`, skip the `Validate` checks in the OIDC branch.
 - Run the new tests with `-race` and `-count=5`.
-- Inputs to try: a secret of exactly 32 and 31 bytes; a header value of 64 KiB; the header name in lower case (`x-proxy-secret`); `//healthz` and `/healthz?x=1` (the query is not part of the path, so it is exempt) and `/%68ealthz` (not exempt, by the `RawPath` rule above); `HEAD /healthz` and `POST /healthz` (not exempt); a 64 KiB header value (refused, `404`).
+- Inputs to try: a secret of exactly 32 and 31 bytes; a header value of 64 KiB; the header name in lower case (`x-proxy-secret`); `//healthz` (refused: the path is not exactly `/healthz`) and `/healthz?x=1` (the query is not part of the path, so it is exempt) and `/%68ealthz` (not exempt, by the `RawPath` rule above); `HEAD /healthz` and `POST /healthz` (not exempt); a 64 KiB header value (refused, `404`).
 
 ## Stop and ask when
 
