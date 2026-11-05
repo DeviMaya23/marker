@@ -24,15 +24,19 @@ const (
 	maxStateLen = 12288
 	// maxCodeLen caps the authorization code accepted at the callback, in bytes.
 	maxCodeLen = 2048
+	// maxBindingLen caps the login_binding cookie value accepted at the callback, in bytes.
+	maxBindingLen = 128
 )
 
 // loginState is the signed payload of the login `state` parameter. It carries what the
 // callback needs and nothing else: the nonce (also sent to the IdP as `nonce`, and the
-// input of the PKCE verifier), where to return to, and when the attempt expires.
+// input of the PKCE verifier), where to return to, when the attempt expires, and the hash
+// of the binding value that only the browser that started the attempt holds.
 type loginState struct {
 	Nonce    string `json:"n"`
 	ReturnTo string `json:"r"`
 	Expires  int64  `json:"e"` // Unix seconds
+	Binding  string `json:"b"` // base64url(HMAC-SHA256(secret, "bind:" + binding value))
 }
 
 // signState returns base64url(payload) + "." + base64url(HMAC-SHA256(secret, payload)),
@@ -80,7 +84,29 @@ func verifyState(secret []byte, state string, now time.Time) (loginState, error)
 	if now.Unix() >= st.Expires {
 		return loginState{}, domain.ErrInvalidLogin
 	}
+	if h, err := base64.RawURLEncoding.DecodeString(st.Binding); err != nil || len(h) != sha256.Size {
+		return loginState{}, domain.ErrInvalidLogin
+	}
 	return st, nil
+}
+
+// bindingHash is what the state stores for a binding value:
+// base64url(HMAC-SHA256(secret, "bind:" + value)), 43 characters.
+func bindingHash(secret []byte, binding string) string {
+	return b64(mac(secret, []byte("bind:"+binding)))
+}
+
+// bindingMatches reports whether binding, the login_binding cookie value, is the one
+// the verified state was minted for. An empty or over-long value never matches.
+func bindingMatches(secret []byte, st loginState, binding string) bool {
+	if binding == "" || len(binding) > maxBindingLen {
+		return false
+	}
+	want, err := base64.RawURLEncoding.DecodeString(st.Binding)
+	if err != nil {
+		return false
+	}
+	return hmac.Equal(want, mac(secret, []byte("bind:"+binding)))
 }
 
 // pkceVerifier derives the PKCE code verifier for a login attempt from its nonce, so it
