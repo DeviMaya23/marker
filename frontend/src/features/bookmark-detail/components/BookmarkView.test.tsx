@@ -785,6 +785,35 @@ describe('BookmarkView inline edit', () => {
       await advance(0)
     })
 
+    it('unmounting while a save is in flight throws nothing and leaves no unhandled rejection', async () => {
+      const calls = pendingUpdate()
+      const rejections: unknown[] = []
+      const onRejection = (e: unknown) => rejections.push(e)
+      process.on('unhandledRejection', onRejection)
+      await open()
+      type(titleInput(), 'T2')
+      await leave(titleInput())
+      cleanup()
+      calls[0].resolve()
+      await advance(0)
+      expect(update).toHaveBeenCalledTimes(1)
+      expect(rejections).toEqual([])
+      process.off('unhandledRejection', onRejection)
+    })
+
+    it('a note of exactly 500 emoji is sent, 501 is not, and a title of 300 emoji is sent', async () => {
+      await open()
+      type(noteInput(), '😀'.repeat(501))
+      await leave(noteInput())
+      expect(update).not.toHaveBeenCalled()
+      type(noteInput(), '😀'.repeat(500))
+      await leave(noteInput())
+      expect(update).toHaveBeenLastCalledWith('b-1', { note: '😀'.repeat(500) })
+      type(titleInput(), '😀'.repeat(300))
+      await leave(titleInput())
+      expect(update).toHaveBeenLastCalledWith('b-1', { title: '😀'.repeat(300) })
+    })
+
     it('Enter then blur right after, with the first save pending, sends one request', async () => {
       pendingUpdate()
       await open()
