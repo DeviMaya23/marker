@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Dialog } from './Dialog'
@@ -51,7 +51,7 @@ describe('Dialog', () => {
     render(<Harness />)
     await open()
     expect(screen.getByRole('dialog', { name: 'Edit it' })).toBeInTheDocument()
-    expect(screen.getByLabelText('second')).toHaveFocus()
+    await waitFor(() => expect(screen.getByLabelText('second')).toHaveFocus())
   })
 
   it('closes on Esc and gives focus back to the opener', async () => {
