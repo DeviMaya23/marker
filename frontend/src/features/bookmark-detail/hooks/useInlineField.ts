@@ -39,6 +39,7 @@ export function useInlineField({
 
   const typedRef = useRef<string | null>(null)
   const inFlight = useRef(false)
+
   const baseline = saved ?? stored
   const value = typed ?? baseline
 
@@ -55,10 +56,10 @@ export function useInlineField({
   }, [flash])
 
   // Release the saved text once the refetch the save started has finished (or none started).
-  useEffect(() => {
-    if (saved === null) return
-    if (client.getQueryState(bookmarkKey(id))?.fetchStatus !== 'fetching') setSaved(null)
-  }, [saved, isFetching, client, id])
+  // `isFetching` re-renders the page when that fetch ends; the cache says whether one is running.
+  // Adjusting state during render is React's way to reset state that depends on outside data.
+  const refetching = client.getQueryState(bookmarkKey(id))?.fetchStatus === 'fetching'
+  if (saved !== null && !refetching && !isFetching) setSaved(null)
 
   const over = overLimits({ title: field === 'title' ? value : '', note: field === 'note' ? value : '' })[field]
   const overMessage = field === 'title' ? TITLE_TOO_LONG : NOTE_TOO_LONG

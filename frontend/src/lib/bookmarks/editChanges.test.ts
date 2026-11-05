@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { codePointLength, computeChanges, overLimits } from './editChanges'
+import { changeForField, codePointLength, computeChanges, overLimits } from './editChanges'
 
 describe('codePointLength', () => {
   it('counts an emoji as one', () => {
@@ -68,5 +68,24 @@ describe('computeChanges', () => {
   it('keeps note: null as an explicit key', () => {
     expect('note' in computeChanges(stored, { title: 'Old', note: '' })).toBe(true)
     expect('note' in computeChanges(stored, { title: 'New', note: 'old note' })).toBe(false)
+  })
+})
+
+describe('changeForField', () => {
+  it.each([
+    ['title', 'Hello', 'Hello there', { title: 'Hello there' }],
+    ['title', 'Hello', '  Hello ', {}],
+    ['title', 'Hello', '  Other  ', { title: 'Other' }],
+    ['title', '', '   ', {}],
+    ['title', 'Hello', '   ', { title: '' }],
+    ['note', 'a note', 'text', { note: 'text' }],
+    ['note', 'a note', 'a note', {}],
+    ['note', 'a note', '', { note: null }],
+    ['note', 'a note', '   ', { note: null }],
+    ['note', '', '', {}],
+    ['note', '', '   ', {}],
+    ['note', '', 'new', { note: 'new' }],
+  ] as const)('%s: baseline %j, typed %j gives %j, and never the other field', (field, baseline, typed, expected) => {
+    expect(changeForField(field, baseline, typed)).toEqual(expected)
   })
 })
