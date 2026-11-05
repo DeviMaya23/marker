@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -53,6 +54,7 @@ func TestProxySecret_RefusesAnythingElse(t *testing.T) {
 		{"correct value with a byte appended", []string{testProxySecret + "0"}},
 		{"lower case of a mixed-case secret", []string{"abcdefghijklmnopqrstuvwxyz012345"}},
 		{"first of two headers is wrong", []string{"wrong", testProxySecret}},
+		{"64 KiB value", []string{strings.Repeat("a", 64*1024)}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
