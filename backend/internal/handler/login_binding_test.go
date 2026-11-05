@@ -42,6 +42,9 @@ func TestRecordLoginBinding(t *testing.T) {
 		{"quotes around a value are stripped", []string{`login_binding="quoted"`}, "quoted"},
 		{"a malformed header records nothing and does not fail", []string{";;==; login_binding"}, ""},
 		{"a cookie with an invalid byte is dropped by Go and counts as absent", []string{"login_binding=a\x7fb"}, ""},
+		{"a value with a space is passed on as Go parsed it", []string{"login_binding=a b"}, "a b"},
+		{"a value with a non-ASCII byte is dropped by Go and counts as absent", []string{"login_binding=caf\xc3\xa9"}, ""},
+		{"an invalid first cookie is skipped and the next parseable one is used", []string{"login_binding=a\x7fb; login_binding=second"}, "second"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
