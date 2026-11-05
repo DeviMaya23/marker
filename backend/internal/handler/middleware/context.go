@@ -11,6 +11,9 @@ const (
 	SessionCookie = "session"
 	CSRFCookie    = "csrf_token"
 	CSRFHeader    = "X-CSRF-Token"
+
+	// LoginBindingCookie ties one login attempt to the browser that started it.
+	LoginBindingCookie = "login_binding"
 )
 
 // Auth identifies the caller of an authenticated request.

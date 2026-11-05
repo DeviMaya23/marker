@@ -46,3 +46,27 @@ func setAuthCookies(c echo.Context, grant usecase.Grant, secure bool) {
 	c.SetCookie(session)
 	c.SetCookie(csrf)
 }
+
+// loginBindingPath is where the binding cookie is sent: only the callback needs it.
+const loginBindingPath = "/auth/callback"
+
+// loginBindingCookie builds the cookie /auth/login sets so that only this browser can
+// finish the attempt. maxAge is in seconds and must be positive: a zero would omit
+// Max-Age and make a session cookie.
+func loginBindingCookie(value string, maxAge int, secure bool) *http.Cookie {
+	return &http.Cookie{
+		Name:     middleware.LoginBindingCookie,
+		Value:    value,
+		Path:     loginBindingPath,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
+// clearLoginBindingCookie clears the binding cookie. It differs from loginBindingCookie
+// only in value and MaxAge.
+func clearLoginBindingCookie(secure bool) *http.Cookie {
+	return loginBindingCookie("", -1, secure)
+}
