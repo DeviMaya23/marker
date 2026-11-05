@@ -11,7 +11,7 @@ What has not been turned into a task yet, and the loose ends from verifier repor
 
 ## Backend: cross-cutting
 
-- Rate limiting behind the proxy (left out of `rate-limiting`): the app trusts the header named by `CLIENT_IP_HEADER` as sent, which is safe only if the server is reachable through the proxy alone (restrict the Cloud Run address so Cloudflare is the only way in). Limits are per process, so more than one instance multiplies them. Decide when deployment is scoped.
+- Dockerfile for the backend: a multi-stage build producing both binaries (`cmd/server` and `cmd/migrate`) in a small non-root image. The container listens on `HTTP_ADDR`, takes all settings from the environment, and has no secrets baked in; add a `.dockerignore`. Migrations run as a separate step before each release against Neon's direct (non-pooled) connection, so say how `cmd/migrate` is invoked from the image. The builder may not be able to run Docker in a cloud session; the user builds and runs the image locally.
 
 ## Frontend: screens and features not built
 
@@ -50,7 +50,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 
 ## Later, after the app is finished
 
-- Deployment and real use of the app. Nothing is planned or scoped yet; do not draft a task for it until the features above are done.
+- Deployment files kept in the repo and copied by hand to Cloudflare: the Worker source (`deploy/`; it must use `redirect: "manual"` so login redirects reach the browser, add the shared secret from a Worker secret, and pass the client IP through) and `frontend/public/_redirects` so the Pages site serves `index.html` for unknown paths. Needs the shared-secret task first. Hosting is Cloudflare Pages, Cloud Run and Neon (see `STACK.md`, Deployment).
 
 ## Process and tooling
 

@@ -73,6 +73,25 @@ A root `Makefile` is the task runner. Run `make help` for the targets. `make che
 - Any PostgreSQL 17 works; set `DATABASE_URL` in `.env` (`make` loads it). A local install is the default. `docker-compose.yml` is an optional alternative (`make db-up`, host port 5435) for machines without one, and `.env.example` matches it.
 - `make migrate` applies the app's migrations and then River's.
 
+## Deployment
+
+Planned, not built. It is the same arrangement as the user's other projects.
+
+- Frontend: Cloudflare Pages, serving the built files on the app's own domain. Unknown paths must fall back to `index.html` (`frontend/public/_redirects`).
+- Backend: Google Cloud Run, running the Go server from a container image. Settings come from the environment (`HTTP_ADDR` set to the port Cloud Run expects, `APP_ENV=production`, `APP_BASE_URL` the public https address, never `AUTH_DEV_LOGIN`). Secrets go in Cloud Run's secret store, not the repository.
+- Database: Neon PostgreSQL. Use the direct connection string, not the pooled one, for `DATABASE_URL`.
+- Proxy: a Cloudflare Worker on the same domain forwards `/api/*`, `/auth/*` and `/healthz` to the Cloud Run address, so the browser sees one origin, as in development. Its source lives in the repository (`deploy/`) and is copied by hand to Cloudflare. It must use `redirect: "manual"`, because login, callback and logout answer with redirects the browser has to follow itself. It also adds a shared-secret header that the backend checks (`PROXY_SHARED_SECRET`, planned), because the Cloud Run address is public; `CLIENT_IP_HEADER` is then `CF-Connecting-IP`.
+- Migrations are a separate step (`cmd/migrate`), run before each release; the server does not migrate at start.
+- Kinde production callback and logout URLs use the public https address and are registered in Kinde.
+- Fetcher isolation (NFR-8): the in-code check in `pkg/safehttp` is the baseline. A network-level egress block is an optional second layer, not decided.
+
+Not yet confirmed against the providers' documentation; check them when deploying:
+
+- That River's job queue and `cmd/migrate` need Neon's direct connection (advisory locks and notifications through a pooler).
+- That the fetch queue needs Cloud Run's CPU always allocated and at least one instance, since it runs inside the server process.
+- That the in-process rate limits need a single instance, because they are per process.
+- That Cloudflare forwards `CF-Connecting-IP` through the Worker to a non-Cloudflare origin.
+
 ## Open items
 
 - Kinde: the logout redirect parameter, which URLs must be registered, and confirming `sub` is stable.
