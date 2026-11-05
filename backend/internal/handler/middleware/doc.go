@@ -1,2 +1,2 @@
-// Package middleware holds HTTP middleware: sessions, CSRF, rate limiting.
+// Package middleware holds HTTP middleware: the proxy secret check, sessions, CSRF, rate limiting.
 package middleware

@@ -39,6 +39,10 @@ type Deps struct {
 
 	// Limits is the rate limiters (NFR-16). Nil means no limiting.
 	Limits *middleware.RateLimits
+
+	// ProxySecret, if set, is the value every request except GET /healthz must carry in
+	// X-Proxy-Secret; any other request is answered 404. Empty means no check.
+	ProxySecret string
 }
 
 // NewRouter builds the Echo instance with every route registered.
@@ -46,6 +50,12 @@ func NewRouter(deps Deps) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HTTPErrorHandler = ErrorHandler
+	// Order matters: the proxy secret check must be the first middleware, so a request
+	// without the secret is refused before the body limit, sessions, CSRF and rate limits,
+	// and its client IP header is never used. It also guards the unknown-route answer.
+	if deps.ProxySecret != "" {
+		e.Use(middleware.ProxySecret(deps.ProxySecret))
+	}
 	e.Use(echomw.BodyLimit(maxBodySize))
 
 	// Operational endpoint, deliberately outside /api/v1 and not part of openapi.yaml.

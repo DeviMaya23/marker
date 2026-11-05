@@ -27,10 +27,15 @@ type Config struct {
 	AuthStateSecret         string // key that signs the login state; its own bytes, at least minStateSecretLen
 
 	ClientIPHeader string // header that carries the client address behind a proxy, for the login limit; empty uses the connection address
+
+	ProxySharedSecret string // value the proxy must send in X-Proxy-Secret; empty turns the check off; never logged
 }
 
 // minStateSecretLen is the least length in bytes of AUTH_STATE_SECRET.
 const minStateSecretLen = 32
+
+// minProxySecretLen is the least length in bytes of PROXY_SHARED_SECRET.
+const minProxySecretLen = 32
 
 // Load reads configuration from the environment, applying defaults suited to local development.
 func Load() Config {
@@ -50,6 +55,8 @@ func Load() Config {
 		AuthStateSecret:         getenv("AUTH_STATE_SECRET", ""),
 
 		ClientIPHeader: getenv("CLIENT_IP_HEADER", ""),
+
+		ProxySharedSecret: getenv("PROXY_SHARED_SECRET", ""),
 	}
 }
 
@@ -69,6 +76,18 @@ func (c Config) Validate() error {
 
 	if c.ClientIPHeader != "" && !isHeaderName(c.ClientIPHeader) {
 		return errors.New("CLIENT_IP_HEADER must be a header name: letters, digits and hyphens only")
+	}
+
+	if c.Env == "production" && c.ProxySharedSecret == "" {
+		return errors.New("PROXY_SHARED_SECRET must be set when APP_ENV=production")
+	}
+	if c.ProxySharedSecret != "" {
+		if len(c.ProxySharedSecret) < minProxySecretLen {
+			return fmt.Errorf("PROXY_SHARED_SECRET must be at least %d bytes", minProxySecretLen)
+		}
+		if !visibleASCII(c.ProxySharedSecret) {
+			return errors.New("PROXY_SHARED_SECRET must be visible ASCII with no spaces or line breaks")
+		}
 	}
 
 	if !c.OIDCEnabled() {
@@ -116,6 +135,16 @@ func (c Config) Validate() error {
 		return errors.New("APP_BASE_URL must be https when APP_ENV=production")
 	}
 	return nil
+}
+
+// visibleASCII reports whether every byte of s is in 0x21 to 0x7E.
+func visibleASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < 0x21 || s[i] > 0x7E {
+			return false
+		}
+	}
+	return true
 }
 
 // isHeaderName reports whether s is one or more letters, digits or hyphens.

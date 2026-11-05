@@ -90,6 +90,8 @@ func main() {
 		Auth:      authService,
 		AppOrigin: cfg.AppBaseURL,
 		Limits:    middleware.NewRateLimits(cfg.ClientIPHeader, nil),
+
+		ProxySecret: cfg.ProxySharedSecret,
 	}
 	if cfg.Env == "production" && cfg.ClientIPHeader == "" {
 		log.Print("WARNING: CLIENT_IP_HEADER is empty: login limits use the connection address, which behind a proxy is the proxy's address (all users share one bucket)")

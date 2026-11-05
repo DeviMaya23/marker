@@ -17,6 +17,8 @@ func oidcConfig(mutate func(*Config)) Config {
 		OIDCClientSecret: "client-secret-value",
 		OIDCLogoutURL:    "https://idp.example/logout",
 		AuthStateSecret:  strings.Repeat("s", 32),
+
+		ProxySharedSecret: strings.Repeat("p", 32),
 	}
 	if mutate != nil {
 		mutate(&c)
@@ -177,6 +179,66 @@ func TestConfig_Validate_ClientIPHeader(t *testing.T) {
 				err := build(bad).Validate()
 				require.ErrorContains(t, err, "CLIENT_IP_HEADER", bad)
 				require.NotContains(t, err.Error(), bad)
+			}
+		})
+	}
+}
+
+func TestLoad_ReadsTheProxySecret(t *testing.T) {
+	t.Setenv("PROXY_SHARED_SECRET", "")
+	require.Empty(t, Load().ProxySharedSecret)
+
+	t.Setenv("PROXY_SHARED_SECRET", strings.Repeat("k", 40))
+	require.Equal(t, strings.Repeat("k", 40), Load().ProxySharedSecret)
+}
+
+func TestConfig_Validate_ProxySecret(t *testing.T) {
+	dev := func(secret string) Config {
+		return Config{Env: "development", AuthDevLogin: true, ProxySharedSecret: secret}
+	}
+	oidc := func(env, secret string) Config {
+		return oidcConfig(func(c *Config) {
+			c.Env = env
+			c.ProxySharedSecret = secret
+			if env != "production" {
+				c.AppBaseURL = "http://localhost:5175"
+			}
+		})
+	}
+	valid := strings.Repeat("a", 32)
+
+	t.Run("empty is valid in development", func(t *testing.T) {
+		require.NoError(t, dev("").Validate())
+		require.NoError(t, oidc("development", "").Validate())
+	})
+	t.Run("32 bytes accepted", func(t *testing.T) {
+		require.NoError(t, dev(valid).Validate())
+		require.NoError(t, oidc("production", valid).Validate())
+	})
+	t.Run("production with it empty is rejected", func(t *testing.T) {
+		err := oidc("production", "").Validate()
+		require.ErrorContains(t, err, "PROXY_SHARED_SECRET must be set when APP_ENV=production")
+	})
+
+	rejected := []struct {
+		name, value, want string
+	}{
+		{"31 bytes", strings.Repeat("a", 31), "PROXY_SHARED_SECRET must be at least 32 bytes"},
+		{"space", strings.Repeat("a", 20) + " " + strings.Repeat("a", 20), "PROXY_SHARED_SECRET must be visible ASCII"},
+		{"trailing newline", valid + "\n", "PROXY_SHARED_SECRET must be visible ASCII"},
+		{"tab", strings.Repeat("a", 20) + "\t" + strings.Repeat("a", 20), "PROXY_SHARED_SECRET must be visible ASCII"},
+		{"non-ASCII", strings.Repeat("a", 20) + "é" + strings.Repeat("a", 20), "PROXY_SHARED_SECRET must be visible ASCII"},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name+" is rejected everywhere", func(t *testing.T) {
+			for name, cfg := range map[string]Config{
+				"dev login":           dev(tt.value),
+				"OIDC in development": oidc("development", tt.value),
+				"OIDC in production":  oidc("production", tt.value),
+			} {
+				err := cfg.Validate()
+				require.ErrorContains(t, err, tt.want, name)
+				require.NotContains(t, err.Error(), tt.value, name)
 			}
 		})
 	}
