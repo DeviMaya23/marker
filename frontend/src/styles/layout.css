@@ -662,6 +662,10 @@
   color: var(--text-faint);
   margin-top: var(--space-3);
 }
+.login-card .banner {
+  justify-content: center;
+  text-align: center;
+}
 
 .full-page-loading {
   display: flex;
