@@ -51,7 +51,7 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 
 ## Process and tooling
 
-- Hook the Worker's test into `make check` (`node --test deploy/`, run from the repository root). Split from `worker-proxy`, which could not change the `Makefile`.
+- Hook the Worker's test into `make check` (`node --test "deploy/*.test.mjs"`, run from the repository root). Split from `worker-proxy`, which could not change the `Makefile`.
 - Verifiers open the PR when they find nothing Blocking (`docs/tasks/prompts.md`). Check that this works from a cloud session; if not, the agent gives the title and body in its final message.
 - Try chaining builder to first verifier, with the builder stopping and asking when blocked (a `Status: done|blocked` line in the plan file).
 - Mock-versus-contract check: a front-end test that validates the mocked responses against `openapi.yaml`, so drift shows up before the two halves meet.

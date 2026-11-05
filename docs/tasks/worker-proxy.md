@@ -95,7 +95,7 @@ The only written instructions, short and in the order a person does them:
 
 ## Structure
 
-`deploy/` at the repository root, four files as listed. Not linted or built by `make check`; the test runs with `node --test deploy/` (Node's built-in runner and `node:assert`, no dependency), from the repository root.
+`deploy/` at the repository root, four files as listed. Not linted or built by `make check`; the test runs with `node --test "deploy/*.test.mjs"` (Node's built-in runner and `node:assert`, no dependency), from the repository root.
 
 ## Dependencies
 
@@ -103,7 +103,7 @@ None. No `package.json` in `deploy/`, no `wrangler`, no test library: `node:test
 
 ## Acceptance criteria
 
-`deploy/worker.test.mjs`, run with `node --test deploy/`. Each test stubs the global `fetch` with a function that records the request it receives and returns a canned response, so nothing touches a network. The stub receives the single `Request` argument the Worker passes; the test helper reads method, URL, headers and body text from it. Tests build an `env` with `CLOUD_RUN_ORIGIN` `https://run.example` and `PROXY_SHARED_SECRET` a fixed 32-character string.
+`deploy/worker.test.mjs`, run with `node --test "deploy/*.test.mjs"`. Each test stubs the global `fetch` with a function that records the request it receives and returns a canned response, so nothing touches a network. The stub receives the single `Request` argument the Worker passes; the test helper reads method, URL, headers and body text from it. Tests build an `env` with `CLOUD_RUN_ORIGIN` `https://run.example` and `PROXY_SHARED_SECRET` a fixed 32-character string.
 
 **Forwarding**
 - `GET https://app.example/api/v1/bookmarks?q=a%20b` reaches `fetch` as `https://run.example/api/v1/bookmarks?q=a%20b` (path and query unchanged), method `GET`.
@@ -135,7 +135,7 @@ None. No `package.json` in `deploy/`, no `wrangler`, no test library: `node:test
 - The file is `frontend/public/_redirects` with the one rule above. After `make build-frontend`, `frontend/dist/_redirects` exists and contains the same rule (report the check).
 
 **Repo-wide**
-- `node --test deploy/` passes (report the Node version) and `make check` passes.
+- `node --test "deploy/*.test.mjs"` passes (report the Node version) and `make check` passes.
 - Nothing outside the four allowed files (and the plan file) changed. `frontend/package.json` and its lockfile are unchanged.
 
 ## Verifier checks
@@ -143,7 +143,7 @@ None. No `package.json` in `deploy/`, no `wrangler`, no test library: `node:test
 - Diff touches only the four files and the plan file.
 - Read `worker.mjs` against the Behavior section: the secret and `X-Client-IP` are deleted before they are set; `Origin` is never touched; `redirect` is `manual`; the response is returned without being read or rebuilt; there is no `console.*` call and no place the secret or an address is written to a response or log.
 - Break each behavior and see its test fail, then revert. Do it on a copy of `deploy/` in a temporary folder outside the repository (the verifier does not change source files in the checkout): `redirect: "follow"`; copy the client's `X-Proxy-Secret` instead of setting it; forward a client `X-Client-IP`; match `/api` without the trailing slash; forward `/login`; drop one `Set-Cookie` by rebuilding the response; forward when `CLOUD_RUN_ORIGIN` is `http:`.
-- Re-run `node --test deploy/` and `make build-frontend`, and confirm `dist/_redirects`.
+- Re-run `node --test "deploy/*.test.mjs"` and `make build-frontend`, and confirm `dist/_redirects`.
 - Inputs to try: `//evil.example/api/x` as a path, `/api/%2e%2e/login`, `/api/` with nothing after it (forwarded), a header value `CF-Connecting-IP: ` (empty: no `X-Client-IP`), two `X-Proxy-Secret` headers, a very long query, method `HEAD` (forwarded as is).
 - The verifier cannot test Cloudflare or Pages: say so, and do not mark anything "verified on Cloudflare".
 
@@ -158,4 +158,4 @@ Do not improvise around these. Report what blocked you and what you did not do.
 
 ## Handing back
 
-Follow `AGENTS.md`: run `make check` and `node --test deploy/`, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, the Node version, requirement IDs covered (none; say so), dependency versions (none), that nothing was run on Cloudflare, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle. The `make test-integration-local` step does not apply (no `backend/` change).
+Follow `AGENTS.md`: run `make check` and `node --test "deploy/*.test.mjs"`, commit in small steps, push your branch (never `main`), and finish with a short report with the branch name, what changed, the Node version, requirement IDs covered (none; say so), dependency versions (none), that nothing was run on Cloudflare, and anything you were unsure about. Also note every place you made a judgment call that this file did not settle. The `make test-integration-local` step does not apply (no `backend/` change).
