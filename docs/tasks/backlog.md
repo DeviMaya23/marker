@@ -66,3 +66,6 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - [bookmark-actions] A stored title with surrounding spaces enables Save on open, because the trimmed value differs from the stored one. Only matters if the server ever stores untrimmed titles.
 - [bookmark-actions] Base UI gives each toast `role="dialog"` inside the `role="status"` region (plan call 12); screen readers may announce toasts unevenly. Check in a real browser.
 - [bookmark-actions] Base UI pauses a toast's timer on hover and focus, so "disappears after 3.5 s" holds only while the pointer and focus are elsewhere.
+- [worker-proxy] N1: no test guards the `new URL(path, origin)` mistake; it only differs for paths starting `//`, which the path check already answers 404, so the `/api//x` test passes either way.
+- [worker-proxy] N2: the plan header still says `node --test deploy/`, and the plan's test names do not match the real ones.
+- [worker-proxy] N3: the README says the Worker tests run with the glob, while the task file's Handing back and Structure sections say `node --test deploy/`; they disagree until B1 is settled.
