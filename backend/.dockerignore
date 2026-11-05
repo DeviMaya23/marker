@@ -1,0 +1,17 @@
+# Version control
+.git
+
+# Local environment files (the example file stays)
+.env
+.env.*
+!.env.example
+
+# Build output, test binaries, coverage
+**/bin/
+**/*.test
+**/*.out
+coverage.txt
+
+# Not needed in the build context
+Dockerfile
+.dockerignore
