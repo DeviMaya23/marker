@@ -1,6 +1,6 @@
 {
   // Cloudflare Workers static assets: serves the Vite build (`npm run build` -> dist/).
-  "name": "marker-frontend",
+  "name": "marker-fe",
   "compatibility_date": "2026-11-01",
   "assets": {
     "directory": "./dist",
