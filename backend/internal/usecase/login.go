@@ -50,43 +50,62 @@ func NewLoginService(idp IdentityProvider, sessions SessionManager, cfg LoginCon
 	return &LoginService{idp: idp, sessions: sessions, cfg: cfg, now: time.Now}
 }
 
-// Begin starts a login attempt and returns the IdP URL to redirect the browser to.
-// returnTo must already be a safe same-origin path; it comes back from Complete.
-func (s *LoginService) Begin(ctx context.Context, returnTo string) (string, error) {
+// LoginAttempt is one started login: where to send the browser, and the binding value to
+// hand the browser in the login_binding cookie so only it can finish this attempt.
+type LoginAttempt struct {
+	AuthorizeURL string
+	Binding      string
+	MaxAge       int // seconds the cookie (and the state) live
+}
+
+// Begin starts a login attempt. returnTo must already be a safe same-origin path; it
+// comes back from Complete. The state carries the hash of a fresh binding value, which is
+// returned separately and never appears in the state or the URL.
+func (s *LoginService) Begin(ctx context.Context, returnTo string) (LoginAttempt, error) {
 	nonce, err := newNonce()
 	if err != nil {
-		return "", err
+		return LoginAttempt{}, err
 	}
-	state, err := signState(s.cfg.StateSecret, loginState{
+	binding, err := randomToken()
+	if err != nil {
+		return LoginAttempt{}, err
+	}
+	st := loginState{
 		Nonce:    nonce,
 		ReturnTo: returnTo,
 		Expires:  s.now().Add(loginStateTTL).Unix(),
-	})
+		Binding:  bindingHash(s.cfg.StateSecret, binding),
+	}
+	state, err := signState(s.cfg.StateSecret, st)
 	if err != nil {
-		return "", err
+		return LoginAttempt{}, err
 	}
 	if len(state) > maxStateLen {
 		// A return_to full of characters JSON escapes. Never mint a state Complete would refuse.
-		state, err = signState(s.cfg.StateSecret, loginState{
-			Nonce:    nonce,
-			ReturnTo: "/",
-			Expires:  s.now().Add(loginStateTTL).Unix(),
-		})
+		st.ReturnTo = "/"
+		state, err = signState(s.cfg.StateSecret, st)
 		if err != nil {
-			return "", err
+			return LoginAttempt{}, err
 		}
 	}
-	return s.idp.AuthorizeURL(ctx, state, nonce, pkceVerifier(s.cfg.StateSecret, nonce))
+	u, err := s.idp.AuthorizeURL(ctx, state, nonce, pkceVerifier(s.cfg.StateSecret, nonce))
+	if err != nil {
+		return LoginAttempt{}, err
+	}
+	return LoginAttempt{AuthorizeURL: u, Binding: binding, MaxAge: int(loginStateTTL.Seconds())}, nil
 }
 
-// Complete finishes a login attempt: it verifies the state, exchanges the code, and
-// starts a session for the subject. The state and the code are checked before the IdP is
-// called. Bad attempts are domain.ErrInvalidLogin; anything else is a fault. Once the state
+// Complete finishes a login attempt, in this order: verify the state, check that binding
+// (the login_binding cookie value) belongs to it, check the code, exchange it, start a
+// session for the subject. The IdP is never called before the binding is verified. Bad attempts are domain.ErrInvalidLogin; anything else is a fault. Once the state
 // verified, the returned return-to is set even on failure, so a retry can go back there.
-func (s *LoginService) Complete(ctx context.Context, code, state string) (Grant, string, error) {
+func (s *LoginService) Complete(ctx context.Context, code, state, binding string) (Grant, string, error) {
 	st, err := verifyState(s.cfg.StateSecret, state, s.now())
 	if err != nil {
 		return Grant{}, "", err
+	}
+	if !bindingMatches(s.cfg.StateSecret, st, binding) {
+		return Grant{}, st.ReturnTo, domain.ErrInvalidLogin
 	}
 	if code == "" || len(code) > maxCodeLen {
 		return Grant{}, st.ReturnTo, domain.ErrInvalidLogin

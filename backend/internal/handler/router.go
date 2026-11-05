@@ -71,6 +71,8 @@ func NewRouter(deps Deps) *echo.Echo {
 			// So do the folder writes, to reject unknown keys and read parent_id.
 			"createFolder": {requireJSON, recordBodyKeys},
 			"updateFolder": {requireJSON, recordBodyKeys},
+			// The callback needs the login_binding cookie (see login_binding.go).
+			"authCallback": {recordLoginBinding},
 		},
 	})
 

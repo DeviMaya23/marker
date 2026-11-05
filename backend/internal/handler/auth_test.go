@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,6 +25,8 @@ import (
 // loginSpy is a value-return spy for LoginFlow.
 type loginSpy struct {
 	authorizeURL string
+	binding      string
+	maxAge       int
 	beginErr     error
 	gotReturnTo  string
 	beginCalls   int
@@ -34,6 +37,7 @@ type loginSpy struct {
 	completeCall int
 	gotCode      string
 	gotState     string
+	gotBinding   string
 
 	logoutURL    string
 	logoutErr    error
@@ -41,15 +45,15 @@ type loginSpy struct {
 	logoutCalls  int
 }
 
-func (s *loginSpy) Begin(_ context.Context, returnTo string) (string, error) {
+func (s *loginSpy) Begin(_ context.Context, returnTo string) (usecase.LoginAttempt, error) {
 	s.beginCalls++
 	s.gotReturnTo = returnTo
-	return s.authorizeURL, s.beginErr
+	return usecase.LoginAttempt{AuthorizeURL: s.authorizeURL, Binding: s.binding, MaxAge: s.maxAge}, s.beginErr
 }
 
-func (s *loginSpy) Complete(_ context.Context, code, state string) (usecase.Grant, string, error) {
+func (s *loginSpy) Complete(_ context.Context, code, state, binding string) (usecase.Grant, string, error) {
 	s.completeCall++
-	s.gotCode, s.gotState = code, state
+	s.gotCode, s.gotState, s.gotBinding = code, state, binding
 	return s.grant, s.returnTo, s.completeErr
 }
 
@@ -62,6 +66,8 @@ func (s *loginSpy) Logout(_ context.Context, sessionID uuid.UUID) (string, error
 func newLoginSpy() *loginSpy {
 	return &loginSpy{
 		authorizeURL: "https://idp.test/authorize?state=abc",
+		binding:      "binding-value",
+		maxAge:       600,
 		grant:        usecase.Grant{Token: "session-token", CSRFToken: "csrf-token", ExpiresAt: time.Now().Add(90 * 24 * time.Hour)},
 		returnTo:     "/folders/1",
 		logoutURL:    "https://idp.test/logout?redirect=http%3A%2F%2Flocalhost%3A5175%2F",
@@ -94,17 +100,42 @@ func loginRouter(spy *loginSpy, secure bool) *echo.Echo {
 }
 
 func TestAuthLogin(t *testing.T) {
-	t.Run("redirects to the identity provider and sets nothing else", func(t *testing.T) {
-		spy := newLoginSpy()
+	for _, secure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("redirects to the identity provider and sets only the binding cookie (secure=%v)", secure), func(t *testing.T) {
+			spy := newLoginSpy()
 
-		rec := do(loginRouter(spy, false), http.MethodGet, "/auth/login")
+			rec := do(loginRouter(spy, secure), http.MethodGet, "/auth/login")
 
-		require.Equal(t, http.StatusFound, rec.Code)
-		require.Equal(t, spy.authorizeURL, rec.Header().Get("Location"))
-		require.Empty(t, rec.Header().Values("Set-Cookie"))
-		require.Equal(t, []string{spy.authorizeURL}, rec.Header().Values("Location"))
-		require.Len(t, rec.Header(), 1, "only Location")
-	})
+			require.Equal(t, http.StatusFound, rec.Code)
+			require.Equal(t, []string{spy.authorizeURL}, rec.Header().Values("Location"))
+			require.Len(t, rec.Header(), 2, "Location and Set-Cookie")
+			require.Len(t, rec.Header().Values("Set-Cookie"), 1)
+			c := cookieByName(t, rec.Result().Cookies(), "login_binding")
+			require.Equal(t, spy.binding, c.Value)
+			require.True(t, c.HttpOnly)
+			require.Equal(t, http.SameSiteLaxMode, c.SameSite)
+			require.Equal(t, "/auth/callback", c.Path)
+			require.Equal(t, 600, c.MaxAge)
+			require.Equal(t, secure, c.Secure)
+			require.Contains(t, rec.Header().Get("Set-Cookie"), "Max-Age=600")
+		})
+	}
+
+	for name, mutate := range map[string]func(*loginSpy){
+		"an empty binding":  func(s *loginSpy) { s.binding = "" },
+		"a zero MaxAge":     func(s *loginSpy) { s.maxAge = 0 },
+		"a negative MaxAge": func(s *loginSpy) { s.maxAge = -1 },
+	} {
+		t.Run(name+" is a 500 and sets no cookie", func(t *testing.T) {
+			spy := newLoginSpy()
+			mutate(spy)
+
+			rec := do(loginRouter(spy, false), http.MethodGet, "/auth/login")
+
+			requireProblem(t, rec, http.StatusInternalServerError, api.ErrorCodeInternalError)
+			require.Empty(t, rec.Header().Values("Set-Cookie"))
+		})
+	}
 
 	tests := []struct {
 		name     string
@@ -160,6 +191,11 @@ func TestAuthCallback_Redirects(t *testing.T) {
 	require.Len(t, rec.Header().Values("Set-Cookie"), 3) // session, csrf_token, cleared login_binding
 
 	cookies := rec.Result().Cookies()
+	binding := cookieByName(t, cookies, "login_binding")
+	require.Equal(t, -1, binding.MaxAge)
+	require.Equal(t, "/auth/callback", binding.Path)
+	require.True(t, binding.HttpOnly)
+	require.Equal(t, http.SameSiteLaxMode, binding.SameSite)
 	session := cookieByName(t, cookies, middleware.SessionCookie)
 	require.Equal(t, spy.grant.Token, session.Value)
 	require.True(t, session.HttpOnly)
@@ -174,6 +210,54 @@ func TestAuthCallback_Redirects(t *testing.T) {
 	require.Equal(t, http.SameSiteLaxMode, csrf.SameSite)
 	require.Equal(t, "/", csrf.Path)
 	require.InDelta(t, wantMaxAge, float64(csrf.MaxAge), 1)
+}
+
+func TestAuthCallback_Binding(t *testing.T) {
+	cookie := func(vals ...string) func(*http.Request) {
+		return func(r *http.Request) {
+			for _, v := range vals {
+				r.AddCookie(&http.Cookie{Name: "login_binding", Value: v})
+			}
+		}
+	}
+	tests := []struct {
+		name string
+		opts []func(*http.Request)
+		want string
+	}{
+		{"the cookie value is passed to Complete", []func(*http.Request){cookie("abc")}, "abc"},
+		{"no cookie passes an empty string", nil, ""},
+		{"an empty cookie passes an empty string", []func(*http.Request){cookie("")}, ""},
+		{"the first of two cookies is used", []func(*http.Request){cookie("first", "second")}, "first"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spy := newLoginSpy()
+
+			rec := do(loginRouter(spy, false), http.MethodGet, callbackPath, tt.opts...)
+
+			require.Equal(t, http.StatusFound, rec.Code)
+			require.Equal(t, 1, spy.completeCall)
+			require.Equal(t, tt.want, spy.gotBinding)
+		})
+	}
+
+	t.Run("every failure clears the binding cookie, whether or not one was sent", func(t *testing.T) {
+		for _, opts := range [][]func(*http.Request){nil, {cookie("abc")}} {
+			spy := newLoginSpy()
+			spy.completeErr = domain.ErrInvalidLogin
+
+			rec := do(loginRouter(spy, true), http.MethodGet, callbackPath, opts...)
+
+			requireLoginFailure(t, rec, "login_failed")
+			c := cookieByName(t, rec.Result().Cookies(), "login_binding")
+			require.Equal(t, -1, c.MaxAge)
+			require.Equal(t, "/auth/callback", c.Path)
+			require.True(t, c.HttpOnly)
+			require.True(t, c.Secure)
+			require.Equal(t, http.SameSiteLaxMode, c.SameSite)
+		}
+	})
 }
 
 func TestAuthCallback_SecureFlag(t *testing.T) {

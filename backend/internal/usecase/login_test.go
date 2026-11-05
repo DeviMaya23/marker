@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"strings"
@@ -79,12 +80,20 @@ func newTestLogin() (*LoginService, *idpSpy, *sessionsSpy, *time.Time) {
 	return svc, idp, sessions, &now
 }
 
-// begin starts a login and returns the state the IdP received.
-func begin(t *testing.T, svc *LoginService, idp *idpSpy, returnTo string) string {
+// begin starts a login and returns the state the IdP received and the binding value.
+func begin(t *testing.T, svc *LoginService, idp *idpSpy, returnTo string) (state, binding string) {
 	t.Helper()
-	_, err := svc.Begin(context.Background(), returnTo)
+	a, err := svc.Begin(context.Background(), returnTo)
 	require.NoError(t, err)
-	return idp.authorizeState
+	return idp.authorizeState, a.Binding
+}
+
+// signedState hand-signs a state with a valid binding hash for binding.
+func signedState(t *testing.T, st loginState) string {
+	t.Helper()
+	state, err := signState(testSecret, st)
+	require.NoError(t, err)
+	return state
 }
 
 func TestLoginService_BeginThenComplete(t *testing.T) {
@@ -92,11 +101,11 @@ func TestLoginService_BeginThenComplete(t *testing.T) {
 		t.Run(returnTo, func(t *testing.T) {
 			svc, idp, sessions, _ := newTestLogin()
 
-			u, err := svc.Begin(context.Background(), returnTo)
+			a, err := svc.Begin(context.Background(), returnTo)
 			require.NoError(t, err)
-			require.Equal(t, "https://idp.test/authorize", u)
+			require.Equal(t, "https://idp.test/authorize", a.AuthorizeURL)
 
-			grant, gotReturn, err := svc.Complete(context.Background(), "the-code", idp.authorizeState)
+			grant, gotReturn, err := svc.Complete(context.Background(), "the-code", idp.authorizeState, a.Binding)
 			require.NoError(t, err)
 
 			require.Equal(t, "the-code", idp.exchangeCode)
@@ -113,9 +122,9 @@ func TestLoginService_BeginThenComplete(t *testing.T) {
 func TestLoginService_BeginMintsFreshStateAndNonce(t *testing.T) {
 	svc, idp, _, _ := newTestLogin()
 
-	s1 := begin(t, svc, idp, "/")
+	s1, _ := begin(t, svc, idp, "/")
 	n1 := idp.authorizeNonce
-	s2 := begin(t, svc, idp, "/")
+	s2, _ := begin(t, svc, idp, "/")
 
 	require.NotEqual(t, s1, s2)
 	require.NotEqual(t, n1, idp.authorizeNonce)
@@ -124,9 +133,9 @@ func TestLoginService_BeginMintsFreshStateAndNonce(t *testing.T) {
 func TestLoginService_VerifierIsDerivedPerAttemptAndNotInTheState(t *testing.T) {
 	svc, idp, _, _ := newTestLogin()
 
-	s1 := begin(t, svc, idp, "/")
+	s1, _ := begin(t, svc, idp, "/")
 	v1 := idp.authorizeVerifier
-	_ = begin(t, svc, idp, "/")
+	_, _ = begin(t, svc, idp, "/")
 
 	require.Len(t, v1, 43)
 	require.NotEqual(t, v1, idp.authorizeVerifier, "each attempt has its own verifier")
@@ -143,10 +152,10 @@ func TestLoginService_BeginFallsBackWhenStateWouldBeTooLong(t *testing.T) {
 
 	// 8191 double quotes: each takes two bytes in JSON, so the state exceeds maxStateLen.
 	hostile := "/" + strings.Repeat(`"`, 8191)
-	state := begin(t, svc, idp, hostile)
+	state, binding := begin(t, svc, idp, hostile)
 	require.LessOrEqual(t, len(state), maxStateLen)
 
-	_, gotReturn, err := svc.Complete(context.Background(), "c", state)
+	_, gotReturn, err := svc.Complete(context.Background(), "c", state, binding)
 	require.NoError(t, err)
 	require.Equal(t, "/", gotReturn)
 }
@@ -155,22 +164,22 @@ func TestLoginService_BeginKeepsTheLongestAllowedReturnTo(t *testing.T) {
 	svc, idp, _, _ := newTestLogin()
 
 	longest := "/" + strings.Repeat("a", 8191)
-	state := begin(t, svc, idp, longest)
+	state, binding := begin(t, svc, idp, longest)
 	require.LessOrEqual(t, len(state), maxStateLen)
 
-	_, gotReturn, err := svc.Complete(context.Background(), "c", state)
+	_, gotReturn, err := svc.Complete(context.Background(), "c", state, binding)
 	require.NoError(t, err)
 	require.Equal(t, longest, gotReturn)
 }
 
 func TestLoginService_CompleteRejectsABadAttempt(t *testing.T) {
 	svc, idp, sessions, _ := newTestLogin()
-	good := begin(t, svc, idp, "/")
+	good, binding := begin(t, svc, idp, "/")
 	payload, sig, _ := strings.Cut(good, ".")
 
 	other := NewLoginService(idp, sessions, LoginConfig{StateSecret: []byte(strings.Repeat("x", 32))})
 	other.now = svc.now
-	foreign := begin(t, other, idp, "/")
+	foreign, foreignBinding := begin(t, other, idp, "/")
 
 	// Flip the first character: the last base64url character of a 32-byte MAC carries
 	// two padding bits, so flipping it can decode to the same bytes and the test would
@@ -184,23 +193,26 @@ func TestLoginService_CompleteRejectsABadAttempt(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		code, state string
+		name                 string
+		code, state, binding string
 	}{
-		{"empty state", "c", ""},
-		{"no dot", "c", payload + sig},
-		{"two dots", "c", good + ".x"},
-		{"half is not base64url", "c", "!!!." + sig},
-		{"signature is not base64url", "c", payload + ".!!!"},
-		{"tampered payload", "c", flip(payload) + "." + sig},
-		{"tampered signature", "c", payload + "." + flip(sig)},
-		{"signed with another secret", "c", foreign},
-		{"empty code", "", good},
+		{"empty state", "c", "", binding},
+		{"no dot", "c", payload + sig, binding},
+		{"two dots", "c", good + ".x", binding},
+		{"half is not base64url", "c", "!!!." + sig, binding},
+		{"signature is not base64url", "c", payload + ".!!!", binding},
+		{"tampered payload", "c", flip(payload) + "." + sig, binding},
+		{"tampered signature", "c", payload + "." + flip(sig), binding},
+		{"signed with another secret", "c", foreign, foreignBinding},
+		{"empty code", "", good, binding},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := svc.Complete(context.Background(), tt.code, tt.state)
+			_, rt, err := svc.Complete(context.Background(), tt.code, tt.state, tt.binding)
 			require.ErrorIs(t, err, domain.ErrInvalidLogin)
+			if tt.name != "empty code" {
+				require.Empty(t, rt, "a bad state yields no return_to")
+			}
 			require.Zero(t, idp.exchangeCalls)
 			require.Zero(t, sessions.startCalls)
 		})
@@ -209,17 +221,23 @@ func TestLoginService_CompleteRejectsABadAttempt(t *testing.T) {
 
 func TestLoginService_CompleteRejectsAStateMissingAField(t *testing.T) {
 	svc, idp, sessions, _ := newTestLogin()
+	exp := t0.Add(time.Minute).Unix()
+	hash := bindingHash(testSecret, "v")
 
 	for name, st := range map[string]loginState{
-		"no nonce":     {ReturnTo: "/", Expires: t0.Add(time.Minute).Unix()},
-		"no return_to": {Nonce: "n", Expires: t0.Add(time.Minute).Unix()},
-		"no expiry":    {Nonce: "n", ReturnTo: "/"},
+		"no nonce":                  {ReturnTo: "/", Expires: exp, Binding: hash},
+		"no return_to":              {Nonce: "n", Expires: exp, Binding: hash},
+		"no expiry":                 {Nonce: "n", ReturnTo: "/", Binding: hash},
+		"no binding":                {Nonce: "n", ReturnTo: "/", Expires: exp},
+		"binding not base64url":     {Nonce: "n", ReturnTo: "/", Expires: exp, Binding: "!!!" + hash[3:]},
+		"binding 31 bytes":          {Nonce: "n", ReturnTo: "/", Expires: exp, Binding: b64(make([]byte, 31))},
+		"binding 33 bytes":          {Nonce: "n", ReturnTo: "/", Expires: exp, Binding: b64(make([]byte, 33))},
+		"binding with padding char": {Nonce: "n", ReturnTo: "/", Expires: exp, Binding: hash + "="},
 	} {
 		t.Run(name, func(t *testing.T) {
-			state, err := signState(testSecret, st)
-			require.NoError(t, err)
-			_, _, err = svc.Complete(context.Background(), "c", state)
+			_, rt, err := svc.Complete(context.Background(), "c", signedState(t, st), "v")
 			require.ErrorIs(t, err, domain.ErrInvalidLogin)
+			require.Empty(t, rt)
 			require.Zero(t, idp.exchangeCalls)
 			require.Zero(t, sessions.startCalls)
 		})
@@ -231,20 +249,20 @@ func TestLoginService_CompleteSizeLimits(t *testing.T) {
 		svc, idp, _, _ := newTestLogin()
 		// A well-formed, correctly signed state padded past the cap would still be refused:
 		// the length check comes first.
-		_, _, err := svc.Complete(context.Background(), "c", strings.Repeat("a", maxStateLen+1))
+		_, _, err := svc.Complete(context.Background(), "c", strings.Repeat("a", maxStateLen+1), "v")
 		require.ErrorIs(t, err, domain.ErrInvalidLogin)
 		require.Zero(t, idp.exchangeCalls)
 	})
 
 	t.Run("a state of 12288 bytes is decoded and refused for its signature", func(t *testing.T) {
 		svc, idp, _, _ := newTestLogin()
-		good := begin(t, svc, idp, "/")
+		good, _ := begin(t, svc, idp, "/")
 		payload, _, _ := strings.Cut(good, ".")
 		// Valid base64url halves, wrong signature, exactly at the cap.
 		state := payload + "." + strings.Repeat("A", maxStateLen-len(payload)-1)
 		require.Len(t, state, maxStateLen)
 
-		_, _, err := svc.Complete(context.Background(), "c", state)
+		_, _, err := svc.Complete(context.Background(), "c", state, "v")
 		require.ErrorIs(t, err, domain.ErrInvalidLogin)
 		require.Zero(t, idp.exchangeCalls)
 	})
@@ -253,7 +271,7 @@ func TestLoginService_CompleteSizeLimits(t *testing.T) {
 		svc, _, _, _ := newTestLogin()
 		signedOfLen := func(n int) string {
 			for pad := 1; pad < n; pad++ {
-				st, err := signState(testSecret, loginState{Nonce: "n", ReturnTo: "/" + strings.Repeat("a", pad), Expires: t0.Add(time.Minute).Unix()})
+				st, err := signState(testSecret, loginState{Nonce: "n", ReturnTo: "/" + strings.Repeat("a", pad), Expires: t0.Add(time.Minute).Unix(), Binding: bindingHash(testSecret, "v")})
 				require.NoError(t, err)
 				if len(st) == n {
 					return st
@@ -266,23 +284,40 @@ func TestLoginService_CompleteSizeLimits(t *testing.T) {
 			return ""
 		}
 
-		_, _, err := svc.Complete(context.Background(), "c", signedOfLen(maxStateLen))
+		_, _, err := svc.Complete(context.Background(), "c", signedOfLen(maxStateLen), "v")
 		require.NoError(t, err)
 		// 12289 cannot be built: the payload's base64 length would be 1 mod 4. 12290 is the
 		// nearest signed state above the cap.
-		_, _, err = svc.Complete(context.Background(), "c", signedOfLen(maxStateLen+2))
+		_, _, err = svc.Complete(context.Background(), "c", signedOfLen(maxStateLen+2), "v")
 		require.ErrorIs(t, err, domain.ErrInvalidLogin)
+	})
+
+	t.Run("a binding of 129 bytes is refused even when it matches, 128 is accepted", func(t *testing.T) {
+		svc, idp, _, _ := newTestLogin()
+		stateFor := func(binding string) string {
+			return signedState(t, loginState{Nonce: "n", ReturnTo: "/", Expires: t0.Add(time.Minute).Unix(), Binding: bindingHash(testSecret, binding)})
+		}
+
+		long := strings.Repeat("b", maxBindingLen+1)
+		_, rt, err := svc.Complete(context.Background(), "c", stateFor(long), long)
+		require.ErrorIs(t, err, domain.ErrInvalidLogin)
+		require.Equal(t, "/", rt)
+		require.Zero(t, idp.exchangeCalls)
+
+		ok := strings.Repeat("b", maxBindingLen)
+		_, _, err = svc.Complete(context.Background(), "c", stateFor(ok), ok)
+		require.NoError(t, err)
 	})
 
 	t.Run("a code of 2049 bytes is refused, 2048 reaches the IdP", func(t *testing.T) {
 		svc, idp, _, _ := newTestLogin()
-		state := begin(t, svc, idp, "/")
+		state, binding := begin(t, svc, idp, "/")
 
-		_, _, err := svc.Complete(context.Background(), strings.Repeat("c", maxCodeLen+1), state)
+		_, _, err := svc.Complete(context.Background(), strings.Repeat("c", maxCodeLen+1), state, binding)
 		require.ErrorIs(t, err, domain.ErrInvalidLogin)
 		require.Zero(t, idp.exchangeCalls)
 
-		_, _, err = svc.Complete(context.Background(), strings.Repeat("c", maxCodeLen), state)
+		_, _, err = svc.Complete(context.Background(), strings.Repeat("c", maxCodeLen), state, binding)
 		require.NoError(t, err)
 		require.Equal(t, 1, idp.exchangeCalls)
 	})
@@ -290,7 +325,7 @@ func TestLoginService_CompleteSizeLimits(t *testing.T) {
 
 func TestLoginService_StateExpiry(t *testing.T) {
 	svc, idp, _, now := newTestLogin()
-	state := begin(t, svc, idp, "/")
+	state, binding := begin(t, svc, idp, "/")
 	expiry := t0.Add(loginStateTTL)
 
 	tests := []struct {
@@ -305,7 +340,7 @@ func TestLoginService_StateExpiry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			*now = tt.at
-			_, _, err := svc.Complete(context.Background(), "c", state)
+			_, _, err := svc.Complete(context.Background(), "c", state, binding)
 			if tt.invalid {
 				require.ErrorIs(t, err, domain.ErrInvalidLogin)
 				return
@@ -317,10 +352,10 @@ func TestLoginService_StateExpiry(t *testing.T) {
 
 func TestLoginService_CompleteKeepsAnIdPFaultApartFromABadLogin(t *testing.T) {
 	svc, idp, sessions, _ := newTestLogin()
-	state := begin(t, svc, idp, "/")
+	state, binding := begin(t, svc, idp, "/")
 	idp.exchangeErr = errors.New("token endpoint down")
 
-	_, _, err := svc.Complete(context.Background(), "c", state)
+	_, _, err := svc.Complete(context.Background(), "c", state, binding)
 
 	require.Error(t, err)
 	require.NotErrorIs(t, err, domain.ErrInvalidLogin, "a fault must become a 500, not a 400")
@@ -329,10 +364,10 @@ func TestLoginService_CompleteKeepsAnIdPFaultApartFromABadLogin(t *testing.T) {
 
 func TestLoginService_CompleteRejectsAnEmptySubject(t *testing.T) {
 	svc, idp, sessions, _ := newTestLogin()
-	state := begin(t, svc, idp, "/")
+	state, binding := begin(t, svc, idp, "/")
 	idp.subject = ""
 
-	_, _, err := svc.Complete(context.Background(), "c", state)
+	_, _, err := svc.Complete(context.Background(), "c", state, binding)
 
 	require.ErrorIs(t, err, domain.ErrInvalidLogin)
 	require.Zero(t, sessions.startCalls)
@@ -393,14 +428,82 @@ func orDefault(v, def string) string {
 
 func TestLoginService_CompleteKeepsReturnToOnceStateVerified(t *testing.T) {
 	svc, idp, _, _ := newTestLogin()
-	state := begin(t, svc, idp, "/save?x=1")
+	state, binding := begin(t, svc, idp, "/save?x=1")
 
-	_, returnTo, err := svc.Complete(context.Background(), "", state)
+	_, returnTo, err := svc.Complete(context.Background(), "", state, binding)
 
 	require.ErrorIs(t, err, domain.ErrInvalidLogin)
 	require.Equal(t, "/save?x=1", returnTo)
 
-	_, returnTo, err = svc.Complete(context.Background(), "c", "garbage")
+	_, returnTo, err = svc.Complete(context.Background(), "c", "garbage", binding)
 	require.ErrorIs(t, err, domain.ErrInvalidLogin)
 	require.Empty(t, returnTo, "an unverified state yields no return_to")
+}
+
+func TestLoginService_BeginReturnsABinding(t *testing.T) {
+	svc, idp, _, _ := newTestLogin()
+
+	a1, err := svc.Begin(context.Background(), "/")
+	require.NoError(t, err)
+	state1 := idp.authorizeState
+	a2, err := svc.Begin(context.Background(), "/")
+	require.NoError(t, err)
+
+	require.Len(t, a1.Binding, 43)
+	raw, err := base64.RawURLEncoding.DecodeString(a1.Binding)
+	require.NoError(t, err)
+	require.Len(t, raw, 32)
+	require.Equal(t, 600, a1.MaxAge)
+	require.NotEqual(t, a1.Binding, a2.Binding)
+
+	payload, _, _ := strings.Cut(state1, ".")
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	require.NoError(t, err)
+	var st loginState
+	require.NoError(t, json.Unmarshal(decoded, &st))
+	require.Len(t, st.Binding, 43)
+	require.Equal(t, bindingHash(testSecret, a1.Binding), st.Binding)
+	require.NotContains(t, string(decoded), a1.Binding, "the binding value is not in the state")
+	require.NotContains(t, state1, a1.Binding)
+	require.NotContains(t, a1.AuthorizeURL, a1.Binding)
+}
+
+func TestLoginService_BeginMintsOneBindingForTheFallbackState(t *testing.T) {
+	svc, idp, _, _ := newTestLogin()
+
+	state, binding := begin(t, svc, idp, "/"+strings.Repeat(`"`, 8191))
+
+	_, rt, err := svc.Complete(context.Background(), "c", state, binding)
+	require.NoError(t, err)
+	require.Equal(t, "/", rt, "the fallback state carries the same binding the cookie gets")
+}
+
+func TestLoginService_CompleteRequiresTheBinding(t *testing.T) {
+	svc, idp, sessions, _ := newTestLogin()
+	state, binding := begin(t, svc, idp, "/save?x=1")
+	_, otherBinding := begin(t, svc, idp, "/")
+
+	t.Run("the right binding succeeds", func(t *testing.T) {
+		_, _, err := svc.Complete(context.Background(), "c", state, binding)
+		require.NoError(t, err)
+		require.Equal(t, 1, idp.exchangeCalls)
+	})
+
+	for name, b := range map[string]string{
+		"no binding":       "",
+		"a wrong binding":  otherBinding,
+		"a guessed value":  "x",
+		"the state itself": state,
+	} {
+		t.Run(name+" is refused before the IdP is called", func(t *testing.T) {
+			calls, started := idp.exchangeCalls, sessions.startCalls
+
+			_, rt, err := svc.Complete(context.Background(), "c", state, b)
+
+			require.ErrorIs(t, err, domain.ErrInvalidLogin)
+			require.Equal(t, "/save?x=1", rt, "the verified state's return_to comes back")
+			require.Equal(t, calls, idp.exchangeCalls)
+			require.Equal(t, started, sessions.startCalls)
+		})
+	}
 }
