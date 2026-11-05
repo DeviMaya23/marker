@@ -1,0 +1,12 @@
+{
+  // Cloudflare Workers static assets: serves the Vite build (`npm run build` -> dist/).
+  "name": "marker-frontend",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./dist",
+    // A path that is not a built file answers index.html, so a reload on a
+    // client-side route (/trash, /login, ...) shows the app. A `/* /index.html 200`
+    // rule in `_redirects` is rejected on Workers as an infinite loop.
+    "not_found_handling": "single-page-application"
+  }
+}

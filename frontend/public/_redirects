@@ -1,3 +1,0 @@
-# Cloudflare Pages: answer every path that is not a built file with index.html,
-# so a reload on a client-side route (/trash, /login, ...) shows the app.
-/*  /index.html  200
