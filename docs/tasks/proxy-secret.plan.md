@@ -7,39 +7,44 @@ All tests are unit and router-level tests; none needs a database and none is an 
 ## Acceptance criteria
 
 ### Middleware (`handler/middleware/proxysecret.go`, test `handler/middleware/proxysecret_test.go`)
-- [ ] Correct value passes
-- [ ] Refused, next handler not run: no header, empty, one byte shorter, one byte longer, correct + appended byte, lower-cased mixed-case secret, two headers (first wrong)
-- [ ] `GET /healthz` passes with no, wrong, correct header; `/healthz/`, `/healthz2`, `/%68ealthz` (RawPath) refused
-- [ ] POST and OPTIONS to `/api/v1/bookmarks`, POST and HEAD to `/healthz` refused
-- [ ] Lower-case header name `x-proxy-secret` accepted
-- [ ] Refusal error is `echo.ErrNotFound`; body contains neither secret nor supplied value
+- [x] Correct value passes
+- [x] Refused, next handler not run: no header, empty, one byte shorter, one byte longer, correct + appended byte, lower-cased mixed-case secret, two headers (first wrong)
+- [x] `GET /healthz` passes with no, wrong, correct header; `/healthz/`, `/healthz2`, `/%68ealthz` (RawPath) refused
+- [x] POST and OPTIONS to `/api/v1/bookmarks`, POST and HEAD to `/healthz` refused
+- [x] Lower-case header name `x-proxy-secret` accepted
+- [x] Refusal error is `echo.ErrNotFound`; body contains neither secret nor supplied value
 
 ### Router (`handler/proxysecret_router_test.go`, next to `router_test.go`)
-- [ ] Valid session, no header: 404 problem, handler not run; correct header reaches handler
-- [ ] Refused response bytes equal `GET /no/such/path` with the header
-- [ ] Order: 404 not 401; 404 not 403 (bad CSRF); 404 not 413
-- [ ] Rate limiting: 20 no-header `GET /auth/login` are 404 and take no token
-- [ ] Forged client IP never used (`CF-Connecting-IP`): 20 forged 404, then 10 pass, 11th 429
-- [ ] `GET /healthz` 200 without header; `GET /auth/callback` without header 404
-- [ ] Refused body has neither secret nor supplied value
-- [ ] `Deps.ProxySecret` empty: nothing refused (existing router tests pass unchanged)
-- [ ] `Server` nil with secret: unknown path refused, `/healthz` answers
+- [x] Valid session, no header: 404 problem, handler not run; correct header reaches handler
+- [x] Refused response bytes equal `GET /no/such/path` with the header
+- [x] Order: 404 not 401; 404 not 403 (bad CSRF); 404 not 413
+- [x] Rate limiting: 20 no-header `GET /auth/login` are 404 and take no token
+- [x] Forged client IP never used (`CF-Connecting-IP`): 20 forged 404, then 10 pass, 11th 429
+- [x] `GET /healthz` 200 without header; `GET /auth/callback` without header 404
+- [x] Refused body has neither secret nor supplied value
+- [x] `Deps.ProxySecret` empty: nothing refused (existing router tests pass unchanged)
+- [x] `Server` nil with secret: unknown path refused, `/healthz` answers
 
 ### Config (`platform/config/config.go`, test `config_test.go`)
-- [ ] `PROXY_SHARED_SECRET` read into `ProxySharedSecret`; empty valid in development
-- [ ] Production with it empty rejected, naming the variable; production with valid value accepted
-- [ ] 31 bytes rejected (dev and production); 32 accepted; error names variable, not value
-- [ ] Space, trailing `\n`, tab, non-ASCII (each >= 32 bytes) rejected; error names variable, not value
-- [ ] Checks run for dev-login-only and OIDC configurations
+- [x] `PROXY_SHARED_SECRET` read into `ProxySharedSecret`; empty valid in development
+- [x] Production with it empty rejected, naming the variable; production with valid value accepted
+- [x] 31 bytes rejected (dev and production); 32 accepted; error names variable, not value
+- [x] Space, trailing `\n`, tab, non-ASCII (each >= 32 bytes) rejected; error names variable, not value
+- [x] Checks run for dev-login-only and OIDC configurations
 
 ### Wiring and docs
-- [ ] `handler/router.go` `Deps.ProxySecret`, first `e.Use`; `cmd/server/main.go` passes it; `.env.example` block; `handler/middleware/doc.go` updated
+- [x] `handler/router.go` `Deps.ProxySecret`, first `e.Use`; `cmd/server/main.go` passes it; `.env.example` block; `handler/middleware/doc.go` updated
 
 ### Repo-wide
-- [ ] `make check` passes: not run yet
-- [ ] Only allowed paths changed; `go.mod` and `go.sum` unchanged
-- [ ] `make test-integration-local`: not run yet
+- [x] `make check` passes: run, passed (second run; the first run failed once on the unrelated frontend test `EmptyTrash.test.tsx` "focuses the field on open", which passed on rerun with no change)
+- [x] Only allowed paths changed; `go.mod` and `go.sum` unchanged
+- [x] `make test-integration-local`: run, passed (PostgreSQL 16)
 
 ## Judgment calls
 
-(filled in at the end)
+- The Worker-sent header is read with `Header.Get`, so a repeated header counts only by its first value, as the task says.
+- `ProxySecretHeader` is exported (used by the router tests); the exempt path constant `healthPath` is unexported.
+- The `/healthz?x=1` and `//healthz` cases are in the middleware test: the query is exempt, `//healthz` is not (path differs).
+- `Config.Validate` runs the `PROXY_SHARED_SECRET` checks for every `Env`; a non-"production" unrecognised Env with an empty secret stays valid.
+- The router "forged IP" test builds its 20 distinct IPs in a loop with a simple two-digit suffix.
+- `npm ci` was needed in `frontend/` before `make check` could run, per AGENTS.md.
