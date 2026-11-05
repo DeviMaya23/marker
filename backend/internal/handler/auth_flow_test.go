@@ -130,14 +130,31 @@ func noFollow(t *testing.T, rawURL string) string {
 	return resp.Header.Get("Location")
 }
 
-// startLogin calls /auth/login on the router and returns the identity provider URL.
-func (e *flowEnv) startLogin(t *testing.T, returnTo string) string {
+// startLogin calls /auth/login on the router and returns the identity provider URL and
+// the login_binding cookie the browser would now hold.
+func (e *flowEnv) startLogin(t *testing.T, returnTo string) (string, *http.Cookie) {
 	t.Helper()
 	rec := do(e.router, http.MethodGet, "/auth/login?return_to="+url.QueryEscape(returnTo))
 	require.Equal(t, http.StatusFound, rec.Code)
 	loc := rec.Header().Get("Location")
 	require.True(t, strings.HasPrefix(loc, e.fake.AuthorizeEndpoint()+"?"), loc)
-	return loc
+	return loc, cookieByName(t, rec.Result().Cookies(), "login_binding")
+}
+
+// attempt starts a login and follows the identity provider's redirect: it returns the
+// callback path and the binding cookie.
+func (e *flowEnv) attempt(t *testing.T, returnTo string) (string, *http.Cookie) {
+	t.Helper()
+	loc, ck := e.startLogin(t, returnTo)
+	return callbackPathFrom(t, noFollow(t, loc)), ck
+}
+
+// callback sends the callback path as a browser holding cookie (nil: no cookie).
+func (e *flowEnv) callback(path string, cookie *http.Cookie) *httptest.ResponseRecorder {
+	if cookie == nil {
+		return do(e.router, http.MethodGet, path)
+	}
+	return do(e.router, http.MethodGet, path, func(r *http.Request) { r.AddCookie(&http.Cookie{Name: cookie.Name, Value: cookie.Value}) })
 }
 
 // callbackPath turns the fake's redirect back to the app into a path and query for the router.
@@ -155,9 +172,8 @@ func TestAuthFlow_LoginRoundTrip(t *testing.T) {
 	e.fake.Configure(func(k *testutil.FakeIDPKnobs) { k.Subject = "sub-alice" })
 	returnTo := "/save?url=https%3A%2F%2Fa.test%2F%26x&title=t"
 
-	authorizeURL := e.startLogin(t, returnTo)
-	callback := callbackPathFrom(t, noFollow(t, authorizeURL))
-	rec := do(e.router, http.MethodGet, callback)
+	callback, ck := e.attempt(t, returnTo)
+	rec := e.callback(callback, ck)
 
 	require.Equal(t, http.StatusFound, rec.Code)
 	require.Equal(t, returnTo, rec.Header().Get("Location"))
@@ -173,10 +189,12 @@ func TestAuthFlow_LoginRoundTrip(t *testing.T) {
 
 func TestAuthFlow_ReplayedCallbackIsRefused(t *testing.T) {
 	e := newFlowEnv(t)
-	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
+	callback, ck := e.attempt(t, "/")
 
-	require.Equal(t, http.StatusFound, do(e.router, http.MethodGet, callback).Code)
-	rec := do(e.router, http.MethodGet, callback)
+	require.Equal(t, http.StatusFound, e.callback(callback, ck).Code)
+	// The cookie is sent again and still matches the state. The app keeps no list of used
+	// states: the replay fails because the identity provider's code is single use.
+	rec := e.callback(callback, ck)
 
 	requireLoginFailure(t, rec, "login_failed")
 	require.Equal(t, 1, e.sessions.count())
@@ -186,9 +204,9 @@ func TestAuthFlow_DeniedLoginIsRefused(t *testing.T) {
 	e := newFlowEnv(t)
 	e.fake.Configure(func(k *testutil.FakeIDPKnobs) { k.DenyLogin = true })
 
-	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
+	callback, ck := e.attempt(t, "/")
 	require.NotContains(t, callback, "code=")
-	rec := do(e.router, http.MethodGet, callback)
+	rec := e.callback(callback, ck)
 
 	requireLoginFailure(t, rec, "access_denied")
 	require.Zero(t, e.sessions.count())
@@ -197,10 +215,10 @@ func TestAuthFlow_DeniedLoginIsRefused(t *testing.T) {
 func TestAuthFlow_StateSignedWithAnotherSecretIsRefused(t *testing.T) {
 	e := newFlowEnv(t)
 	foreign := usecase.NewLoginService(e.idp, e.sessions, usecase.LoginConfig{StateSecret: []byte("another-secret-another-secret-123456")})
-	authorizeURL, err := foreign.Begin(context.Background(), "/")
+	attempt, err := foreign.Begin(context.Background(), "/")
 	require.NoError(t, err)
 
-	rec := do(e.router, http.MethodGet, callbackPathFrom(t, noFollow(t, authorizeURL)))
+	rec := e.callback(callbackPathFrom(t, noFollow(t, attempt.AuthorizeURL)), &http.Cookie{Name: "login_binding", Value: attempt.Binding})
 
 	requireLoginFailure(t, rec, "login_failed")
 	require.Zero(t, e.fake.Requests("token"), "the token endpoint is never called for a bad state")
@@ -209,8 +227,8 @@ func TestAuthFlow_StateSignedWithAnotherSecretIsRefused(t *testing.T) {
 
 func TestAuthFlow_Logout(t *testing.T) {
 	e := newFlowEnv(t)
-	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
-	login := do(e.router, http.MethodGet, callback)
+	callback, ck := e.attempt(t, "/")
+	login := e.callback(callback, ck)
 	token := cookieByName(t, login.Result().Cookies(), "session").Value
 	require.Equal(t, 1, e.sessions.count())
 
@@ -240,8 +258,8 @@ func TestAuthFlow_SameSubjectTwice(t *testing.T) {
 	e.fake.Configure(func(k *testutil.FakeIDPKnobs) { k.Subject = "sub-bob" })
 
 	for range 2 {
-		callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
-		require.Equal(t, http.StatusFound, do(e.router, http.MethodGet, callback).Code)
+		callback, ck := e.attempt(t, "/")
+		require.Equal(t, http.StatusFound, e.callback(callback, ck).Code)
 	}
 
 	require.Equal(t, []string{"sub-bob", "sub-bob"}, e.sessions.startedSubs())
@@ -249,7 +267,7 @@ func TestAuthFlow_SameSubjectTwice(t *testing.T) {
 
 func TestAuthFlow_ConcurrentCallbacksStartOneSession(t *testing.T) {
 	e := newFlowEnv(t)
-	callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, "/")))
+	callback, ck := e.attempt(t, "/")
 
 	const n = 8
 	recs := make([]*httptest.ResponseRecorder, n)
@@ -258,7 +276,7 @@ func TestAuthFlow_ConcurrentCallbacksStartOneSession(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			recs[i] = do(e.router, http.MethodGet, callback)
+			recs[i] = e.callback(callback, ck)
 		}()
 	}
 	wg.Wait()
@@ -292,8 +310,8 @@ func TestAuthFlow_ReturnToThroughTheWholeRoundTrip(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := newFlowEnv(t)
-			callback := callbackPathFrom(t, noFollow(t, e.startLogin(t, tt.returnTo)))
-			rec := do(e.router, http.MethodGet, callback)
+			callback, ck := e.attempt(t, tt.returnTo)
+			rec := e.callback(callback, ck)
 
 			require.Equal(t, http.StatusFound, rec.Code)
 			require.Equal(t, tt.want, rec.Header().Get("Location"))
@@ -304,20 +322,119 @@ func TestAuthFlow_ReturnToThroughTheWholeRoundTrip(t *testing.T) {
 
 func TestAuthFlow_EmptyCodeIsRefusedWithoutCallingTheIdP(t *testing.T) {
 	e := newFlowEnv(t)
-	u, err := url.Parse(callbackPathFrom(t, noFollow(t, e.startLogin(t, "/"))))
+	path, ck := e.attempt(t, "/")
+	u, err := url.Parse(path)
 	require.NoError(t, err)
 	q := u.Query()
 	q.Set("code", "")
 
-	rec := do(e.router, http.MethodGet, "/auth/callback?"+q.Encode())
+	rec := e.callback("/auth/callback?"+q.Encode(), ck)
 
 	requireLoginFailure(t, rec, "login_failed")
 	require.Zero(t, e.fake.Requests("token"))
 }
 
+func TestAuthFlow_LongCodeIsRefusedWithoutCallingTheIdP(t *testing.T) {
+	e := newFlowEnv(t)
+	path, ck := e.attempt(t, "/")
+	u, err := url.Parse(path)
+	require.NoError(t, err)
+	q := u.Query()
+	q.Set("code", strings.Repeat("c", 2049))
+
+	rec := e.callback("/auth/callback?"+q.Encode(), ck)
+
+	requireLoginFailure(t, rec, "login_failed")
+	require.Zero(t, e.fake.Requests("token"))
+	require.Zero(t, e.sessions.count())
+}
+
+// The attack: a login started in the attacker's browser (cookie A) is finished in the
+// victim's browser, which holds no cookie or another one.
+func TestAuthFlow_LoginCSRFIsRefused(t *testing.T) {
+	e := newFlowEnv(t)
+	callbackA, cookieA := e.attempt(t, "/save?x=1")
+	_, cookieB := e.attempt(t, "/")
+	require.NotEqual(t, cookieA.Value, cookieB.Value)
+
+	for name, victim := range map[string]*http.Cookie{
+		"a browser with no cookie":           nil,
+		"a browser with another login's one": cookieB,
+		"a browser with an empty cookie":     {Name: "login_binding", Value: ""},
+		"a browser with a 129-byte cookie":   {Name: "login_binding", Value: strings.Repeat("a", 129)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := e.callback(callbackA, victim)
+
+			requireLoginFailure(t, rec, "login_failed")
+			require.Equal(t, "/login?error=login_failed&return_to=%2Fsave%3Fx%3D1", rec.Header().Get("Location"))
+			require.Zero(t, e.sessions.count())
+			require.Zero(t, e.fake.Requests("token"), "the token endpoint is never called")
+		})
+	}
+
+	t.Run("the attacker's own browser still succeeds", func(t *testing.T) {
+		rec := e.callback(callbackA, cookieA)
+		require.Equal(t, "/save?x=1", rec.Header().Get("Location"))
+		require.Equal(t, 1, e.sessions.count())
+	})
+}
+
+func TestAuthFlow_SecondTabWins(t *testing.T) {
+	e := newFlowEnv(t)
+	callbackA, _ := e.attempt(t, "/")
+	callbackB, cookieB := e.attempt(t, "/") // replaces cookie A in the browser
+
+	requireLoginFailure(t, e.callback(callbackA, cookieB), "login_failed")
+	require.Zero(t, e.sessions.count())
+	require.Zero(t, e.fake.Requests("token"))
+
+	rec := e.callback(callbackB, cookieB)
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.Equal(t, "/", rec.Header().Get("Location"))
+	require.Equal(t, 1, e.sessions.count())
+}
+
+func TestAuthFlow_CancelledLoginWithoutACookieIsStillAccessDenied(t *testing.T) {
+	e := newFlowEnv(t)
+	e.fake.Configure(func(k *testutil.FakeIDPKnobs) { k.DenyLogin = true })
+	path, ck := e.attempt(t, "/")
+
+	requireLoginFailure(t, e.callback(path, ck), "access_denied")
+	requireLoginFailure(t, e.callback(path, nil), "access_denied")
+	requireLoginFailure(t, e.callback("/auth/callback?error=access_denied", nil), "access_denied")
+	require.Zero(t, e.sessions.count())
+	require.Zero(t, e.fake.Requests("token"))
+}
+
+func TestAuthFlow_FailureRedirectCarriesNoBindingOrState(t *testing.T) {
+	e := newFlowEnv(t)
+	path, ck := e.attempt(t, "/save?x=1")
+	u, err := url.Parse(path)
+	require.NoError(t, err)
+	state := u.Query().Get("state")
+
+	for name, cookie := range map[string]*http.Cookie{"no cookie": nil, "wrong cookie": {Name: "login_binding", Value: "wrong"}} {
+		t.Run(name, func(t *testing.T) {
+			rec := e.callback(path, cookie)
+
+			loc, err := url.Parse(rec.Header().Get("Location"))
+			require.NoError(t, err)
+			require.Equal(t, "/login", loc.Path)
+			require.Len(t, loc.Query(), 2)
+			require.Equal(t, "login_failed", loc.Query().Get("error"))
+			require.Equal(t, "/save?x=1", loc.Query().Get("return_to"))
+			require.NotContains(t, rec.Header().Get("Location"), state)
+			require.NotContains(t, rec.Header().Get("Location"), ck.Value)
+			require.Empty(t, rec.Body.String())
+		})
+	}
+}
+
 func TestAuthFlow_LogoutDoesNotDependOnTheIdPBeingUp(t *testing.T) {
 	e := newFlowEnv(t)
-	login := do(e.router, http.MethodGet, callbackPathFrom(t, noFollow(t, e.startLogin(t, "/"))))
+	callback, ck := e.attempt(t, "/")
+	login := e.callback(callback, ck)
 	token := cookieByName(t, login.Result().Cookies(), "session").Value
 	e.fake.Server.Close()
 
