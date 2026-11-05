@@ -123,4 +123,93 @@ describe('LoginPage', () => {
     })
     expect(getSyncVersion).toHaveBeenCalledExactlyOnceWith()
   })
+
+  describe('login error message', () => {
+    const FAILED = "Login didn't complete. Please try again."
+    const CANCELLED = 'Login was cancelled.'
+
+    it('shows the login-failed message with the link in place', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=login_failed' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(FAILED)
+      expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument()
+    })
+
+    it('shows the cancelled message', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=access_denied' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(CANCELLED)
+    })
+
+    it('keeps return_to in the link next to the message', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=login_failed&return_to=%2Ftrash' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(FAILED)
+      expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute(
+        'href',
+        '/auth/login?return_to=%2Ftrash',
+      )
+    })
+
+    it.each([
+      ['an unknown value', '?error=foo'],
+      ['an empty value', '?error='],
+      ['another case', '?error=LOGIN_FAILED'],
+      ['no error', ''],
+      ['a NUL suffix', '?error=login_failed%00'],
+      ['a very long value', `?error=${'a'.repeat(5000)}`],
+      ['an error[] key', '?error[]=x'],
+      ['a trailing space', '?error=login_failed%20'],
+      ['a double-encoded value', '?error=login%255Ffailed'],
+    ])('shows no alert for %s', async (_n, query) => {
+      signedOut()
+      renderApp(page(), { path: `/login${query}` })
+      await screen.findByRole('link', { name: 'Log in' })
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('ignores a fragment after the value', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=login_failed#x' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(FAILED)
+    })
+
+    it('uses the first value when the key repeats', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=login_failed&error=access_denied' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(FAILED)
+    })
+
+    it('links to / for an unsafe return_to and still shows the message', async () => {
+      signedOut()
+      renderApp(page(), { path: '/login?error=access_denied&return_to=%2F%2Fevil.example' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(CANCELLED)
+      expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', loginHref('/', ''))
+    })
+
+    it('shows only the checking status while the probe is pending', () => {
+      vi.mocked(getSyncVersion).mockReturnValue(new Promise(() => {}))
+      renderApp(page(), { path: '/login?error=login_failed' })
+      expect(screen.getByText('Checking your session…')).toHaveAttribute('role', 'status')
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it.each(['', '&return_to=%2Ftrash'])('never shows it when signed in (%j)', async (extra) => {
+      vi.mocked(getSyncVersion).mockResolvedValue({ version: 1 } as never)
+      renderApp(page(), { path: `/login?error=login_failed${extra}` })
+      const to = extra ? '/trash' : '/'
+      await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent(`${to} REPLACE`))
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it.each([
+      ['500', new ApiError(500, null, null)],
+      ['429', new ApiError(429, null, 2)],
+      ['a network error', new TypeError('Failed to fetch')],
+    ])('shows the message when the probe fails with %s', async (_n, error) => {
+      vi.mocked(getSyncVersion).mockRejectedValue(error)
+      renderApp(page(), { path: '/login?error=access_denied' })
+      expect(await screen.findByRole('alert')).toHaveTextContent(CANCELLED)
+    })
+  })
 })
