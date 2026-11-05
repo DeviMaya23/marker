@@ -48,10 +48,11 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 
 ## Later, after the app is finished
 
-- Deployment files kept in the repo and copied by hand to Cloudflare: the Worker source (`deploy/`; it must use `redirect: "manual"` so login redirects reach the browser, add the shared secret from a Worker secret, and pass the client IP through) and `frontend/public/_redirects` so the Pages site serves `index.html` for unknown paths. Needs the shared-secret task first. Hosting is Cloudflare Pages, Cloud Run and Neon (see `STACK.md`, Deployment).
+
 
 ## Process and tooling
 
+- Hook the Worker's test into `make check` (`node --test deploy/`, run from the repository root). Split from `worker-proxy`, which could not change the `Makefile`.
 - Verifiers open the PR when they find nothing Blocking (`docs/tasks/prompts.md`). Check that this works from a cloud session; if not, the agent gives the title and body in its final message.
 - Try chaining builder to first verifier, with the builder stopping and asking when blocked (a `Status: done|blocked` line in the plan file).
 - Mock-versus-contract check: a front-end test that validates the mocked responses against `openapi.yaml`, so drift shows up before the two halves meet.
