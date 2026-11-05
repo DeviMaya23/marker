@@ -65,3 +65,4 @@ Screen numbers are those of the design brief (`docs/design/ui-reference/ui-desig
 - [bookmark-actions] A stored title with surrounding spaces enables Save on open, because the trimmed value differs from the stored one. Only matters if the server ever stores untrimmed titles.
 - [bookmark-actions] Base UI gives each toast `role="dialog"` inside the `role="status"` region (plan call 12); screen readers may announce toasts unevenly. Check in a real browser.
 - [bookmark-actions] Base UI pauses a toast's timer on hover and focus, so "disappears after 3.5 s" holds only while the pointer and focus are elsewhere.
+- [flaky-focus-tests] Focus assertions right after opening a Base UI popup (dialog, drawer, menu) need `waitFor`, because Base UI moves focus asynchronously.

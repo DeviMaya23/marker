@@ -60,7 +60,7 @@ describe('EditBookmarkDialog fields', () => {
   it('opens prefilled, with the title focused, counters and the note placeholder', async () => {
     await open({ title: 'Stored', note: 'stored note' })
     expect(titleField()).toHaveValue('Stored')
-    expect(titleField()).toHaveFocus()
+    await waitFor(() => expect(titleField()).toHaveFocus())
     expect(noteField()).toHaveValue('stored note')
     expect(noteField()).toHaveAttribute('rows', '4')
     expect(screen.getByText('6/300')).toBeInTheDocument()

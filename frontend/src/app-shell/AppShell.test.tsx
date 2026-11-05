@@ -180,7 +180,7 @@ describe('AppShell drawer', () => {
   it('focuses Close menu on open and gives focus back to Open menu on close', async () => {
     const { user } = narrow()
     await openDrawer(user)
-    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus())
     await user.click(screen.getByRole('button', { name: 'Close menu' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(menuButton()).toHaveFocus()

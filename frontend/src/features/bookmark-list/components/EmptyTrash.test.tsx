@@ -85,7 +85,7 @@ describe('Empty trash dialog text', () => {
 
   it('focuses the field on open', async () => {
     await openDialog()
-    expect(field()).toHaveFocus()
+    await waitFor(() => expect(field()).toHaveFocus())
   })
 })
 

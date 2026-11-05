@@ -42,7 +42,7 @@ describe('Drawer', () => {
     const onClose = vi.fn()
     render(<Harness onClose={onClose} />)
     const user = await open()
-    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus())
     await user.tab()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Open', hidden: true })).not.toHaveFocus()

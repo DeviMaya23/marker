@@ -67,7 +67,7 @@ describe('FolderFormDialog titles and fields', () => {
     expect(screen.getByRole('dialog', { name: 'New folder' })).toBeInTheDocument()
     expect(nameField()).toHaveValue('')
     expect(nameField()).toHaveAttribute('placeholder', 'Folder name')
-    expect(nameField()).toHaveFocus()
+    await waitFor(() => expect(nameField()).toHaveFocus())
     expect(saveButton()).toBeDisabled()
     expect(screen.queryByText('Give the folder a name.')).not.toBeInTheDocument()
     expect(screen.getByText('0/100')).toBeInTheDocument()
