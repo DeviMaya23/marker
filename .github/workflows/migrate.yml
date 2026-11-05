@@ -1,0 +1,44 @@
+name: Migrate
+
+# Runs when a push to main changes migrations (STACK.md). It can also be run by hand from
+# the Actions tab or `gh workflow run migrate.yml --ref main`, for example to retry.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - backend/migration/**
+      - backend/cmd/migrate/**
+      - backend/internal/platform/migrate/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two migrations against the database at once, and never cancel one midway.
+concurrency:
+  group: migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Run migrations
+    # Only ever migrate the production database from main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      # cmd/migrate applies the app's golang-migrate migrations, then River's.
+      - name: Run migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: go run ./cmd/migrate
