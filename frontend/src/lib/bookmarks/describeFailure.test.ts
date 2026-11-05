@@ -23,7 +23,7 @@ describe('describeFailure messages', () => {
     ['404, edit', notFound, 'edit', 'This bookmark no longer exists.', 'error'],
     ['404, delete', notFound, 'delete', 'That bookmark no longer exists.', 'error'],
     ['404, restore', notFound, 'restore', 'That bookmark no longer exists.', 'error'],
-    ['401, delete', api(401), 'delete', "You're logged out.", 'error'],
+    ['401, delete (generic: callers check isUnauthorized first)', api(401), 'delete', "Couldn't move it to the trash.", 'error'],
     ['network, edit', new TypeError('Failed to fetch'), 'edit', "Couldn't save your changes.", 'error'],
     ['network, delete', new TypeError('x'), 'delete', "Couldn't move it to the trash.", 'error'],
     ['network, restore', new TypeError('x'), 'restore', "Couldn't restore it.", 'error'],
@@ -36,7 +36,7 @@ describe('describeFailure messages', () => {
     ['409 in trash, move', inTrash, 'move', "This bookmark is in the trash and can't be moved.", 'error'],
     ['409 with another code, move', api(409, 'duplicate_bookmark'), 'move', "Couldn't move the bookmark.", 'error'],
     ['409 not in trash, move', notInTrash, 'move', "Couldn't move the bookmark.", 'error'],
-    ['401, move', api(401), 'move', "You're logged out.", 'error'],
+    ['401, move (generic: callers check isUnauthorized first)', api(401), 'move', "Couldn't move the bookmark.", 'error'],
     ['500, move', api(500, 'internal_error'), 'move', "Couldn't move the bookmark.", 'error'],
     ['network, move', new TypeError('Failed to fetch'), 'move', "Couldn't move the bookmark.", 'error'],
   ])('%s', (_name, error, action, message, tone) => {
@@ -53,9 +53,8 @@ describe('describeFailure messages', () => {
     expect(describeFailure(notFound, 'empty').message).toBe("Couldn't empty the trash.")
   })
 
-  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty', 'move'])('401 is signed out for %s', (action) => {
-    expect(describeFailure(api(401), action).signedOut).toBe(true)
-    expect(describeFailure(api(500), action).signedOut).toBe(false)
+  it.each<BookmarkAction>(['edit', 'delete', 'restore', 'empty', 'move'])('a 401 for %s is the same as a 500, with no flag', (action) => {
+    expect(describeFailure(api(401), action)).toEqual(describeFailure(api(500), action))
   })
 })
 

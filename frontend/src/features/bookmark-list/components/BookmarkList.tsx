@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Inbox, Search, Trash2, TriangleAlert } from 'lucide-react'
 import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { StatePanel } from '../../../components/ui/StatePanel'
 import { useBookmarkList } from '../hooks/useBookmarkList'
 import { useAppliedSearch } from '../hooks/useListSearch'
@@ -43,9 +42,7 @@ export function BookmarkList({ trashed = false, folderId, empty, notFound }: Pro
   const [moveOpen, setMoveOpen] = useState(false)
 
   let body
-  if (phase === 'signed-out') {
-    body = <SignedOutMessage />
-  } else if (phase === 'not-found' && notFound) {
+  if (phase === 'not-found' && notFound) {
     body = notFound
   } else if (phase === 'loading') {
     body = (

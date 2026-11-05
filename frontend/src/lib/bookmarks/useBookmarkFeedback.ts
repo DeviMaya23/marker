@@ -1,10 +1,8 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useLocation } from 'react-router'
 import { useToast } from '../../components/ui/useToast'
-import { goTo } from '../goTo'
-import { loginHref } from '../loginHref'
-import { describeFailure, type BookmarkAction, type FailureDisplay } from './describeFailure'
+import { isUnauthorized } from '../api/ApiError'
+import { describeFailure, type BookmarkAction } from './describeFailure'
 import { FOLDERS_KEY } from '../folders/queryKeys'
 import { BOOKMARK_LIST_KEY, bookmarkKey } from './queryKeys'
 
@@ -15,7 +13,6 @@ import { BOOKMARK_LIST_KEY, bookmarkKey } from './queryKeys'
 export function useBookmarkFeedback(id?: string) {
   const client = useQueryClient()
   const toast = useToast()
-  const { pathname, search } = useLocation()
 
   /**
    * Invalidates every list, the bookmark page's query and the folder list (the sidebar's counts
@@ -31,22 +28,15 @@ export function useBookmarkFeedback(id?: string) {
     [client, id],
   )
 
-  /** A failure as a toast, with a "Log in" action for a 401. Refreshes unless nothing changed. */
+  /** A failure as a toast. Refreshes unless nothing changed. A 401 is silent: the login redirect is on its way. */
   const toastFailure = useCallback(
-    (error: unknown, action: BookmarkAction, message?: string): FailureDisplay => {
+    (error: unknown, action: BookmarkAction, message?: string): void => {
+      if (isUnauthorized(error)) return
       const display = describeFailure(error, action)
       if (display.refresh) void refresh()
-      if (display.signedOut) {
-        toast.show(display.message, {
-          tone: 'error',
-          action: { label: 'Log in', onClick: () => goTo(loginHref(pathname, search)) },
-        })
-      } else {
-        toast.show(message ?? display.message, { tone: display.tone === 'neutral' && !message ? 'neutral' : 'error' })
-      }
-      return display
+      toast.show(message ?? display.message, { tone: display.tone === 'neutral' && !message ? 'neutral' : 'error' })
     },
-    [refresh, toast, pathname, search],
+    [refresh, toast],
   )
 
   return { refresh, toastFailure, toast }

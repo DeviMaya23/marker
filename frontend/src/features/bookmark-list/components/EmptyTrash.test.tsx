@@ -205,12 +205,17 @@ describe('Empty trash confirmation', () => {
     expect(field()).toBeEnabled()
   })
 
-  it('401: shows the signed-out message in the dialog', async () => {
+  it('401: shows no message and leaves the dialog usable', async () => {
     empty.mockRejectedValue(new ApiError(401, null, null))
     const { user } = await openDialog()
     await user.type(field(), 'empty trash')
     await user.click(confirm())
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(empty).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(confirm()).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't empty/)).not.toBeInTheDocument()
     expect(dialog()).toBeInTheDocument()
+    expect(field()).toHaveValue('empty trash')
+    expect(field()).toBeEnabled()
   })
 })

@@ -7,8 +7,6 @@ export const NOTE_MAX = 500
 export type BookmarkAction = 'edit' | 'delete' | 'restore' | 'empty' | 'move'
 
 export type FailureDisplay = {
-  /** A 401: the screen shows the signed-out message (a toast adds a "Log in" action). */
-  signedOut: boolean
   /** The text to show; empty when the failure is shown only under fields. */
   message: string
   /** `neutral` for "it was already done" outcomes, `error` otherwise. */
@@ -27,8 +25,6 @@ const GENERIC: Record<BookmarkAction, string> = {
   move: "Couldn't move the bookmark.",
 }
 
-export const LOGGED_OUT_TOAST = "You're logged out."
-
 export function rateLimitMessage(retryAfter: number | null): string {
   if (retryAfter !== null && Number.isInteger(retryAfter) && retryAfter >= 0) {
     return `Too many requests. Try again in about ${retryAfter} seconds.`
@@ -37,7 +33,7 @@ export function rateLimitMessage(retryAfter: number | null): string {
 }
 
 function result(message: string, tone: 'neutral' | 'error' = 'error'): FailureDisplay {
-  return { signedOut: false, message, tone, fields: {}, refresh: true }
+  return { message, tone, fields: {}, refresh: true }
 }
 
 /** Maps whatever one of the five calls threw to what the screen shows. Pure. */
@@ -48,9 +44,6 @@ export function describeFailure(error: unknown, action: BookmarkAction): Failure
   const { status } = error
   const code = error.problem?.code
 
-  if (status === 401) {
-    return { ...result(LOGGED_OUT_TOAST), signedOut: true }
-  }
   if (status === 429) return result(rateLimitMessage(error.retryAfter))
 
   if (status === 404 && action !== 'empty') {

@@ -98,11 +98,16 @@ describe('FolderPage', () => {
     expect(screen.getAllByRole('link', { name: 'Back to all bookmarks' }).length).toBeGreaterThan(0)
   })
 
-  it('shows the signed-out message on a 401', async () => {
+  it('shows its loading state and no login text on a 401', async () => {
     list.mockRejectedValue(new ApiError(401, null, null))
     folders.mockRejectedValue(new ApiError(401, null, null))
     open('/folder/f-1')
-    expect((await screen.findAllByText("You're logged out. Log in to continue.")).length).toBeGreaterThan(0)
+    await waitFor(() => expect(list).toHaveBeenCalled())
+    await waitFor(() => expect(folders).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByText(/You're logged out/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('skeleton-row').length).toBeGreaterThan(0)
   })
 
   it('saves from the add field into this folder, and refreshes the list', async () => {

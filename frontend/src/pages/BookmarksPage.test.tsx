@@ -73,14 +73,17 @@ describe('BookmarksPage sync', () => {
     expect(screen.queryByText('A soup')).not.toBeInTheDocument()
   })
 
-  it('refetches on a 401 from the poll, and shows the signed-out message when the list answers 401 too', async () => {
+  it('stops polling on a 401 from the poll and shows no login text while the list loads', async () => {
     sync.mockReset().mockRejectedValue(new ApiError(401, null, null))
-    list.mockResolvedValueOnce(page([bookmark({ id: 'b-1', title: 'A soup' })]))
-    list.mockRejectedValue(new ApiError(401, null, null))
+    list.mockReset().mockRejectedValue(new ApiError(401, null, null))
     renderApp(<BookmarksPage />)
     await tick(0)
     await tick(0)
-    expect(list).toHaveBeenCalledTimes(2)
-    expect(screen.getAllByText("You're logged out. Log in to continue.").length).toBeGreaterThan(0)
+    expect(sync).toHaveBeenCalledTimes(1)
+    await tick(SYNC_POLL_MS * 3)
+    expect(sync).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/You're logged out/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+    expect(screen.getAllByTestId('skeleton-row').length).toBeGreaterThan(0)
   })
 })

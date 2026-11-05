@@ -34,11 +34,10 @@ export function logoutTarget(url: unknown): string {
   return url
 }
 
-/** What a failed logout shows. `signedOut` (a 401) has no message: the toast text is its own. */
-export function describeLogoutFailure(error: unknown): { signedOut: boolean; message: string } {
+/** What a failed logout shows. */
+export function describeLogoutFailure(error: unknown): { message: string } {
   if (error instanceof ApiError) {
-    if (error.status === 401) return { signedOut: true, message: '' }
-    if (error.status === 429) return { signedOut: false, message: rateLimitMessage(error.retryAfter) }
+    if (error.status === 429) return { message: rateLimitMessage(error.retryAfter) }
   }
-  return { signedOut: false, message: LOGOUT_FAILED }
+  return { message: LOGOUT_FAILED }
 }

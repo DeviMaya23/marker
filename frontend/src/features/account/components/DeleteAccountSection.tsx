@@ -1,7 +1,6 @@
 import { useRef, useState, type RefObject } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Dialog } from '../../../components/ui/Dialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useDeleteAccount } from '../hooks/useDeleteAccount'
 
 export const CONFIRM_PHRASE = 'delete my account'
@@ -68,8 +67,7 @@ function ConfirmForm({
         if (canConfirm) void onConfirm()
       }}
     >
-      {failure?.signedOut && <SignedOutMessage />}
-      {failure && !failure.signedOut && (
+      {failure && (
         <div className="banner banner--error" role="alert">
           {failure.message}
         </div>

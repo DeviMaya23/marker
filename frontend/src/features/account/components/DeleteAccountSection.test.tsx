@@ -97,7 +97,6 @@ describe('DeleteAccountSection', () => {
   })
 
   it.each([
-    ['a 401', new ApiError(401, null, null), "You're logged out. Log in to continue."],
     ['a 429', new ApiError(429, null, 7), 'Too many requests. Try again in about 7 seconds.'],
     ['a 500', new ApiError(500, null, null), "Couldn't delete your account."],
     ['a network error', new TypeError('offline'), "Couldn't delete your account."],
@@ -107,11 +106,23 @@ describe('DeleteAccountSection', () => {
     await user.type(field(), 'delete my account')
     await user.click(confirm())
     expect(await within(dialog() as HTMLElement).findByText(shown)).toBeInTheDocument()
-    if (error instanceof ApiError && error.status === 401) {
-      expect(within(dialog() as HTMLElement).getByRole('link', { name: 'Log in' })).toBeInTheDocument()
-    }
     expect(field()).toHaveValue('delete my account')
     expect(confirm()).toBeEnabled()
+    expect(onDeleted).not.toHaveBeenCalled()
+  })
+
+  it('a 401 shows no message and leaves the dialog usable', async () => {
+    del.mockImplementation(() => Promise.reject(new ApiError(401, null, null)))
+    const { user, onDeleted } = await openDialog()
+    await user.type(field(), 'delete my account')
+    await user.click(confirm())
+    await waitFor(() => expect(del).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(confirm()).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't delete/)).not.toBeInTheDocument()
+    expect(dialog()).toBeInTheDocument()
+    expect(field()).toHaveValue('delete my account')
+    expect(field()).toBeEnabled()
     expect(onDeleted).not.toHaveBeenCalled()
   })
 

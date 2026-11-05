@@ -127,10 +127,15 @@ describe('DeleteFolderDialog', () => {
     expect(invalidate.mock.calls.map(([f]) => f?.queryKey)).toContainEqual(['folders'])
   })
 
-  it('a 401 shows the signed-out message', async () => {
+  it('a 401 shows no message and leaves the dialog usable, without a refresh', async () => {
     del.mockRejectedValue(new ApiError(401, null, null))
-    const { user } = await setup()
+    const { user, invalidate } = await setup()
     await user.click(confirmButton())
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(del).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(confirmButton()).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Log in|Couldn't delete/)).not.toBeInTheDocument()
+    expect(confirmation()).toBeInTheDocument()
+    expect(invalidate).not.toHaveBeenCalled()
   })
 })

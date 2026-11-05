@@ -1,5 +1,4 @@
 import { act, renderHook, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../lib/api/ApiError'
 import { logout as requestLogout } from '../../../lib/api/auth'
@@ -106,17 +105,13 @@ describe('useLogout', () => {
     expect(result.current.disabled).toBe(false)
   })
 
-  it('on 401 toasts with a Log in action back to the current location', async () => {
+  it('on 401 shows no toast, re-enables the trigger and does not navigate', async () => {
     vi.mocked(requestLogout).mockRejectedValue(new ApiError(401, null, null))
     const { result } = setup('/trash?x=1')
     await act(() => result.current.logout())
-    expect(tone("You're logged out.")).toHaveClass('toast--error')
+    expect(document.querySelector('.toast')).toBeNull()
     expect(result.current.disabled).toBe(false)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Log in' }))
-    expect(goTo).toHaveBeenCalledTimes(1)
-    const href = vi.mocked(goTo).mock.calls[0][0]
-    expect(href).toContain(encodeURIComponent('/trash?x=1'))
-    expect(href).toContain('return_to=')
+    expect(goTo).not.toHaveBeenCalled()
   })
 
   it('works again after a failure', async () => {

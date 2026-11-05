@@ -160,10 +160,11 @@ describe('MoveDialog', () => {
     expect(retry).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the signed-out message in place of the list on a 401', () => {
+  it('shows the loading state, not an error, for a 401 on the folder list', () => {
     show(props({ folders: { items: undefined, pending: false, error: new ApiError(401, null, null), retry: vi.fn() } }))
-    expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    expect(screen.getByText('Loading folders…')).toBeInTheDocument()
     expect(screen.queryByText("Couldn't load your folders.")).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument()
     expect(moveButton()).toBeDisabled()
   })
 
@@ -212,7 +213,7 @@ describe('MoveDialog', () => {
 
   describe('a failure', () => {
     it('shows its message in an alert above the list, keeps the dialog and the selection', async () => {
-      show(props({ currentLocation: 'a', failure: { signedOut: false, message: 'A folder with this name already exists there.' } }))
+      show(props({ currentLocation: 'a', failure: { message: 'A folder with this name already exists there.' } }))
       const alert = screen.getByRole('alert')
       expect(alert).toHaveTextContent('A folder with this name already exists there.')
       expect(screen.getByRole('dialog')).toBeInTheDocument()
@@ -223,9 +224,9 @@ describe('MoveDialog', () => {
       expect(within(screen.getByRole('dialog')).getByRole('alert')).toBeInTheDocument()
     })
 
-    it('shows the signed-out message for a 401', () => {
-      show(props({ failure: { signedOut: true, message: "You're logged out." } }))
-      expect(screen.getByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    it('shows no banner when there is no failure (what a write 401 leaves)', () => {
+      show(props({ failure: null }))
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
   })
 

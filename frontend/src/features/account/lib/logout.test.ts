@@ -45,8 +45,8 @@ describe('logoutTarget', () => {
 })
 
 describe('describeLogoutFailure', () => {
-  it('marks a 401 as signed out with no message', () => {
-    expect(describeLogoutFailure(new ApiError(401, null, null))).toEqual({ signedOut: true, message: '' })
+  it('gives the generic message for a 401: callers check isUnauthorized first', () => {
+    expect(describeLogoutFailure(new ApiError(401, null, null))).toEqual({ message: LOGOUT_FAILED })
   })
 
   it.each([
@@ -54,7 +54,7 @@ describe('describeLogoutFailure', () => {
     [0, 'Too many requests. Try again in about 0 seconds.'],
     [null, 'Too many requests. Try again in a moment.'],
   ])('words a 429 with retryAfter %s', (retryAfter, message) => {
-    expect(describeLogoutFailure(new ApiError(429, null, retryAfter))).toEqual({ signedOut: false, message })
+    expect(describeLogoutFailure(new ApiError(429, null, retryAfter))).toEqual({ message })
   })
 
   it.each([
@@ -64,6 +64,6 @@ describe('describeLogoutFailure', () => {
     new Error('x'),
     new TypeError('Failed to fetch'),
   ])('gives the generic message for %s', (error) => {
-    expect(describeLogoutFailure(error)).toEqual({ signedOut: false, message: LOGOUT_FAILED })
+    expect(describeLogoutFailure(error)).toEqual({ message: LOGOUT_FAILED })
   })
 })

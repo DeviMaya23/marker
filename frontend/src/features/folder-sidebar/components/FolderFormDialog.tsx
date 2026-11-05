@@ -1,6 +1,5 @@
 import { useId, useRef, useState, type RefObject } from 'react'
 import { Dialog } from '../../../components/ui/Dialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { codePointLength } from '../../../lib/bookmarks/editChanges'
 import {
   FOLDER_NAME_MAX,
@@ -89,7 +88,6 @@ function NameForm({
         }}
       >
         {mode === 'create' && parentName !== undefined && <p className="confirm-text">In {parentName}</p>}
-        {failure?.kind === 'signed-out' && <SignedOutMessage />}
         {failure?.kind === 'dialog' && (
           <div className="banner banner--error" role="alert">
             {failure.message}

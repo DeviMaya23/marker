@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { ArrowLeft, CircleAlert, Clock, ExternalLink, FolderInput, Pencil, Trash2, TriangleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { Banner } from '../../../components/ui/Banner'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { EditBookmarkDialog } from '../../../components/ui/EditBookmarkDialog'
 import { MoveBookmarkDialog } from '../../../components/ui/MoveBookmarkDialog'
 import { StatePanel } from '../../../components/ui/StatePanel'
-import { ApiError } from '../../../lib/api/ApiError'
+import { ApiError, isUnauthorized } from '../../../lib/api/ApiError'
 import type { BookmarkDetail } from '../../../lib/api/bookmarks'
 import { useDeleteBookmark } from '../../../lib/bookmarks/useDeleteBookmark'
 import { useEditBookmark } from '../../../lib/bookmarks/useEditBookmark'
@@ -21,8 +20,7 @@ import { FetchStatusChip } from '../../../components/ui/FetchStatusChip'
 export function BookmarkView({ id }: { id: string }) {
   const { bookmark, error, isLoading, retry } = useBookmark(id)
 
-  // A 401 or 404 wins even when a bookmark is already on screen (a later poll found it gone).
-  if (error instanceof ApiError && error.status === 401) return <SignedOutMessage />
+  // A 404 wins even when a bookmark is already on screen (a later poll found it gone).
   if (error instanceof ApiError && error.status === 404) {
     return (
       <StatePanel
@@ -33,6 +31,8 @@ export function BookmarkView({ id }: { id: string }) {
     )
   }
   if (bookmark) return <BookmarkDetailBody bookmark={bookmark} />
+  // A 401 is silent: the login redirect is on its way.
+  if (isUnauthorized(error)) return <p className="state-panel">Loading…</p>
   if (isLoading) return <p className="state-panel">Loading…</p>
   return (
     <StatePanel

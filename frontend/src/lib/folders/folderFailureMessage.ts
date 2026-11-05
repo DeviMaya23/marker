@@ -1,5 +1,4 @@
 import { ApiError } from '../api/ApiError'
-import { LOGGED_OUT_TOAST } from '../bookmarks/describeFailure'
 
 export const FOLDER_NAME_MAX = 100
 
@@ -7,10 +6,10 @@ export type FolderAction = 'create' | 'rename' | 'delete' | 'move'
 
 export type FolderFailure = {
   /**
-   * `signed-out`: the screen shows the signed-out message. `field`: the text sits under the
-   * name field. `dialog`: the text sits in a banner inside the dialog.
+   * `field`: the text sits under the name field. `dialog`: the text sits in a banner inside
+   * the dialog.
    */
-  kind: 'signed-out' | 'field' | 'dialog'
+  kind: 'field' | 'dialog'
   message: string
   /** False for a 422 or a 409 (nothing changed on the server); true otherwise. */
   refresh: boolean
@@ -62,7 +61,6 @@ export function folderFailureMessage(action: FolderAction, error: unknown): Fold
   const { status } = error
   const code = error.problem?.code
 
-  if (status === 401) return { kind: 'signed-out', message: LOGGED_OUT_TOAST, refresh: true }
   if (status === 429) return { kind: 'dialog', message: rateLimitMessage(error.retryAfter), refresh: true }
   if (action === 'move') return moveFailure(status, code) ?? generic
   if (status === 404) return { kind: 'dialog', message: FOLDER_GONE, refresh: true }

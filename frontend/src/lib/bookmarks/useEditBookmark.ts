@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { updateBookmark, type BookmarkChanges } from '../api/bookmarks'
+import { isUnauthorized } from '../api/ApiError'
 import { describeFailure, type FailureDisplay } from './describeFailure'
 import { useBookmarkFeedback } from './useBookmarkFeedback'
 
@@ -23,6 +24,7 @@ export function useEditBookmark(id: string) {
       try {
         await updateBookmark(id, changes)
       } catch (error) {
+        if (isUnauthorized(error)) return false
         const display = describeFailure(error, 'edit')
         setFailure(display)
         if (display.refresh) void refresh()

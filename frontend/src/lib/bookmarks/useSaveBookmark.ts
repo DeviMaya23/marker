@@ -1,13 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
+import { isUnauthorized } from '../api/ApiError'
 import { createBookmark, type BookmarkSummary, type CreateBookmarkRequest } from '../api/bookmarks'
 import { describeSaveFailure, type SaveFailure } from './saveFailure'
 
 /** Names from the design's glossary (`checking-auth` does not exist: there is no who-am-I yet). */
-export type SavePhase = 'form' | 'saving' | 'saved' | 'duplicate' | 'error' | 'needs-login'
+export type SavePhase = 'form' | 'saving' | 'saved' | 'duplicate' | 'error'
 
 export type SaveBookmark = {
   phase: SavePhase
-  /** Set while the phase is `duplicate`, `error` or `needs-login`. */
+  /** Set while the phase is `duplicate` or `error`. */
   failure: SaveFailure | null
   /** Saves once; a call while a save is in flight does nothing. Resolves with the new bookmark, or null. */
   save: (request: CreateBookmarkRequest) => Promise<BookmarkSummary | null>
@@ -31,15 +32,15 @@ export function useSaveBookmark(): SaveBookmark {
       setPhase('saved')
       return bookmark
     } catch (error) {
+      if (isUnauthorized(error)) {
+        // Silent: the login redirect is on its way.
+        setFailure(null)
+        setPhase('form')
+        return null
+      }
       const described = describeSaveFailure(error)
       setFailure(described)
-      setPhase(
-        described.kind === 'signed-out'
-          ? 'needs-login'
-          : described.kind === 'duplicate'
-            ? 'duplicate'
-            : 'error',
-      )
+      setPhase(described.kind === 'duplicate' ? 'duplicate' : 'error')
       return null
     } finally {
       inFlight.current = false
@@ -48,7 +49,7 @@ export function useSaveBookmark(): SaveBookmark {
 
   const dismiss = useCallback(() => {
     setPhase((current) => (current === 'duplicate' || current === 'error' ? 'form' : current))
-    setFailure((current) => (current?.kind === 'signed-out' ? current : null))
+    setFailure(null)
   }, [])
 
   return { phase, failure, save, dismiss }

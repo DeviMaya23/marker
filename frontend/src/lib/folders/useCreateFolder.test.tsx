@@ -67,6 +67,18 @@ describe('useCreateFolder', () => {
     expect(screen.queryByText('Folder created.')).not.toBeInTheDocument()
   })
 
+  it('a 401 is silent: resolves null, no failure, no refresh, no toast, not pending', async () => {
+    create.mockRejectedValue(new ApiError(401, null, null))
+    const { result, keys } = setup()
+    await act(async () => {
+      expect(await result.current.create({ name: 'A' })).toBeNull()
+    })
+    expect(result.current.failure).toBeNull()
+    expect(result.current.pending).toBe(false)
+    expect(keys()).toEqual([])
+    expect(document.querySelector('.toast')).toBeNull()
+  })
+
   it('refreshes after a 404, and reset forgets the failure', async () => {
     create.mockRejectedValue(problem(404, 'not_found'))
     const { result, keys } = setup()

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { isUnauthorized } from '../api/ApiError'
 import { useToast } from '../../components/ui/useToast'
 import { BOOKMARK_LIST_KEY, bookmarkKey } from '../bookmarks/queryKeys'
 import { FOLDERS_KEY } from './queryKeys'
@@ -50,6 +51,7 @@ export function useFolderMutation<A extends unknown[], R>({
         toast.show(successMessage(result), { tone: 'success' })
         return result
       } catch (error) {
+        if (isUnauthorized(error)) return null
         const described = folderFailureMessage(action, error)
         if (described.refresh) refresh()
         setFailure(described)

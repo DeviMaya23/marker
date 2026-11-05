@@ -181,13 +181,18 @@ describe('AddUrlForm', () => {
       expect(await screen.findByText('bookmark page')).toBeInTheDocument()
     })
 
-    it('shows the signed-out message on a 401 and keeps the input', async () => {
+    it('shows nothing on a 401, keeps the input and lets the user type again', async () => {
       vi.mocked(createBookmark).mockRejectedValue(problem(401, 'unauthenticated'))
       const user = renderForm()
       await user.type(input(), 'https://a.test{Enter}')
-      expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument()
+      await waitFor(() => expect(createBookmark).toHaveBeenCalledTimes(1))
+      await waitFor(() => expect(input()).toBeEnabled())
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.queryByText(/logged out|Couldn't save/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Log in' })).not.toBeInTheDocument()
       expect(input()).toHaveValue('https://a.test')
+      await user.type(input(), 'x')
+      expect(input()).toHaveValue('https://a.testx')
     })
 
     it('clears the message when the user edits the field', async () => {

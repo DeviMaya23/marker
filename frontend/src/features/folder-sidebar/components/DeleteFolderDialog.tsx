@@ -1,5 +1,4 @@
 import { Dialog } from '../../../components/ui/Dialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import type { Folder } from '../../../lib/api/folders'
 import { useDeleteFolder } from '../../../lib/folders/useDeleteFolder'
 import { deleteFolderText } from '../lib/deleteFolderText'
@@ -48,7 +47,6 @@ export function DeleteFolderDialog({ open, folder, subfolders, bookmarks, onClos
         </>
       }
     >
-      {failure?.kind === 'signed-out' && <SignedOutMessage />}
       {failure?.kind === 'dialog' && (
         <div className="banner banner--error" role="alert">
           {failure.message}

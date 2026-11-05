@@ -44,6 +44,18 @@ describe('useDeleteAccount', () => {
     expect(result.current.pending).toBe(false)
   })
 
+  it('a 401 is silent: no failure, resolves false and is not pending', async () => {
+    vi.mocked(deleteAccount).mockRejectedValue(new ApiError(401, null, null))
+    const { result } = renderHook(() => useDeleteAccount())
+    let ok = true
+    await act(async () => {
+      ok = await result.current.run()
+    })
+    expect(ok).toBe(false)
+    expect(result.current.failure).toBeNull()
+    expect(result.current.pending).toBe(false)
+  })
+
   it('sends no second request while one runs and resolves false for it', async () => {
     let finish: () => void = () => {}
     vi.mocked(deleteAccount).mockReturnValue(new Promise<void>((resolve) => (finish = resolve)))

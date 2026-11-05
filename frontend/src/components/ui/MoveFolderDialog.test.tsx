@@ -68,12 +68,16 @@ describe('MoveFolderDialog', () => {
     expect(screen.getByRole('radio', { name: 'Gamma' })).toBeChecked()
   })
 
-  it('shows the signed-out message for a 401', async () => {
+  it('shows no banner for a 401 and keeps the dialog usable', async () => {
     vi.mocked(updateFolder).mockRejectedValue(new ApiError(401, null, null))
     renderApp(<MoveFolderDialog open folder={a} onClose={vi.fn()} />)
     const user = userEvent.setup()
     await user.click(await screen.findByRole('radio', { name: 'Gamma' }))
     await user.click(screen.getByRole('button', { name: 'Move' }))
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(updateFolder).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Move' })).toBeEnabled())
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out|Couldn't move/)).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 })

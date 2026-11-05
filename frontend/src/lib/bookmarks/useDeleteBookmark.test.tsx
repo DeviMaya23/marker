@@ -109,14 +109,13 @@ describe('useDeleteBookmark', () => {
     expect(result.current.pending).toBe(false)
   })
 
-  it('401: an error toast whose "Log in" action goes to the login link', async () => {
+  it('401: no toast, no refresh, and not pending', async () => {
     del.mockRejectedValue(new ApiError(401, null, null))
-    const { result } = setup()
+    const { result, invalidate } = setup()
     await act(() => result.current.remove())
-    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Log in' }))
-    await waitFor(() => expect(goTo).toHaveBeenCalledTimes(1))
-    expect(vi.mocked(goTo).mock.calls[0][0]).toContain('return_to=%2Ftrash%3Fx%3D1')
+    expect(document.querySelector('.toast')).toBeNull()
+    expect(invalidate).not.toHaveBeenCalled()
+    expect(result.current.pending).toBe(false)
   })
 })
 
@@ -174,18 +173,21 @@ describe('useDeleteBookmark Undo of a bookmark that was in a folder', () => {
     expect(update).not.toHaveBeenCalled()
   })
 
-  it('restore fails with 401: logged-out toast with Log in, no second call', async () => {
+  it('restore fails with 401: no toast, no refresh, no second call', async () => {
     restore.mockRejectedValue(new ApiError(401, null, null))
-    await undoInFolder()
-    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    const { invalidate } = await undoInFolder()
+    await waitFor(() => expect(restore).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText(UNDO_FAILED)).not.toBeInTheDocument()
+    expect(screen.queryByText("You're logged out.")).not.toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()
+    expect(invalidatedKeys(invalidate)).toEqual([])
   })
 
   it.each([
     ['404 not_found', problem(404, 'not_found')],
     ['409 in trash', problem(409, 'bookmark_in_trash')],
     ['429', new ApiError(429, null, 3)],
+    ['500', problem(500, 'internal_error')],
     ['network', new TypeError('Failed to fetch')],
   ])('move back fails with %s: neutral toast, one refresh', async (_n, error) => {
     restore.mockResolvedValue({} as never)
@@ -197,14 +199,15 @@ describe('useDeleteBookmark Undo of a bookmark that was in a folder', () => {
     expect(invalidatedKeys(invalidate)).toEqual(KEYS)
   })
 
-  it('move back fails with 401: logged-out toast with Log in, one refresh, no neutral text', async () => {
+  it('move back fails with 401: no toast and no refresh', async () => {
     restore.mockResolvedValue({} as never)
     update.mockRejectedValue(new ApiError(401, null, null))
     const { invalidate } = await undoInFolder()
-    expect(await screen.findByText("You're logged out.")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1))
     expect(screen.queryByText(RESTORED_BUT_NOT_MOVED)).not.toBeInTheDocument()
-    expect(invalidatedKeys(invalidate)).toEqual(KEYS)
+    expect(screen.queryByText(RESTORED_TO_FOLDER)).not.toBeInTheDocument()
+    expect(screen.queryByText("You're logged out.")).not.toBeInTheDocument()
+    expect(invalidatedKeys(invalidate)).toEqual([])
   })
 
   it('with undo: false there is no Undo, whatever the folder', async () => {

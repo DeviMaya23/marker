@@ -38,7 +38,7 @@ function scrollToEnd() {
 
 function renderList(trashed = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <ToastProvider>
@@ -47,7 +47,10 @@ function renderList(trashed = false) {
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { client, ...view }
 }
+
+const NO_LOGIN_TEXT = /logged out|Log in/
 
 const cursors = () => list.mock.calls.map(([args]) => args?.cursor)
 const titles = () => screen.getAllByRole('link').map((a) => a.querySelector('.bookmark-row__title')?.textContent)
@@ -214,21 +217,43 @@ describe('BookmarkList (live list)', () => {
     expect(cursors()).toEqual([undefined, 'c1', 'c1'])
   })
 
-  it('replaces the list with the signed-out message on a first-page 401', async () => {
+  it('shows the skeleton on a first-page 401: no error, no empty panel, no login text', async () => {
     list.mockRejectedValueOnce(new ApiError(401, null, null))
     renderList()
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getAllByTestId('skeleton-row').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+    expect(screen.queryByText('No bookmarks yet')).not.toBeInTheDocument()
+    expect(screen.queryByText(NO_LOGIN_TEXT)).not.toBeInTheDocument()
   })
 
-  it('replaces the rows with the signed-out message on a later-page 401', async () => {
+  it('keeps the rows and shows nothing on a later-page 401', async () => {
     list
       .mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
       .mockRejectedValueOnce(new ApiError(401, null, null))
     renderList()
     await screen.findByText('Title a')
     scrollToEnd()
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
-    expect(screen.queryByText('Title a')).not.toBeInTheDocument()
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getByText('Title a')).toBeInTheDocument()
+    expect(screen.queryByText(NO_LOGIN_TEXT)).not.toBeInTheDocument()
+    expect(screen.queryByText("Couldn't load more.")).not.toBeInTheDocument()
+    expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
+  })
+
+  it('keeps the rows when a refetch answers 401', async () => {
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })]))
+    const { client } = renderList()
+    await screen.findByText('Title a')
+    list.mockRejectedValueOnce(new ApiError(401, null, null))
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['bookmark-list'] })
+    })
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Title a')).toBeInTheDocument()
+    expect(screen.queryByText(NO_LOGIN_TEXT)).not.toBeInTheDocument()
   })
 
   it('disconnects the observer on unmount', async () => {
@@ -327,10 +352,14 @@ describe('BookmarkList (trash)', () => {
     expect(await screen.findByText("Couldn't load the trash.")).toBeInTheDocument()
   })
 
-  it('shows the signed-out message on a 401', async () => {
+  it('shows the skeleton, not an error, on a 401', async () => {
     list.mockRejectedValueOnce(new ApiError(401, null, null))
     renderList(true)
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getAllByTestId('skeleton-row').length).toBeGreaterThan(0)
+    expect(screen.queryByText("Couldn't load the trash.")).not.toBeInTheDocument()
+    expect(screen.queryByText(NO_LOGIN_TEXT)).not.toBeInTheDocument()
   })
 
   it('pages like the list', async () => {
@@ -570,11 +599,14 @@ describe('BookmarkList (search)', () => {
     expect(await screen.findByText('Found')).toBeInTheDocument()
   })
 
-  it('shows the signed-out message on a 401', async () => {
+  it('shows the skeleton, not an error, on a 401', async () => {
     list.mockRejectedValue(new ApiError(401, null, null))
     renderSearch('/?q=foo')
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1))
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getAllByTestId('skeleton-row').length).toBeGreaterThan(0)
     expect(screen.queryByText("Couldn't search your bookmarks.")).not.toBeInTheDocument()
+    expect(screen.queryByText(NO_LOGIN_TEXT)).not.toBeInTheDocument()
   })
 
   it('shows "Couldn\'t load more." when a later page fails, and the second page carries q and the cursor', async () => {

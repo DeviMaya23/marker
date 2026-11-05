@@ -138,22 +138,49 @@ describe('useBookmarkList', () => {
     expect(cursors()).toEqual([undefined, 'c1', 'c1'])
   })
 
-  it.each([
-    ['first', false],
-    ['later', true],
-  ])('reports signed-out for a 401 on the %s page', async (_name, later) => {
-    if (later) {
-      list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
-      list.mockRejectedValueOnce(new ApiError(401, null, null))
-    } else {
-      list.mockRejectedValueOnce(new ApiError(401, null, null))
-    }
+  it('stays in the loading phase for a 401 on the first page (no error, no empty)', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    list.mockRejectedValueOnce(new ApiError(401, null, null))
+    const { result } = setup(false, client)
+    await waitFor(() => expect(client.getQueryCache().getAll()[0].state.status).toBe('error'))
+    expect(result.current.phase).toBe('loading')
+    expect(result.current.loadMoreFailed).toBe(false)
+  })
+
+  it('keeps page 1 on screen after a 401 on page 2, with no failure flag and no further requests', async () => {
+    list.mockResolvedValueOnce(page([bookmark({ id: 'a' })], 'c1'))
+    list.mockRejectedValueOnce(new ApiError(401, null, null))
     const { result } = setup()
-    if (later) {
-      await waitFor(() => expect(result.current.phase).toBe('ready'))
-      act(() => result.current.fetchNext())
-    }
-    await waitFor(() => expect(result.current.phase).toBe('signed-out'))
+    await waitFor(() => expect(result.current.phase).toBe('ready'))
+    act(() => result.current.fetchNext())
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current.isLoadingMore).toBe(false))
+    expect(result.current.phase).toBe('ready')
+    expect(result.current.rows.map((r) => r.id)).toEqual(['a'])
+    expect(result.current.loadMoreFailed).toBe(false)
+    expect(result.current.hasNextPage).toBe(true)
+
+    act(() => result.current.fetchNext())
+    act(() => result.current.fetchNext())
+    await act(async () => {})
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the empty phase when an empty list gets a 401 on a refetch', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    list.mockResolvedValueOnce(page([], null))
+    const { result } = setup(false, client)
+    await waitFor(() => expect(result.current.phase).toBe('empty'))
+    list.mockRejectedValueOnce(new ApiError(401, null, null))
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ['bookmark-list'] })
+      // Let react-query's batched notification reach the hook; without this the assertion reads a stale render.
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(list).toHaveBeenCalledTimes(2)
+    expect(client.getQueryCache().getAll()[0].state.error).toBeInstanceOf(ApiError)
+    expect(result.current.phase).toBe('empty')
+    expect(result.current.loadMoreFailed).toBe(false)
   })
 
   it('survives a refresh (as after a save) while the next page is in flight', async () => {

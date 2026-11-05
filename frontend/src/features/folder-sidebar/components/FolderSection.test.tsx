@@ -85,10 +85,15 @@ describe('FolderSection states', () => {
     expect(list).toHaveBeenCalledTimes(2)
   })
 
-  it('shows the signed-out message on a 401', async () => {
+  it('shows the skeleton rows and no text on a 401 with no folders', async () => {
     list.mockRejectedValue(problem(401, 'unauthenticated'))
     setup()
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(list).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.getByTestId('folder-skeleton')).toBeInTheDocument()
+    expect(screen.queryByText("Couldn't load your folders.")).not.toBeInTheDocument()
+    expect(screen.queryByText(/logged out/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Recipes' })).not.toBeInTheDocument()
   })
 })
@@ -138,7 +143,7 @@ describe('FolderSection create and rename', () => {
     expect(invalidate).not.toHaveBeenCalled()
   })
 
-  it('a depth error is a banner in the dialog; a 401 shows the signed-out message; both keep the dialog', async () => {
+  it('a depth error is a banner in the dialog; a 401 shows nothing; both keep the dialog', async () => {
     vi.mocked(createFolder).mockRejectedValueOnce(problem(422, 'folder_depth_exceeded'))
     const { user } = setup()
     await user.click(await screen.findByRole('button', { name: 'New folder' }))
@@ -146,7 +151,9 @@ describe('FolderSection create and rename', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Folders can only be nested 3 levels deep.')
     vi.mocked(createFolder).mockRejectedValueOnce(new ApiError(401, null, null))
     await user.type(screen.getByLabelText('Name'), '{Enter}')
-    expect(await screen.findByText("You're logged out. Log in to continue.")).toBeInTheDocument()
+    await waitFor(() => expect(createFolder).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
+    expect(screen.queryByText(/logged out/)).not.toBeInTheDocument()
     expect(screen.getByLabelText('Name')).toHaveValue('Deep')
   })
 

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { isUnauthorized } from '../../../lib/api/ApiError'
 import { deleteAccount } from '../../../lib/api/account'
 import { describeDeleteAccountFailure } from '../lib/deleteAccountFailure'
 
@@ -20,6 +21,7 @@ export function useDeleteAccount() {
       await deleteAccount()
       return true
     } catch (error) {
+      if (isUnauthorized(error)) return false
       setFailure(describeDeleteAccountFailure(error))
       return false
     } finally {

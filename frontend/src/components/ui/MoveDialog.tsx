@@ -2,19 +2,18 @@ import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Check, Folder as FolderIcon, House } from 'lucide-react'
 import { Radio } from '@base-ui/react/radio'
 import { RadioGroup } from '@base-ui/react/radio-group'
-import { ApiError } from '../../lib/api/ApiError'
+import { isUnauthorized } from '../../lib/api/ApiError'
 import type { Folder } from '../../lib/api/folders'
 import { buildFolderTree } from '../../lib/folders/buildFolderTree'
 import { moveTargets } from '../../lib/folders/moveTargets'
 import { Banner } from './Banner'
 import { Dialog } from './Dialog'
-import { SignedOutMessage } from './SignedOutMessage'
 
 export const DISABLED_ROW_TITLE =
   "Can't move here: it is inside this folder, or folders would be nested more than 3 levels deep."
 
 /** A failure of the move call, as the dialog shows it. */
-export type MoveFailure = { signedOut: boolean; message: string }
+export type MoveFailure = { message: string }
 
 type Props = {
   open: boolean
@@ -87,9 +86,8 @@ export function MoveDialog({
   }
 
   let list
-  if (folders.error instanceof ApiError && folders.error.status === 401 && !ready) {
-    list = <SignedOutMessage />
-  } else if (folders.pending) {
+  // A 401 reads as still loading: the login redirect is on its way.
+  if (folders.pending || (isUnauthorized(folders.error) && !ready)) {
     list = <p className="move-dialog__state">Loading folders…</p>
   } else if (!ready) {
     list = (
@@ -145,8 +143,7 @@ export function MoveDialog({
         {itemName}
       </p>
       <p className="move-dialog__note">Moves can't be undone.</p>
-      {failure?.signedOut && <SignedOutMessage />}
-      {failure && !failure.signedOut && (
+      {failure && (
         <Banner tone="error" role="alert">
           {failure.message}
         </Banner>

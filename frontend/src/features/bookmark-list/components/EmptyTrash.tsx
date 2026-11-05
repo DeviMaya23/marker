@@ -1,7 +1,6 @@
 import { useRef, useState, type RefObject } from 'react'
 import { Trash2 } from 'lucide-react'
 import { Dialog } from '../../../components/ui/Dialog'
-import { SignedOutMessage } from '../../../components/ui/SignedOutMessage'
 import { useEmptyTrash } from '../../../lib/bookmarks/useEmptyTrash'
 import { useBookmarkList } from '../hooks/useBookmarkList'
 
@@ -107,8 +106,7 @@ function ConfirmForm({
         onSubmit()
       }}
     >
-      {failure?.signedOut && <SignedOutMessage />}
-      {failure && !failure.signedOut && (
+      {failure && (
         <div className="banner banner--error" role="alert">
           {failure.message}
         </div>
