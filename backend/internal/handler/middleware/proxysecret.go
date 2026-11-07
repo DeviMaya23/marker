@@ -13,11 +13,11 @@ const (
 	ProxySecretHeader = "X-Proxy-Secret"
 	// healthPath is the one route answered without the secret (Cloud Run's startup probe
 	// cannot send a header).
-	healthPath = "/healthz"
+	healthPath = "/health"
 )
 
 // ProxySecret refuses with 404 every request that does not carry the shared secret in
-// X-Proxy-Secret, except GET /healthz. It keeps callers who reach the server directly,
+// X-Proxy-Secret, except GET /health. It keeps callers who reach the server directly,
 // around the proxy, from forging the client IP header that the login limit trusts.
 // It must be the first middleware (before body limit, sessions, CSRF and rate limits).
 // The secret is compared as SHA-256 digests in constant time and is never logged.

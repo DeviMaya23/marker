@@ -1,4 +1,4 @@
-// Cloudflare Worker: forwards /api/*, /auth/* and /healthz to the Cloud Run
+// Cloudflare Worker: forwards /api/*, /auth/* and /health to the Cloud Run
 // address, adding the shared secret and the client address the backend trusts.
 // Settings (Worker variable and secret, see deploy/README.md):
 //   CLOUD_RUN_ORIGIN    https address of Cloud Run, no path
@@ -34,7 +34,7 @@ function parseOrigin(value) {
 
 function isForwarded(path) {
   return (
-    path === "/healthz" || path.startsWith("/api/") || path.startsWith("/auth/")
+    path === "/health" || path.startsWith("/api/") || path.startsWith("/auth/")
   );
 }
 

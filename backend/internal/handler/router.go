@@ -40,7 +40,7 @@ type Deps struct {
 	// Limits is the rate limiters (NFR-16). Nil means no limiting.
 	Limits *middleware.RateLimits
 
-	// ProxySecret, if set, is the value every request except GET /healthz must carry in
+	// ProxySecret, if set, is the value every request except GET /health must carry in
 	// X-Proxy-Secret; any other request is answered 404. Empty means no check.
 	ProxySecret string
 }
@@ -59,7 +59,7 @@ func NewRouter(deps Deps) *echo.Echo {
 	e.Use(echomw.BodyLimit(maxBodySize))
 
 	// Operational endpoint, deliberately outside /api/v1 and not part of openapi.yaml.
-	e.GET("/healthz", Health)
+	e.GET("/health", Health)
 
 	if deps.Server == nil {
 		return e
