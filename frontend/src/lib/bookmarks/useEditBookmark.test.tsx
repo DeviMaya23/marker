@@ -37,6 +37,60 @@ describe('useEditBookmark', () => {
     expect(result.current.failure).toBeNull()
   })
 
+  it('toastOnSave: false says nothing on success but still refreshes', async () => {
+    update.mockResolvedValue({} as never)
+    const client = testClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useEditBookmark('b-1', { toastOnSave: false }), { wrapper: hookWrapper(client) })
+    await act(async () => void (await result.current.save({ title: 'a' })))
+    expect(screen.queryByText('Saved.')).not.toBeInTheDocument()
+    expect(keys(invalidate)).toEqual([['bookmark-list'], ['bookmark', 'b-1'], ['folders']])
+  })
+
+  describe('saveChanges', () => {
+    const problem = (status: number, code: string) => new ApiError(status, { type: 'x', title: 't', status, code } as ProblemBody, null)
+
+    it('resolves saved on success', async () => {
+      update.mockResolvedValue({} as never)
+      const { result } = setup()
+      await act(async () => expect(await result.current.saveChanges({ title: 'a' })).toEqual({ outcome: 'saved' }))
+    })
+
+    it('resolves ignored for a second call while one is in flight', async () => {
+      update.mockImplementation(() => new Promise(() => {}))
+      const { result } = setup()
+      act(() => void result.current.saveChanges({ title: 'a' }))
+      await act(async () => expect(await result.current.saveChanges({ title: 'a' })).toEqual({ outcome: 'ignored' }))
+      expect(update).toHaveBeenCalledTimes(1)
+    })
+
+    it('resolves unauthorized on a 401', async () => {
+      update.mockRejectedValue(new ApiError(401, null, null))
+      const { result } = setup()
+      await act(async () => expect(await result.current.saveChanges({ title: 'a' })).toEqual({ outcome: 'unauthorized' }))
+    })
+
+    it.each([
+      ['a 404', new ApiError(404, null, null), 404, 'This bookmark no longer exists.'],
+      ['a 409', problem(409, 'bookmark_in_trash'), 409, "This bookmark is in the trash and can't be edited."],
+      ['a network error', new TypeError('x'), null, "Couldn't save your changes."],
+    ])('resolves failed with the display and status for %s', async (_name, error, status, message) => {
+      update.mockRejectedValue(error)
+      const { result } = setup()
+      await act(async () => {
+        const r = await result.current.saveChanges({ title: 'a' })
+        expect(r).toMatchObject({ outcome: 'failed', status })
+        expect(r.outcome === 'failed' && r.failure.message).toBe(message)
+      })
+    })
+
+    it('save resolves false for everything but saved', async () => {
+      update.mockRejectedValue(new TypeError('x'))
+      const { result } = setup()
+      await act(async () => expect(await result.current.save({ title: 'a' })).toBe(false))
+    })
+  })
+
   it('a second save while one is in flight sends nothing', async () => {
     let finish: () => void = () => {}
     update.mockImplementation(() => new Promise((resolve) => (finish = () => resolve({} as never))))
