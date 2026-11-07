@@ -15,7 +15,7 @@ export default defineConfig({
     proxy: {
       '/api': { target: backend },
       '/auth': { target: backend },
-      '/healthz': { target: backend },
+      '/health': { target: backend },
     },
   },
   test: {

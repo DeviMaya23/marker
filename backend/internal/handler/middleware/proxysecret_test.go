@@ -69,25 +69,25 @@ func TestProxySecret_HealthzIsExemptOnlyForGET(t *testing.T) {
 		"wrong header":   {"wrong"},
 		"correct header": {testProxySecret},
 	} {
-		t.Run("GET /healthz with "+name, func(t *testing.T) {
-			requirePassedThrough(t, proxyReq(http.MethodGet, "/healthz", values...))
+		t.Run("GET /health with "+name, func(t *testing.T) {
+			requirePassedThrough(t, proxyReq(http.MethodGet, "/health", values...))
 		})
 	}
 
 	t.Run("a query string does not matter", func(t *testing.T) {
-		requirePassedThrough(t, proxyReq(http.MethodGet, "/healthz?x=1"))
+		requirePassedThrough(t, proxyReq(http.MethodGet, "/health?x=1"))
 	})
 
-	for _, path := range []string{"/healthz/", "/healthz2", "//healthz", "/healthz/x"} {
+	for _, path := range []string{"/health/", "/health2", "//health", "/health/x"} {
 		t.Run(path+" is not exempt", func(t *testing.T) {
 			requireRefused(t, proxyReq(http.MethodGet, path))
 		})
 	}
 
 	t.Run("an escaped path is not exempt", func(t *testing.T) {
-		r := proxyReq(http.MethodGet, "/healthz")
-		r.URL.Path = "/healthz"
-		r.URL.RawPath = "/%68ealthz"
+		r := proxyReq(http.MethodGet, "/health")
+		r.URL.Path = "/health"
+		r.URL.RawPath = "/%68ealth"
 		requireRefused(t, r)
 	})
 }
@@ -95,8 +95,8 @@ func TestProxySecret_HealthzIsExemptOnlyForGET(t *testing.T) {
 func TestProxySecret_EveryMethodNeedsTheHeader(t *testing.T) {
 	requireRefused(t, proxyReq(http.MethodPost, "/api/v1/bookmarks"))
 	requireRefused(t, proxyReq(http.MethodOptions, "/api/v1/bookmarks"))
-	requireRefused(t, proxyReq(http.MethodPost, "/healthz"))
-	requireRefused(t, proxyReq(http.MethodHead, "/healthz"))
+	requireRefused(t, proxyReq(http.MethodPost, "/health"))
+	requireRefused(t, proxyReq(http.MethodHead, "/health"))
 }
 
 func TestProxySecret_HeaderNameIsCaseInsensitive(t *testing.T) {

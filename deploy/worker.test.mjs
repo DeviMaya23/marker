@@ -47,19 +47,19 @@ test("forwards POST body, method and Content-Type", async () => {
   assert.equal(calls[0].headers.get("content-type"), "application/json");
 });
 
-test("forwards auth and healthz calls", async () => {
+test("forwards auth and health calls", async () => {
   const calls = stub();
   await call("/auth/login?return_to=%2Ftrash");
   await call("/auth/logout", { method: "POST" });
-  await call("/healthz");
-  await call("/healthz?probe=1");
+  await call("/health");
+  await call("/health?probe=1");
   assert.deepEqual(
     calls.map((c) => [c.method, c.url]),
     [
       ["GET", "https://run.example/auth/login?return_to=%2Ftrash"],
       ["POST", "https://run.example/auth/logout"],
-      ["GET", "https://run.example/healthz"],
-      ["GET", "https://run.example/healthz?probe=1"],
+      ["GET", "https://run.example/health"],
+      ["GET", "https://run.example/health?probe=1"],
     ],
   );
 });
@@ -178,8 +178,8 @@ test("answers 502 when fetch rejects", async () => {
 test("paths outside the three are answered 404 and not forwarded", async () => {
   const calls = stub();
   const paths = [
-    "/", "/login", "/api", "/apix", "/authx", "/auth", "/healthz/",
-    "/healthz/x", "/%61pi/x", "/api/../login", "/api/%2e%2e/login",
+    "/", "/login", "/api", "/apix", "/authx", "/auth", "/health/",
+    "/health/x", "/%61pi/x", "/api/../login", "/api/%2e%2e/login",
     "/api/%2E%2e/x", "//evil.example/api/x",
   ];
   for (const p of paths) {
@@ -205,7 +205,7 @@ test("/api/ with nothing after it is forwarded", async () => {
 
 test("HEAD is forwarded as is", async () => {
   const calls = stub();
-  await call("/healthz", { method: "HEAD" });
+  await call("/health", { method: "HEAD" });
   assert.equal(calls[0].method, "HEAD");
 });
 

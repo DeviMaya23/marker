@@ -136,7 +136,7 @@ func TestProxySecret_AForgedClientIPIsNeverUsed(t *testing.T) {
 
 func TestProxySecret_HealthzAndCallback(t *testing.T) {
 	e := newSecretRouter(okServer{}, nil)
-	require.Equal(t, http.StatusOK, do(e, http.MethodGet, "/healthz").Code)
+	require.Equal(t, http.StatusOK, do(e, http.MethodGet, "/health").Code)
 	requireProblem(t, callback(e), http.StatusNotFound, api.ErrorCodeNotFound)
 }
 
@@ -148,6 +148,6 @@ func TestProxySecret_EmptyMeansNothingIsRefused(t *testing.T) {
 func TestProxySecret_WithoutAServerOnlyTheOperationalRoutesAreGuarded(t *testing.T) {
 	e := NewRouter(Deps{ProxySecret: proxySecret})
 	requireProblem(t, do(e, http.MethodGet, "/no/such/path"), http.StatusNotFound, api.ErrorCodeNotFound)
-	requireProblem(t, do(e, http.MethodPost, "/healthz"), http.StatusNotFound, api.ErrorCodeNotFound)
-	require.Equal(t, http.StatusOK, do(e, http.MethodGet, "/healthz").Code)
+	requireProblem(t, do(e, http.MethodPost, "/health"), http.StatusNotFound, api.ErrorCodeNotFound)
+	require.Equal(t, http.StatusOK, do(e, http.MethodGet, "/health").Code)
 }

@@ -202,4 +202,4 @@ The save page (`/save?url=...&title=...`, FR-3a to 3d) is a frontend route. Its 
 
 ## Proxy secret
 
-In production the server runs behind a proxy that adds the header `X-Proxy-Secret` to every request. When the server's `PROXY_SHARED_SECRET` setting is set, a request without the exact value answers `404 not_found` (the same answer as an unknown route), before sessions, CSRF, the body limit and rate limiting. Only `GET /healthz` is exempt. This is a gateway check outside the per-operation statuses above, and it is not described in `openapi.yaml`.
+In production the server runs behind a proxy that adds the header `X-Proxy-Secret` to every request. When the server's `PROXY_SHARED_SECRET` setting is set, a request without the exact value answers `404 not_found` (the same answer as an unknown route), before sessions, CSRF, the body limit and rate limiting. Only `GET /health` is exempt. This is a gateway check outside the per-operation statuses above, and it is not described in `openapi.yaml`.
