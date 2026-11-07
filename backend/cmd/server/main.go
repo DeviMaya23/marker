@@ -21,6 +21,9 @@ import (
 )
 
 func main() {
+	if err := config.LoadEnvFile(); err != nil {
+		log.Fatalf("config: %v", err)
+	}
 	cfg := config.Load()
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("config: %v", err)
