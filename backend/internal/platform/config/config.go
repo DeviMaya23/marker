@@ -1,4 +1,5 @@
 // Package config parses application configuration from environment variables.
+// LoadEnvFile can first fill unset variables from the file named by ENV_FILE.
 package config
 
 import (

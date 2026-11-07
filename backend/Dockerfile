@@ -14,6 +14,18 @@
 #
 # The image holds no secrets, and the server does not migrate at start.
 #
+# Settings can also come from a file named by ENV_FILE, read once at start. Real
+# environment variables take precedence over the file. The file holds KEY=VALUE lines
+# and godotenv's quoting rules apply (quotes are removed), not those of --env-file.
+# A value that contains $, " #" or a backslash must be in single quotes.
+#   Local:
+#   docker run --rm -p 8080:8080 -v <env file>:/secrets/env:ro -e ENV_FILE=/secrets/env marker-backend
+#   The mounted file must be readable by user 65532, for example mode 0644.
+#   Cloud Run (the user's deployment step; not tested by the author):
+#   --set-secrets=/secrets/env=<secret>:latest --set-env-vars=ENV_FILE=/secrets/env
+# The caution below about HTTP_ADDR applies to --env-file only: a variable in the
+# ENV_FILE file never overrides one the container already has, HTTP_ADDR included.
+#
 # Caution on the run command: the env file must not set HTTP_ADDR to anything but
 # :8080 (it overrides the image's value, and the repository's .env.example sets
 # :8085). Its DATABASE_URL must be reachable from inside the container (localhost
