@@ -53,5 +53,8 @@ jobs:
           service: marker-backend
           region: australia-southeast1
           image: australia-southeast1-docker.pkg.dev/evimaytools/marker/backend:latest
-          flags: --service-account=ci-deployer@evimaytools.iam.gserviceaccount.com
+          flags: >-
+            --service-account=ci-deployer@evimaytools.iam.gserviceaccount.com
+            --set-secrets=/secrets/env=marker-env:latest
+            --set-env-vars=ENV_FILE=/secrets/env
 
